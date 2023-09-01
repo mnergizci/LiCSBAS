@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+v1.5.5 20230901 Lin Shen, Leeds Uni
+v1.5.4 20230804 Jack McGrath, Leeds Uni
+v1.5.3 20211122 Milan Lazecky, Leeds Uni
+v1.5.2 20210311 Yu Morishita, GSI
 
 This script inverts the SB network of unw to obtain the time series and
 velocity using NSBAS (López-Quiroz et al., 2009; Doin et al., 2011) approach.
@@ -56,7 +60,7 @@ Outputs in TS_GEOCml*/ :
 Usage
 =====
 LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs]
-                   [--no_storepatches] [--load_patches]
+			      [--no_storepatches] [--load_patches]
 
  -d  Path to the GEOCml* dir containing stack of unw data
  -t  Path to the output TS_GEOCml* dir.
@@ -83,6 +87,8 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
 """
 #%% Change log
 '''
+v1.5.5 20230901 Lin Shen, Leeds Uni
+ - Exclude non-redundant interferograms for each pixel
 v1.5.4 20230804 Jack McGrath, Leeds Uni
  - Add store and load patches option
 v1.5.3 20211122 Milan Lazecky, Leeds Uni
@@ -147,7 +153,6 @@ import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_loop_lib as loop_lib
 import LiCSBAS_plot_lib as plot_lib
-from LiCSBAS_version import *
 
 class Usage(Exception):
     """Usage context manager"""
@@ -163,6 +168,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
+    ver="1.5.5"; date=20230901; author="M. Lazecky, Lin Shen, Jack McGrath"
     #ver="1.5.2"; date=20210311; author="Y. Morishita"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
@@ -170,7 +176,7 @@ def main(argv=None):
     ## For parallel processing
     global n_para_gap, G, Aloop, unwpatch, imdates, incdir, ifgdir, length, width,\
         coef_r2m, ifgdates, ref_unw, cycle, keep_incfile, resdir, restxtfile, \
-        cmap_vel, cmap_wrap, wavelength
+        cmap_vel, cmap_wrap, wavelength, unwpatch_ori
 
 
     #%% Set default
@@ -515,13 +521,31 @@ def main(argv=None):
         ref_unw.append(np.nanmean(unw))
 
         f.close()
+    ref_unw_ori = []
+    for i, ifgd in enumerate(ifgdates):
+        unwfile_ori = os.path.join(ifgdir, ifgd, ifgd+'.unw.ori')
+        f = open(unwfile_ori, 'rb')
+        f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd path, 4 means byte
+
+        ### Read unw data (mm) at ref area
+        unw_ori = np.fromfile(f, dtype=np.float32, count=countl).reshape((lengththis, width))[:, refx1:refx2]*coef_r2m
+
+        unw_ori[unw_ori == 0] = np.nan
+        if np.all(np.isnan(unw_ori)):
+            print('All nan in ref area in {}.'.format(ifgd))
+            print('Rerun LiCSBAS12.')
+            return 1
+
+        ref_unw_ori.append(np.nanmean(unw_ori))
+
+        f.close()
 
 
     #%% Open cum.h5 for output
     ### Decide here what to do re. cumh5file and reloading patches. Need to check that stored cumh5 file is the right size etc
     print('store_patches:', store_patches)
-    cumfile = os.path.join(resultsdir, 'cum')
-    if load_patches:    
+    if load_patches:
+        cumfile = os.path.join(resultsdir, 'cum')
         if os.path.exists(cumfile):
             try:
                 cum = np.fromfile(cumfile, dtype=np.float32).reshape((n_im, length, width))
@@ -555,7 +579,7 @@ def main(argv=None):
                 print('Data doesnt match. Restarting inversion')
                 processed_rows = 0
         else:
-            print('No previous patches found - this is either the first run or the previous run was successful!')
+            print('No previous patches found')
             processed_rows = 0
     else:
       processed_rows = 0
@@ -604,7 +628,7 @@ def main(argv=None):
             lengththis = rows[1] - rows[0]
             n_pt_all = lengththis*width
             unwpatch = np.zeros((n_ifg, lengththis, width), dtype=np.float32)
-
+            unwpatch_ori = np.zeros((n_ifg, lengththis, width), dtype=np.float32)
             if inv_alg == 'WLS':
                 cohpatch = np.zeros((n_ifg, lengththis, width), dtype=np.float32)
 
@@ -614,6 +638,7 @@ def main(argv=None):
             countl = width*lengththis
             for i, ifgd in enumerate(ifgdates):
                 unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+                unwfile_ori = os.path.join(ifgdir, ifgd, ifgd+'.unw.ori')
                 f = open(unwfile, 'rb')
                 f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd patch, 4 means byte
 
@@ -622,6 +647,16 @@ def main(argv=None):
                 unw[unw == 0] = np.nan # Fill 0 with nan
                 unw = unw - ref_unw[i]
                 unwpatch[i] = unw
+                f.close()
+
+                f = open(unwfile_ori, 'rb')
+                f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd patch, 4 means byte
+
+                ### Read unw data (mm) at patch area
+                unw_ori = np.fromfile(f, dtype=np.float32, count=countl).reshape((lengththis, width))*coef_r2m
+                unw_ori[unw_ori == 0] = np.nan # Fill 0 with nan
+                unw_ori = unw_ori - ref_unw_ori[i]
+                unwpatch_ori[i] = unw_ori
                 f.close()
 
                 ### Read coh file at patch area for WLS
@@ -638,6 +673,7 @@ def main(argv=None):
                     cohpatch[cohpatch==0] = np.nan
 
             unwpatch = unwpatch.reshape((n_ifg, n_pt_all)).transpose() #(n_pt_all, n_ifg)
+            unwpatch_ori = unwpatch_ori.reshape((n_ifg, n_pt_all)).transpose()
 
             ### Calc variance from coherence for WLS
             if inv_alg == 'WLS':
@@ -646,7 +682,28 @@ def main(argv=None):
                 cohpatch[cohpatch>0.99] = 0.99 ## because >1 possible due to geocode
                 varpatch = (1-cohpatch**2)/(2*cohpatch**2)
                 del cohpatch
+    
 
+
+
+            n_para_gap = n_para
+
+        
+            print('  with {} parallel processing...'.format(n_para_gap),
+                      flush=True)
+
+                ### Devide unwpatch by n_para for parallel processing
+            p = q.Pool(n_para_gap)
+            _result = np.array(p.map(count_noloop, range(n_para_gap)),
+                                   dtype=float)
+            p.close()
+            for nn in range(n_para_gap):
+                if nn==0:
+                   unwpatch=_result[0,:,:]
+                else:
+                   unwpatch+=_result[nn,:,:]
+            del _result
+            unwpatch=unwpatch/n_para_gap
 
             #%% Remove points with less valid data than n_unw_thre
             ix_unnan_pt = np.where(np.sum(~np.isnan(unwpatch), axis=1) > n_unw_thre)[0]
@@ -850,22 +907,8 @@ def main(argv=None):
     #%% Find stable ref point
     print('\nFind stable reference point...', flush=True)
     ### Compute RMS of time series with reference to all points
-    sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
-    for i in range(n_im):
-        sumsq_cum_wrt_med = sumsq_cum_wrt_med + (cum[i, :, :]-np.nanmedian(cum[i, :, :]))**2
-    rms_cum_wrt_med = np.sqrt(sumsq_cum_wrt_med/n_im)
-
-    ### Mask by minimum n_gap
-    n_gap = io_lib.read_img(os.path.join(resultsdir, 'n_gap'), length, width)
-    min_n_gap = np.nanmin(n_gap)
-    mask_n_gap = np.float32(n_gap==min_n_gap)
-    mask_n_gap[mask_n_gap==0] = np.nan
-    rms_cum_wrt_med = rms_cum_wrt_med*mask_n_gap
-
-    ### Find stable reference
-    min_rms = np.nanmin(rms_cum_wrt_med)
-    refy1s, refx1s = np.where(rms_cum_wrt_med==min_rms)
-    refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index
+    refy1s=refy1
+    refx1s=refx1
     refy2s, refx2s = refy1s+1, refx1s+1
     print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
 
@@ -876,12 +919,7 @@ def main(argv=None):
     vconst = vconst - vconst[refy1s, refx1s]
 
     ### Save image
-    rms_cum_wrt_med_file = os.path.join(infodir, '13rms_cum_wrt_med')
-    with open(rms_cum_wrt_med_file, 'w') as f:
-        rms_cum_wrt_med.tofile(f)
-
-    pngfile = os.path.join(infodir, '13rms_cum_wrt_med.png')
-    plot_lib.make_im_png(rms_cum_wrt_med, pngfile, cmap_noise_r, 'RMS of cum wrt median (mm)', np.nanpercentile(rms_cum_wrt_med, 1), np.nanpercentile(rms_cum_wrt_med, 99))
+    
 
     ### Save ref
     cumh5.create_dataset('refarea', data='{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s))
@@ -903,8 +941,8 @@ def main(argv=None):
         cumh5.create_dataset('cum', data=cum, compression=compress)
         cumh5.create_dataset('vel', data=vel, compression=compress)
         cumh5.create_dataset('vintercept', data=vconst, compression=compress)
-        if store_patches:
-            os.remove(cumfile)
+        #if store_patches:
+            #os.remove(cumfile)
 
     indices = ['coh_avg', 'hgt', 'n_loop_err', 'n_unw', 'slc.mli',
                'maxTlen', 'n_gap', 'n_ifg_noloop', 'resid_rms']
@@ -954,21 +992,21 @@ def main(argv=None):
     cmaps = [cmap_vel, cmap_vel, cmap_noise_r, cmap_noise_r, cmap_noise_r, cmap_noise]
     titles = ['Velocity (mm/yr)', 'Intercept of velocity (mm)', 'RMS of residual (mm)', 'Number of gaps in SB network', 'Number of ifgs with no loops', 'Max length of connected SB network (yr)']
 
-    print('\nOutput noise png images...', flush=True)
-    for i in range(len(names)):
-        file = os.path.join(resultsdir, names[i])
-        data = io_lib.read_img(file, length, width)
+    #print('\nOutput noise png images...', flush=True)
+    #for i in range(len(names)):
+        #file = os.path.join(resultsdir, names[i])
+        #data = io_lib.read_img(file, length, width)
 
-        pngfile = file+'.png'
+        #pngfile = file+'.png'
 
         ## Get color range if None
-        if cmins[i] is None:
-            cmins[i] = np.nanpercentile(data, 1)
-        if cmaxs[i] is None:
-            cmaxs[i] = np.nanpercentile(data, 99)
-        if cmins[i] == cmaxs[i]: cmins[i] = cmaxs[i]-1
+        #if cmins[i] is None:
+            #cmins[i] = np.nanpercentile(data, 1)
+        #if cmaxs[i] is None:
+            #cmaxs[i] = np.nanpercentile(data, 99)
+        #if cmins[i] == cmaxs[i]: cmins[i] = cmaxs[i]-1
 
-        plot_lib.make_im_png(data, pngfile, cmaps[i], titles[i], cmins[i], cmaxs[i])
+        #plot_lib.make_im_png(data, pngfile, cmaps[i], titles[i], cmins[i], cmaxs[i])
 
     #%% Finish
     elapsed_time = time.time()-start
@@ -981,7 +1019,41 @@ def main(argv=None):
     print('Output directory: {}\n'.format(os.path.relpath(tsadir)))
 
 
-#%%
+def count_noloop(i):
+    print("    Running {:2}/{:2}th patch...".format(i+1, n_para_gap), flush=True)
+    n_pt_patch = int(np.ceil(unwpatch.shape[0]/n_para_gap))
+    n_im = G.shape[1]+1
+    n_loop, n_ifg = Aloop.shape
+
+    if i*n_pt_patch >= unwpatch.shape[0]:
+        # Nothing to do
+        return
+
+    ### n_ifg_noloop
+    # n_ifg*(n_pt,n_ifg)->(n_loop,n_pt)
+    # Number of ifgs for each loop at eath point.
+    # 3 means complete loop, 1 or 2 means broken loop.
+    ns_ifg4loop = np.dot(np.abs(Aloop),(~np.isnan(unwpatch_ori[i*n_pt_patch:(i+1)*n_pt_patch])).T)
+    bool_loop = (ns_ifg4loop==3)
+    del ns_ifg4loop
+    ns_loop4ifg = np.multiply((np.dot((np.abs(Aloop)).T,bool_loop)).T,
+                              (~np.isnan(unwpatch_ori[i*n_pt_patch:(i+1)*n_pt_patch,:]))
+                )
+    del bool_loop
+    unwpatch_patch = unwpatch[i*n_pt_patch:(i+1)*n_pt_patch,:]
+    unwpatch_patch[ns_loop4ifg==0] = np.nan
+    
+    unwpatch[i*n_pt_patch:(i+1)*n_pt_patch,:] = unwpatch_patch
+    del unwpatch_patch
+    #ns_ifg_noloop_tmp = (ns_loop4ifg==0).sum(axis=1) #n_pt
+    #del ns_loop4ifg
+    _unwpatch = unwpatch
+    #ns_nan_ifg = np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch, :]).sum(axis=1)
+    #n_pt, nan ifg count
+    #_ns_loop4ifg_patch = ns_ifg_noloop_tmp - ns_nan_ifg
+    #_ns_loop4ifg_patch = _ns_loop4ifg_patch.transpose()
+    return _unwpatch
+
 def count_gaps_wrapper(i):
     print("    Running {:2}/{:2}th patch...".format(i+1, n_para_gap), flush=True)
     n_pt_patch = int(np.ceil(unwpatch.shape[0]/n_para_gap))
@@ -1007,21 +1079,15 @@ def count_gaps_wrapper(i):
     # n_ifg*(n_pt,n_ifg)->(n_loop,n_pt)
     # Number of ifgs for each loop at eath point.
     # 3 means complete loop, 1 or 2 means broken loop.
-    ns_ifg4loop = np.array([(np.abs(Aloop[j, :])*
-                         (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])))
-                            .sum(axis=1) for j in range(n_loop)])
-    bool_loop = (ns_ifg4loop==3) #(n_loop,n_pt) identify complete loop only
+    ns_ifg4loop = np.dot(np.abs(Aloop),(~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])).T)
+    bool_loop = (ns_ifg4loop==3)
     del ns_ifg4loop
-
-    # n_loop*(n_loop,n_pt)*n_pt->(n_ifg,n_pt)
-    # Number of loops for each ifg at eath point.
-    ns_loop4ifg = np.array([(
-            (np.abs(Aloop[:, j])*bool_loop.T).T*
-            (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch, j]))
-            ).sum(axis=0) for j in range(n_ifg)]) #
+    ns_loop4ifg = np.multiply((np.dot((np.abs(Aloop)).T,bool_loop)).T,
+                              (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch,:]))
+                )
     del bool_loop
 
-    ns_ifg_noloop_tmp = (ns_loop4ifg==0).sum(axis=0) #n_pt
+    ns_ifg_noloop_tmp = (ns_loop4ifg==0).sum(axis=1) #n_pt
     del ns_loop4ifg
 
     ns_nan_ifg = np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch, :]).sum(axis=1)
