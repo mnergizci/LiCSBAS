@@ -146,7 +146,7 @@ def main(argv=None):
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
-    global Aloop, ifgdates, ifgdir, length, width, loop_pngdir, cycle, nullify_threshold \
+    global Aloop, ifgdates, ifgdir, length, width, loop_pngdir, cycle, nullify_threshold, \
         multi_prime, bad_ifg, noref_ifg, bad_ifg_all, refy1, refy2, refx1, refx2  ## for parallel processing
 
     # %% Set default
