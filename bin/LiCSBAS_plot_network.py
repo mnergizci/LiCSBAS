@@ -197,7 +197,7 @@ def main(argv=None):
         strong_links, weak_links, edge_cuts, node_cuts = tools_lib.separate_strong_and_weak_links(
             ifgdates, "{}_stats.txt".format(basename), remove_edge_cuts=remove_edge_cuts, remove_node_cuts=remove_node_cuts, skip_node_cuts=skip_node_cuts)
         pngfile = "{}{}_strongly_connected_network.png".format(basename, suffix)
-        plot_lib.plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_cuts, pngfile, plot_weak=True)
+        plot_lib.plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_cuts, pngfile, plot_weak=True, title=title)
         # export weak links
         with open("{}{}_weak_links.txt".format(basename, suffix), 'w') as f:
             for i in weak_links:

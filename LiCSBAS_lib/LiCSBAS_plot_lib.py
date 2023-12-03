@@ -523,7 +523,7 @@ def plot_coloured_network(ifgdates, bperp, perc_list, pngfile):
     plt.close()
 
 
-def plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_cuts, pngfile, plot_weak=True):
+def plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_cuts, pngfile, plot_weak=True, title=None):
     """
     Plot network of interferometric pairs.
 
@@ -620,6 +620,9 @@ def plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_c
         plt.ylabel('Bperp [m]')
 
     plt.legend()
+
+    if title:
+        plt.title(title)
 
     ### Save
     plt.savefig(pngfile, bbox_inches='tight')
