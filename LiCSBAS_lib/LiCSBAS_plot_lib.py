@@ -231,7 +231,7 @@ def plot_hgt_corr(data_bf, fit_hgt, hgt, title, pngfile):
 
 
 #%%
-def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True, label_name='Removed IFG'):
+def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True, label_name='Removed IFG', title=None):
     """
     Plot network of interferometric pairs.
     
@@ -323,6 +323,9 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True, label_nam
         plt.ylabel('Bperp [m]')
     
     plt.legend()
+
+    if title:
+        plt.title(title)
 
     ### Save
     plt.savefig(pngfile, bbox_inches='tight')
