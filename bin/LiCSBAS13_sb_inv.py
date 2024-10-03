@@ -769,7 +769,7 @@ def main(argv=None):
                     return 1
                 del hasdatapatch # no need anymore
                 print('')
-                print('  '+str(int(orignounw - afternounw))+'/'+str(int(orignounw))+' values dropped.')
+                print('  '+str(int(orignounw - afternounw))+'/'+str(int(orignounw))+' values dropped after noloop_ifg masking.')
                 print('')
 
 
