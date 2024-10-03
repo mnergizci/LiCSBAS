@@ -750,6 +750,7 @@ def main(argv=None):
             # if still ok, perform the main noloop routine
             if nullify_noloops:
                 print('  removing noloop_ifgs before inversion (in memory)')
+                orignounw = (unwpatch[~np.isnan(unwpatch)]).sum()
                 # step 2 for nullify_noloops: counting the noloops and nullying data from ifgs not forming any loop
                 try:
                     print('  with {} parallel processing...'.format(n_para), flush=True)
@@ -759,19 +760,18 @@ def main(argv=None):
                     # _result = np.array(
                     p.map(nullify_noloops_from_ori, range(n_para)) #, dtype=float)
                     p.close()
-                    #for nn in range(n_para):
-                    #    if nn == 0:
-                    #        unwpatch = _result[0, :, :]
-                    #    else:
-                    #        unwpatch += _result[nn, :, :]
-                    #unwpatch = unwpatch/n_para
-                    #del _result
+                    afternounw = (unwpatch[~np.isnan(unwpatch)]).sum()
+
                 except Exception as e:
                     print("ERROR nullifying noloops data:")
                     print(traceback.format_exc())
                     nullify_noloops = False
                     return 1
                 del hasdatapatch # no need anymore
+                print('')
+                print('  '+str(int(orignounw - afternounw))+'/'+str(int(orignounw))+' values dropped.')
+                print('')
+
 
             ### Calc variance from coherence for WLS
             if inv_alg == 'WLS':
