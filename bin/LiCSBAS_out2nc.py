@@ -443,6 +443,15 @@ def main(argv=None):
     else:
         cube.to_netcdf(outfile, encoding={'time': {'dtype': 'i4'}})
     if alignsar:
+        '''
+        alignsar:
+- load cohs2cube, amplitude
+- do mean ampl and amplitude dispersion
+- add atmo error (LB16 edit)
+- add land cover var
+- add metadata to the cube
+- add flowcharts to MUC - general and (updated) LiCSBAS
+        '''
         # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
         del cube
         cube = toalignsar(os.path.dirname(cumfile), outfile, outfile+'.tmp.nc')
