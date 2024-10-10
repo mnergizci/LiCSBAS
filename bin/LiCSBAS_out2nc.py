@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-v1.05 20240420 Milan Lazecky, Leeds Uni
+v1.1 20241011 Milan Lazecky, Leeds Uni
 
 ========
 Overview
@@ -12,11 +12,12 @@ This script outputs a standard NetCDF4 file using LiCSBAS results
 Usage
 =====
 LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
-     [--ref_geo lon1/lon2/lat1/lat2] [--clip_geo lon1/lon2/lat1/lat2]
+     [--ref_geo lon1/lon2/lat1/lat2] [--clip_geo lon1/lon2/lat1/lat2] [-A]
 
  -i  Path to input cum file (Default: cum_filt.h5)
  -o  Output netCDF4 file (Default: output.nc)
  -m  Master (reference) date (Default: first date) - TODO: bperps are fixed-referred to the 1st date
+ --alignsar, -A  Export complete cube as developed within AlignSAR (all amplitudes, coherences, calc D_A, mean amp, TODO: atmo_error based on step 16)
  --ref_geo  Reference area in geographical coordinates as: lon1/lon2/lat1/lat2
  --clip_geo  Area to clip in geographical coordinates as: lon1/lon2/lat1/lat2
  --compress, -C  use zlib compression (very small files but time series may take long to load in GIS)
@@ -27,6 +28,8 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
 """
 #%% Change log
 '''
+v1.1 20241012 ML
+ - allowing extras for AlignSAR cube
 v1.05 20240420 ML
  - fixed masking (apply_mask), improved metadata (to be improved further)
 v1.0 20200901 Milan Lazecky, Uni of Leeds
@@ -206,6 +209,82 @@ def maskit(clipped, cohthres = 0.62, rmsthres = 5, vstdthres = 0.3):
     return out
 
 
+def toalignsar(tsdir, ncfile, outncfile):
+    '''Will add some extras to the ncfile - need to have workdir with GEOC.MLI loaded - and for now, the multilook should be only ML = 1!'''
+    docoh = True
+    doamp = True
+    cube=xr.open_dataset(ncfile) # only opening, not loading to memory
+    workdir=os.path.dirname(tsdir)
+    mldircode=tsdir.split('/')[-1].split('_')[-1]
+    geocmldir=os.path.join(workdir, mldircode)
+    try:
+        ml = int(mldircode[6:].split('G')[0].split('m')[0].split('c')[0])
+        if ml>1:
+            print('WARNING, only ML1 will work ok for amplitudes (for now) - you used multilook '+str(ml)+'. Skipping amplitudes.')
+            doamp = False
+        else:
+            doamp = True
+    except:
+        print('WARNING, could not identify ml factor from the folder name. Assuming not equal 1 == skipping amplitudes')
+        doamp = False
+    if not os.path.exists(geocmldir):
+        docoh = False
+    mlidir = os.path.join(workdir, 'GEOC.MLI')
+    if not os.path.exists(mlidir):
+        doamp = False
+    #
+    #
+    #
+    if doamp:
+        #cube = xr.open_dataset(ncfile)
+        var = cube['cum'] # will do 3D set
+        new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
+        cube = cube.assign({'amplitude': new_var})
+        print('Importing amplitudes')
+        cube = import_tifs2cube_simple(mlidir, cube, searchstring='/*/*geo.mli.tif', varname='amplitude', thirddim='time',
+                                apply_func=np.sqrt)
+        cube['amplitude']=cube['amplitude'].where(cube['amplitude']!=0)
+        print('calculating mean amp and amp stab index')
+        cube['amp_mean']=cube.amplitude.mean(dim='time')
+        cube['amp_std']=cube.amplitude.std(dim='time')
+        cube['ADI']=(cube.amp_std**2)/cube['amp_mean']
+        cube.to_netcdf(outncfile) # uncompressed
+    #if docoh:
+    #    #
+    #cube.to_netcdf(outnc, mode='w', unlimited_dims=['time'])
+    #del cube # clean memory
+    return cube
+
+
+def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varname = 'amplitude', thirddim = 'time', apply_func = None):
+    '''e.g. for amplitude from mlis, use apply_func = np.sqrt
+    Note this function is simplified and loads everything to memory! see licsar_extra/lics_tstools for improved way
+    finally, the varname must exist!'''
+    import glob
+    import pandas as pd
+    t=cube.indexes['time']
+    tifs=glob.glob(tifspath+searchstring)
+    for tif in tifs:
+        fname = os.path.basename(tif)
+        epoch=fname.split('.')[0]
+        if '_' in epoch:  # in case of ifgs, we set this to the later date
+            epoch = epoch.split('_')[-1]
+        epochdt = pd.Timestamp(epoch)
+        if not epochdt in t:
+            continue
+        i = t.get_loc(epochdt)
+        try:
+            data = rioxarray.open_rasterio(tif)
+        except:
+            print('ERROR loading tif for epoch '+epoch)
+            continue
+        data = data.values[0]
+        if apply_func:
+            data = apply_func(data)
+        cube[varname].isel(time=i)[:] = data
+    return cube
+
+
 #%% Main
 def main(argv=None):
    
@@ -214,7 +293,7 @@ def main(argv=None):
         argv = sys.argv
         
     start = time.time()
-    ver=1.05; date=20240420; author="M.Lazecky"
+    ver=1.1; date=20241011; author="M.Lazecky"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -230,13 +309,14 @@ def main(argv=None):
     cliparea_geo = []
     compress = False
     postfilter = False
+    alignsar = False
     centre_refx, centre_refy = np.nan, np.nan
     extracols = ['loop_ph_avg_abs']
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:C", ["help", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -273,6 +353,9 @@ def main(argv=None):
             #    maskfile = a
             elif o == '--apply_mask':
                 apply_mask = True
+            elif (o == '-A') or (o=='--alignsar'):
+                alignsar = True
+                print('outputting as the AlignSAR InSAR TS cube')
 
         if not os.path.exists(cumfile):
             raise Usage('No {} exists! Use -i option.'.format(cumfile))
@@ -340,7 +423,6 @@ def main(argv=None):
         cube['vel_filt'] = interp_and_smooth(cube['vel'], 0.5)
     #masked = maskit(clipped)
     #masked['vel_filt'] = clipped['vel_filt']
-    
     #masked.to_netcdf(outfile)
     #just to make sure it is written..
     #check if it does not invert data!
@@ -348,18 +430,23 @@ def main(argv=None):
     cube.rio.write_crs("EPSG:4326", inplace=True)
     if compress:
         if postfilter:
-            encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9}, 
-            'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9}, 
-            'stc': {'zlib': True, 'complevel': 9}, 'vel_filt': {'zlib': True, 'complevel': 9}, 
+            encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9},
+            'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
+            'stc': {'zlib': True, 'complevel': 9}, 'vel_filt': {'zlib': True, 'complevel': 9},
             'time': {'dtype': 'i4'}}
         else:
-            encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9}, 
-            'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9}, 
-            'stc': {'zlib': True, 'complevel': 9}, 
+            encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9},
+            'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
+            'stc': {'zlib': True, 'complevel': 9},
             'time': {'dtype': 'i4'}}
         cube.to_netcdf(outfile, encoding=encode)
     else:
         cube.to_netcdf(outfile, encoding={'time': {'dtype': 'i4'}})
+    if alignsar:
+        # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
+        del cube
+        cube = toalignsar(os.path.dirname(cumfile), outfile, outfile+'.tmp.nc')
+    #
     #%% Finish
     elapsed_time = time.time()-start
     hour = int(elapsed_time/3600)
