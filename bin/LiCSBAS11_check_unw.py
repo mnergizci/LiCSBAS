@@ -320,7 +320,11 @@ def main(argv=None):
     ## Read bperp data or dummy
     bperp_file = os.path.join(ifgdir, 'baselines')
     if os.path.exists(bperp_file):
-        bperp = io_lib.read_bperp_file(bperp_file, imdates)
+        try:
+            bperp = io_lib.read_bperp_file(bperp_file, imdates)
+        except:
+            print('some error in the baselines file - setting dummy values')
+            bperp = np.random.random(n_im).tolist()
     else: #dummy
         bperp = np.random.random(n_im).tolist()
 
