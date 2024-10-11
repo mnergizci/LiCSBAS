@@ -297,7 +297,18 @@ def toalignsar(tsdir, ncfile, outncfile):
             cube['spatial_coherence'].isel(time=i, btemp=j)[:] = coh
     #cube.to_netcdf(outnc, mode='w', unlimited_dims=['time'])
     #del cube # clean memory
-    #if doatmo:
+    if doatmo:
+        if not os.path.exists(gacosdir):
+            print('WARNING, no GACOS directory found - will store only results of filtering as atmo var')
+        else:
+            var = cube['cum'] # will do 3D set
+            new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
+            varname = 'atmospheric_phase_screen'
+            cube = cube.assign({varname: new_var})
+            print('Importing GACOS as APS')
+            cube = import_tifs2cube_simple(gacosdir, cube, searchstring='/*.sltd.geo.tif', varname=varname, thirddim='time',
+                                    apply_func=rad2mm)
+            cube[varname]=cube[varname].where(cube[varname]!=0)
     #
     cube.to_netcdf(outncfile)  # uncompressed
     return cube
@@ -359,7 +370,10 @@ def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varn
         except:
             print('ERROR loading tif for epoch '+epoch)
             continue
-        data = np.flipud(data.values[0])
+        data = data[0]
+        if data.shape != cube.vel.shape:
+            data = data.interp_like(cube.vel, method='linear') # WARNING: method linear is ok for all but not phase!
+        data = np.flipud(data.values)
         if apply_func:
             data = apply_func(data)
         cube[varname].isel(time=i)[:] = data
