@@ -256,6 +256,41 @@ def toalignsar(tsdir, ncfile, outncfile):
     #del cube # clean memory
     return cube
 
+"""
+os.chdir(os.environ['BATCH_CACHE_DIR'])
+def import_mergedcohs2nc(instr = 'mergedcoh.btemp_', outncfile = 'cohcube.almostdone.nc'):
+    filenames = glob.glob(instr+'*.tif')
+    avg_coh = ''
+    for infile in filenames:
+        numdays = int(infile.replace(instr,'').split('.')[0])
+        cc = rioxarray.open_rasterio(infile)
+        cc = cc.rename({'band':'btemp'})
+        cc['btemp'] = [numdays]
+        if cc.max()<2:
+            print('converting to int')
+            cc = (cc*255).astype(np.uint8)
+        if not isinstance(avg_coh, xr.DataArray):
+            avg_coh = cc.copy(deep=True)
+        else:
+            avg_coh= xr.concat([avg_coh, cc], dim='btemp')
+    cohcube = xr.Dataset()
+    cohcube['avg_coh'] = avg_coh.astype(np.uint8) # just in case
+    cohcube = cohcube.sortby('btemp')
+    encode = {'avg_coh': {'zlib': True, 'complevel': 9}}
+    coordsys = "epsg:4326"
+    cohcube = cohcube.rio.write_crs(coordsys, inplace=True)
+    if outncfile:
+        if os.path.exists(outncfile):
+            os.remove(outncfile)
+            try:
+                os.remove(outncfile+'.nocompressed.nc')
+            except:
+                print('')
+        #cohcube.to_netcdf(outncfile+'.nocompressed.nc')
+        cohcube.to_netcdf(outncfile, encoding=encode)
+    return cohcube
+
+"""
 
 def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varname = 'amplitude', thirddim = 'time', apply_func = None):
     '''e.g. for amplitude from mlis, use apply_func = np.sqrt
