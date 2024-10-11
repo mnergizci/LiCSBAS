@@ -243,8 +243,9 @@ def maskit(clipped, cohthres = 0.62, rmsthres = 5, vstdthres = 0.3):
     return out
 
 
-def toalignsar(tsdir, ncfile, outncfile):
-    '''Will add some extras to the ncfile - need to have workdir with GEOC.MLI loaded - and for now, the multilook should be only ML = 1!'''
+def toalignsar(tsdir, ncfile, outncfile, filestoadd = []):
+    '''Will add some extras to the ncfile - need to have workdir with GEOC.MLI loaded - and for now, the multilook should be only ML = 1!
+    filestoadd should be a list of tif files (with full path) that should be imported'''
     docoh = True
     doamp = True
     doatmo = True
@@ -283,7 +284,7 @@ def toalignsar(tsdir, ncfile, outncfile):
         print('calculating mean amp and amp stab index')
         cube['amp_mean']=cube.amplitude.mean(dim='time')
         cube['amp_std']=cube.amplitude.std(dim='time')
-        #cube['ADI']=(cube.amp_std**2)/cube['amp_mean']
+        cube['amplitude_dispersion_index']=(cube.amp_std**2)/cube['amp_mean']
         cube['ampstab'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
         cube['ampstab'].values[cube['ampstab'] <= 0] = 0.00001
     if docoh:
@@ -328,45 +329,86 @@ def toalignsar(tsdir, ncfile, outncfile):
             cube = import_tifs2cube_simple(gacosdir, cube, searchstring='/*.sltd.geo.tif', varname=varname, thirddim='time',
                                     apply_func=rad2mm)
             cube[varname]=cube[varname].where(cube[varname]!=0)
+            # w.r.t. ref point 
+            cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
+        print('Getting residuals from filtering assuming atmo-correction')
+        cumfile = os.path.join(tsdir, 'cum.h5')
+        cumnf = xr.open_dataset(cumfile)
+        varname = 'filter_APS'
+        var = cube['cum'] # will do 3D set
+        new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
+        cube = cube.assign({varname: new_var})
+        for i in range(len(cube.time)):
+            cube[varname].isel(time=i)[:] = np.flipud(cumnf.cum[i].values) - cube['cum'][i].values
+        # to same ref point (might have changed)
+        cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
+        if 'atmospheric_phase_screen' in cube:
+            cube['atmosphere']=cube['atmospheric_phase_screen']+cube['filter_APS']
+            cube=cube.drop_vars('atmospheric_phase_screen')
+        else:
+            cube=cube.rename({'filter_APS':'atmosphere'})
+        # also adding height
+        cube['hgt'] = cube.vel.copy()
+        cube.hgt.values = np.flipud(cumnf.hgt.values)
+        cube.hgt.attrs['unit']='m'
+        cube['hgt']=cube.hgt.where(cube.hgt!=0)
     #
+    if filestoadd:
+        for tif in filestoadd:
+            try:
+                data = rioxarray.open_rasterio(tif)
+                data = data.squeeze('band')
+                data = data.drop('band')
+                data = data.rename({'x':'lon', 'y':'lat'})
+                dtype = str(data.dtype)
+                try:
+                    fillvalue = data.attrs['_FillValue']
+                except:
+                    if 'int' in dtype:
+                        fillvalue = 0
+                    else:
+                        fillvalue = np.nan
+            except:
+                print('ERROR loading tif '+tif)
+                continue
+            #if data.shape != cube.vel.shape:
+            data = data.interp_like(cube.vel, method='nearest', kwargs={'fill_value':fillvalue})
+            data=data.astype(dtype)
+            varname = os.path.basename(tif).split('.')[0]
+            cube[varname] = cube.vel.copy()
+            cube[varname].values = data.values
+            cube[varname].attrs = {'grid_mapping': 'spatial_ref'}
+    #
+    print('renaming some vars')
+    cube = alignsar_rename(cube)
     cube.to_netcdf(outncfile)  # uncompressed
     return cube
 
-"""
-os.chdir(os.environ['BATCH_CACHE_DIR'])
-def import_mergedcohs2nc(instr = 'mergedcoh.btemp_', outncfile = 'cohcube.almostdone.nc'):
-    filenames = glob.glob(instr+'*.tif')
-    avg_coh = ''
-    for infile in filenames:
-        numdays = int(infile.replace(instr,'').split('.')[0])
-        cc = rioxarray.open_rasterio(infile)
-        cc = cc.rename({'band':'btemp'})
-        cc['btemp'] = [numdays]
-        if cc.max()<2:
-            print('converting to int')
-            cc = (cc*255).astype(np.uint8)
-        if not isinstance(avg_coh, xr.DataArray):
-            avg_coh = cc.copy(deep=True)
-        else:
-            avg_coh= xr.concat([avg_coh, cc], dim='btemp')
-    cohcube = xr.Dataset()
-    cohcube['avg_coh'] = avg_coh.astype(np.uint8) # just in case
-    cohcube = cohcube.sortby('btemp')
-    encode = {'avg_coh': {'zlib': True, 'complevel': 9}}
-    coordsys = "epsg:4326"
-    cohcube = cohcube.rio.write_crs(coordsys, inplace=True)
-    if outncfile:
-        if os.path.exists(outncfile):
-            os.remove(outncfile)
-            try:
-                os.remove(outncfile+'.nocompressed.nc')
-            except:
-                print('')
-        #cohcube.to_netcdf(outncfile+'.nocompressed.nc')
-        cohcube.to_netcdf(outncfile, encoding=encode)
-    return cohcube
 
-"""
+def alignsar_rename(cube):
+    cube.cum.attrs['unit']='mm'
+    cube.cum.attrs['description']='Inverted cumulative displacements from unwrapped interferograms'
+    cube = cube.rename_vars({'cum':'cum_displacement'})
+    cube.vel.attrs['description']='Linear displacement trend estimated from the cumulative displacements'
+    cube = cube.rename_vars({'vel':'linear_velocity'})
+    cube.bperp.attrs['description']='Perpendicular baseline'
+    cube.coh.attrs['description']='Mean spatial coherence of the dataset'
+    cube = cube.rename_vars({'coh':'mean_coherence'})
+    cube.rms.attrs['description']='RMSE from residuals in the small baseline inversion'
+    cube = cube.rename_vars({'rms':'residuals_rms'})
+    cube.loop_ph_avg_abs.attrs['description']='Mean absolute value of phase loop closure residual'
+    cube.loop_ph_avg_abs.attrs['unit']='rad'
+    cube = cube.rename_vars({'loop_ph_avg_abs':'mean_abs_loop_phase_closure'})
+    cube.vstd.attrs['description']='Standard deviation of the velocity'
+    cube.stc.attrs['description']='Spatio-temporal consistency as minimum RMS of double differences of time series in space and time between the pixel and adjacent pixels'
+    cube.ampstab.attrs['description']='Amplitude stability calculated as 1 - mean/variance of the amplitudes'
+    cube.spatial_coherence.attrs['description']='Spatial coherence of given Btemp where time represents second epoch of the interferometric pair'
+    cube.atmosphere.attrs['description']='Errors due to atmosphere estimated from GACOS and spatio-temporal filtering'
+    cube.atmosphere.attrs['unit']='mm'
+    cube['filter_APS'].attrs['description']='Errors due to atmosphere estimated from spatio-temporal filtering'
+    cube['filter_APS'].attrs['unit']='mm'
+    cube.hgt.attrs['description']='Height map extracted from Copernicus DEM'
+    return cube
 
 
 def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varname = 'amplitude', thirddim = 'time', apply_func = None):
@@ -386,13 +428,17 @@ def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varn
         i = t.get_loc(epochdt)
         try:
             data = rioxarray.open_rasterio(tif)
+            data = data.squeeze('band')
+            data = data.drop('band')
+            data = data.rename({'x':'lon', 'y':'lat'})
         except:
             print('ERROR loading tif for epoch '+epoch)
             continue
-        data = data[0]
         if data.shape != cube.vel.shape:
             data = data.interp_like(cube.vel, method='linear') # WARNING: method linear is ok for all but not phase!
-        data = np.flipud(data.values)
+            data = data.values
+        else:
+            data = np.flipud(data.values) # to np array..
         if apply_func:
             data = apply_func(data)
         cube[varname].isel(time=i)[:] = data
