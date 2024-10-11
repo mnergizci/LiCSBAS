@@ -48,6 +48,8 @@ import rioxarray
 import subprocess as subp
 from scipy.ndimage import gaussian_filter
 from scipy import interpolate
+import glob
+import pandas as pd
 
 class Usage(Exception):
     """Usage context manager"""
@@ -250,8 +252,36 @@ def toalignsar(tsdir, ncfile, outncfile):
         cube['ampstab'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
         cube['ampstab'].values[cube['ampstab'] <= 0] = 0.00001
         cube.to_netcdf(outncfile) # uncompressed
-    #if docoh:
-    #    #
+    if docoh:
+        # will set only 12 and 24 day cohs for now
+        btemps = [12, 24]
+        var = cube['cum'] # will do 3D set
+        new_var = var.expand_dims({'btemp':btemps}).astype(np.float32) * np.nan
+        cube = cube.assign({'spatial_coherence': new_var})
+        #
+        import LiCSAR_misc as misc
+        t=cube.indexes['time']
+        var=cube['cum'][0]
+        searchstring='/*/*.cc'
+        ccs = glob.glob(geocmldir+searchstring)
+        print('Importing spatial coherences for following Btemp [days]:')
+        print(btemps)
+        print('')
+        for cc in ccs:
+            pair = os.path.basename(cc).split('.')[0]
+            btemp = misc.datediff_pair(pair)
+            if not btemp in btemps:
+                continue
+            epochdt = pd.Timestamp(pair.split('_')[1])
+            if not epochdt in t:
+                continue
+            coh=np.fromfile(cc,np.uint8)
+            coh=coh.reshape(cube.vel.shape)
+            coh = (np.flipud(coh)/255).astype(np.float32)
+            coh[coh==0]=np.nan
+            i = t.get_loc(epochdt)
+            j = cube.indexes['btemp'].get_loc(btemp)
+            cube['spatial_coherence'].isel(time=i, btemp=j)[:] = coh
     #cube.to_netcdf(outnc, mode='w', unlimited_dims=['time'])
     #del cube # clean memory
     return cube
@@ -292,12 +322,11 @@ def import_mergedcohs2nc(instr = 'mergedcoh.btemp_', outncfile = 'cohcube.almost
 
 """
 
+
 def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varname = 'amplitude', thirddim = 'time', apply_func = None):
     '''e.g. for amplitude from mlis, use apply_func = np.sqrt
     Note this function is simplified and loads everything to memory! see licsar_extra/lics_tstools for improved way
     finally, the varname must exist!'''
-    import glob
-    import pandas as pd
     t=cube.indexes['time']
     tifs=glob.glob(tifspath+searchstring)
     for tif in tifs:
