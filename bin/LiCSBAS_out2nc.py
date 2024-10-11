@@ -24,7 +24,6 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
  --postfilter will interpolate VEL only through empty areas and filter in space
  --apply_mask  Will apply mask to all relevant variables
  --extracol Will add extra layer from files in folder TS*/results - e.g. --extracol loop_ph_avg_abs
- 
 """
 #%% Change log
 '''
@@ -247,7 +246,9 @@ def toalignsar(tsdir, ncfile, outncfile):
         print('calculating mean amp and amp stab index')
         cube['amp_mean']=cube.amplitude.mean(dim='time')
         cube['amp_std']=cube.amplitude.std(dim='time')
-        cube['ADI']=(cube.amp_std**2)/cube['amp_mean']
+        #cube['ADI']=(cube.amp_std**2)/cube['amp_mean']
+        cube['ampstab'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
+        cube['ampstab'].values[cube['ampstab'] <= 0] = 0.00001
         cube.to_netcdf(outncfile) # uncompressed
     #if docoh:
     #    #
@@ -278,7 +279,7 @@ def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varn
         except:
             print('ERROR loading tif for epoch '+epoch)
             continue
-        data = data.values[0]
+        data = np.flipud(data.values[0])
         if apply_func:
             data = apply_func(data)
         cube[varname].isel(time=i)[:] = data
