@@ -57,6 +57,25 @@ class Usage(Exception):
         self.msg = msg
 
 
+def mm2rad(inmm, radar_freq=5.405e9, rad2mm=False):
+    """Converts from mm to radians [or vice versa]
+    """
+    #speed_of_light = 299792458 #m/s
+    speed_of_light = 299702547  #m/s ... in case of all-in-air 299792458 #m/s
+    #radar_freq = 5.405e9  #for S1
+    wavelength = speed_of_light/radar_freq #meter
+    coef_r2m = wavelength/4/np.pi*1000 #rad -> mm,
+    if rad2mm:
+        # apologies for the inmm/outrad naming
+        outrad = inmm*coef_r2m
+    else:
+        outrad = inmm/coef_r2m
+    return outrad
+
+
+def rad2mm(inrad, radar_freq=5.405e9):
+    return mm2rad(inrad, radar_freq=radar_freq, rad2mm=True)
+
 
 def grep1line(arg,filename):
     file = open(filename, "r")
