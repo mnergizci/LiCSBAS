@@ -71,6 +71,20 @@ def grep1line(arg,filename):
     return res
 
 
+def datediff_pair(pair):
+    """Input: list of pair string (e.g. '20230129_20230210'). will get number of days of Btemp
+    """
+    epoch1=pair.split('_')[0]
+    epoch2=pair.split('_')[1]
+    return datediff(epoch1, epoch2)
+
+
+def datediff(epoch1, epoch2):
+    date1 = dt.datetime.strptime(epoch1,'%Y%m%d').date()
+    date2 = dt.datetime.strptime(epoch2,'%Y%m%d').date()
+    return (date2-date1).days
+
+
 #just an eye candy layer
 def interp_and_smooth(da, sigma=0.8):
     dar = da.copy()
@@ -214,10 +228,12 @@ def toalignsar(tsdir, ncfile, outncfile):
     '''Will add some extras to the ncfile - need to have workdir with GEOC.MLI loaded - and for now, the multilook should be only ML = 1!'''
     docoh = True
     doamp = True
+    doatmo = True
     cube=xr.open_dataset(ncfile) # only opening, not loading to memory
     workdir=os.path.dirname(tsdir)
     mldircode=tsdir.split('/')[-1].split('_')[-1]
     geocmldir=os.path.join(workdir, mldircode)
+    gacosdir = os.path.join(workdir, 'GACOS')
     try:
         ml = int(mldircode[6:].split('G')[0].split('m')[0].split('c')[0])
         if ml>1:
@@ -251,7 +267,6 @@ def toalignsar(tsdir, ncfile, outncfile):
         #cube['ADI']=(cube.amp_std**2)/cube['amp_mean']
         cube['ampstab'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
         cube['ampstab'].values[cube['ampstab'] <= 0] = 0.00001
-        cube.to_netcdf(outncfile) # uncompressed
     if docoh:
         # will set only 12 and 24 day cohs for now
         btemps = [12, 24]
@@ -259,9 +274,7 @@ def toalignsar(tsdir, ncfile, outncfile):
         new_var = var.expand_dims({'btemp':btemps}).astype(np.float32) * np.nan
         cube = cube.assign({'spatial_coherence': new_var})
         #
-        import LiCSAR_misc as misc
         t=cube.indexes['time']
-        var=cube['cum'][0]
         searchstring='/*/*.cc'
         ccs = glob.glob(geocmldir+searchstring)
         print('Importing spatial coherences for following Btemp [days]:')
@@ -269,7 +282,7 @@ def toalignsar(tsdir, ncfile, outncfile):
         print('')
         for cc in ccs:
             pair = os.path.basename(cc).split('.')[0]
-            btemp = misc.datediff_pair(pair)
+            btemp = datediff_pair(pair)
             if not btemp in btemps:
                 continue
             epochdt = pd.Timestamp(pair.split('_')[1])
@@ -284,6 +297,9 @@ def toalignsar(tsdir, ncfile, outncfile):
             cube['spatial_coherence'].isel(time=i, btemp=j)[:] = coh
     #cube.to_netcdf(outnc, mode='w', unlimited_dims=['time'])
     #del cube # clean memory
+    #if doatmo:
+    #
+    cube.to_netcdf(outncfile)  # uncompressed
     return cube
 
 """
@@ -510,12 +526,12 @@ def main(argv=None):
     if alignsar:
         '''
         alignsar:
-- load cohs2cube, amplitude
-- do mean ampl and amplitude dispersion
-- add atmo error (LB16 edit)
-- add land cover var
-- add metadata to the cube
-- add flowcharts to MUC - general and (updated) LiCSBAS
+        - load cohs2cube, amplitude
+        - do mean ampl and amplitude dispersion
+        - add atmo error (LB16 edit)
+        - add land cover var
+        - add metadata to the cube
+        - add flowcharts to MUC - general and (updated) LiCSBAS
         '''
         # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
         del cube
