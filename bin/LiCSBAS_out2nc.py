@@ -243,13 +243,13 @@ def maskit(clipped, cohthres = 0.62, rmsthres = 5, vstdthres = 0.3):
     return out
 
 
-def toalignsar(tsdir, ncfile, outncfile, filestoadd = []):
+def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd = []):
     '''Will add some extras to the ncfile - need to have workdir with GEOC.MLI loaded - and for now, the multilook should be only ML = 1!
     filestoadd should be a list of tif files (with full path) that should be imported'''
     docoh = True
     doamp = True
     doatmo = True
-    cube=xr.open_dataset(ncfile) # only opening, not loading to memory
+    #cube=xr.open_dataset(ncfile) # only opening, not loading to memory
     workdir=os.path.dirname(tsdir)
     mldircode=tsdir.split('/')[-1].split('_')[-1]
     geocmldir=os.path.join(workdir, mldircode)
@@ -384,7 +384,7 @@ def toalignsar(tsdir, ncfile, outncfile, filestoadd = []):
     #
     print('renaming some vars')
     cube = alignsar_rename(cube)
-    cube.to_netcdf(outncfile)  # uncompressed
+    #cube.to_netcdf(outncfile)  # uncompressed
     return cube
 
 
@@ -587,6 +587,9 @@ def main(argv=None):
     # netcdf does not support boolean, so:
     cube.attrs['filtered_version'] = cube.attrs['filtered_version']*1
     
+    # alignsar (RAM-demanding version):
+    cube = toalignsar(os.path.dirname(cumfile), cube)
+    
     #only now will clip - this way the reference area can be outside the clip, if needed
     if cliparea_geo:
         cube = cube.sel(lon=slice(minclipx, maxclipx), lat=slice(minclipy, maxclipy))
@@ -594,6 +597,8 @@ def main(argv=None):
     if postfilter:
         #do filtered (it is nice)
         cube['vel_filt'] = interp_and_smooth(cube['vel'], 0.5)
+    
+    
     #masked = maskit(clipped)
     #masked['vel_filt'] = clipped['vel_filt']
     #masked.to_netcdf(outfile)
@@ -615,10 +620,12 @@ def main(argv=None):
         cube.to_netcdf(outfile, encoding=encode)
     else:
         cube.to_netcdf(outfile, encoding={'time': {'dtype': 'i4'}})
-    if alignsar:
-        # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
-        del cube
-        cube = toalignsar(os.path.dirname(cumfile), outfile, outfile+'.tmp.nc')
+    #if alignsar:
+    #    # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
+    #    del cube
+    #    cube = toalignsar(os.path.dirname(cumfile), outfile, outfile+'.tmp.nc')
+    #    if cliparea_geo:
+    #        cube = cube.sel(lon=slice(minclipx, maxclipx), lat=slice(minclipy, maxclipy))
     #
     #%% Finish
     elapsed_time = time.time()-start
