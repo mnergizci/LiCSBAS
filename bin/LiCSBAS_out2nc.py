@@ -399,31 +399,61 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
 
 
 def alignsar_rename(cube):
-    cube.cum.attrs['unit']='mm'
-    cube.cum.attrs['description']='Inverted cumulative displacements from unwrapped interferograms'
-    cube = cube.rename_vars({'cum':'cum_displacement'})
-    cube.vel.attrs['description']='Linear displacement trend estimated from the cumulative displacements'
-    cube = cube.rename_vars({'vel':'linear_velocity'})
+    def _updatecube(cube, varname, unittext = None, desctext = None, newvarname = None):
+        if varname in cube:
+            if unittext:
+                cube[varname].attrs['unit'] = unittext
+            if desctext:
+                cube[varname].attrs['description'] = desctext
+            if newvarname:
+                cube = cube.rename_vars({varname:newvarname})
+        else:
+            print('WARNING, data var '+varname+' does not exist in the cube. Continuing')
+        return cube
+    #cube = _updatecube(cube, varname, newvarname = None,
+    #            unittext = None,
+    #            desctext = None)
+    cube = _updatecube(cube, 'cum', newvarname = 'cum_displacement',
+                unittext = 'mm',
+                desctext = 'Inverted cumulative displacements from unwrapped interferograms')
+    cube = _updatecube(cube, 'vel', newvarname = 'linear_velocity',
+                unittext = 'mm/year',
+                desctext = 'Linear displacement trend estimated from the cumulative displacements')
     cube.bperp.attrs['description']='Perpendicular baseline'
-    cube.coh.attrs['description']='Mean spatial coherence of the dataset'
-    cube = cube.rename_vars({'coh':'mean_coherence'})
-    cube.rms.attrs['description']='RMSE from residuals in the small baseline inversion'
-    cube = cube.rename_vars({'rms':'residuals_rms'})
-    cube.loop_ph_avg_abs.attrs['description']='Mean absolute value of phase loop closure residual'
-    cube.loop_ph_avg_abs.attrs['unit']='rad'
-    cube = cube.rename_vars({'loop_ph_avg_abs':'mean_abs_loop_phase_closure'})
-    cube.vstd.attrs['description']='Standard deviation of the estimated linear velocity'
-    cube = cube.rename_vars({'vstd': 'linear_velocity_std'})
-    cube.stc.attrs['description']='Spatio-temporal consistency as minimum RMS of double differences of time series in space and time between the pixel and adjacent pixels'
-    cube = cube.rename_vars({'stc': 'spatiotemporal_consistency'})
-    cube['amp_dispersion_index'].attrs['description'] = 'Amplitude dispersion index calculated as variance/mean of the amplitudes'
-    cube['amp_stability_index'].attrs['description']='Amplitude stability calculated as 1 - mean/variance of the amplitudes'
-    cube.spatial_coherence.attrs['description']='Spatial coherence of given Btemp where time represents second epoch of the interferometric pair'
-    cube['atmosphere_external'].attrs['description']='Errors due to atmosphere estimated from GACOS (double-difference to keep consistent datacube)'
-    cube['atmosphere_external'].attrs['unit']='mm'
-    cube['atmosphere_resid_filter'].attrs['description']='Errors due to residual atmosphere (after applying GACOS corrections) estimated from spatio-temporal filtering'
-    cube['atmosphere_resid_filter'].attrs['unit']='mm'
-    cube.DEM.attrs['description']='Height map extracted from Copernicus DEM'
+    cube = _updatecube(cube, 'coh', newvarname = 'mean_coherence',
+                unittext = 'unitless',
+                desctext = 'Mean spatial coherence of the dataset')
+    cube = _updatecube(cube, 'rms', newvarname = 'residuals_rms',
+                unittext = 'mm',
+                desctext = 'RMSE from residuals in the small baseline inversion')
+    cube = _updatecube(cube, 'loop_ph_avg_abs', newvarname = 'mean_abs_loop_phase_closure',
+                unittext = 'rad',
+                desctext = 'Mean absolute value of phase loop closure residual')
+    cube = _updatecube(cube, 'vstd', newvarname = 'linear_velocity_std',
+                unittext = 'mm/year',
+                desctext = 'RMSE of the estimated linear velocity')
+    cube = _updatecube(cube, 'stc', newvarname = 'spatiotemporal_consistency',
+                unittext = 'mm',
+                desctext = 'Spatio-temporal consistency as minimum RMSE of double differences of time series in space and time between the pixel and adjacent pixels')
+    cube = _updatecube(cube, 'amp_dispersion_index',
+                unittext = 'unitless',
+                desctext = 'Amplitude dispersion index calculated as variance/mean of the amplitudes')
+    cube = _updatecube(cube, 'amp_stability_index',
+                unittext = 'unitless',
+                desctext = 'Amplitude stability calculated as 1 - mean/variance of the amplitudes (close to 0 = most stable)')
+    # tricky one - spatial coherence if in 4D cube
+    cube = _updatecube(cube, 'spatial_coherence',
+                unittext = 'unitless',
+                desctext = 'Spatial coherence of given Btemp where time represents second epoch of the interferometric pair')
+    cube = _updatecube(cube, 'atmosphere_external',
+                unittext = 'mm',
+                desctext = 'Errors due to atmosphere estimated from GACOS (double-difference to keep consistent datacube)')
+    cube = _updatecube(cube, 'atmosphere_resid_filter',
+                unittext = 'mm',
+                desctext = 'Errors due to residual atmosphere (after applying GACOS corrections) estimated from spatio-temporal filtering')
+    cube = _updatecube(cube, 'DEM',
+                unittext = 'm',
+                desctext = 'Height map extracted from Copernicus DEM')
     return cube
 
 
