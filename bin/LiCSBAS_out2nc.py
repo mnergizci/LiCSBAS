@@ -247,6 +247,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
     '''Will add some extras to the ncfile - need to have workdir with GEOC.MLI loaded - and for now, the multilook should be only ML = 1!
     filestoadd should be a list of tif files (with full path) that should be imported'''
     docoh = True
+    coh_in_4d = False
     doamp = True
     doatmo = True
     #cube=xr.open_dataset(ncfile) # only opening, not loading to memory
@@ -291,8 +292,14 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         # will set only 12 and 24 day cohs for now
         btemps = [12, 24]
         var = cube['cum'] # will do 3D set
-        new_var = var.expand_dims({'btemp':btemps}).astype(np.float32) * np.nan
-        cube = cube.assign({'spatial_coherence': new_var})
+        if coh_in_4d:
+            new_var = var.expand_dims({'btemp':btemps}).astype(np.float32) * np.nan
+            cube = cube.assign({'spatial_coherence': new_var})
+        else:
+            new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
+            for btemp in btemps:
+                cube = cube.assign({'spatial_coherence_'+str(btemp): new_var})
+                cube['spatial_coherence_'+str(btemp)].attrs['description']='Spatial coherence of Btemp = '+str(btemp)' days estimated per epoch.'
         #
         t=cube.indexes['time']
         searchstring='/*/*.cc'
@@ -313,8 +320,11 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             coh = (np.flipud(coh)/255).astype(np.float32)
             coh[coh==0]=np.nan
             i = t.get_loc(epochdt)
-            j = cube.indexes['btemp'].get_loc(btemp)
-            cube['spatial_coherence'].isel(time=i, btemp=j)[:] = coh
+            if coh_in_4d:
+                j = cube.indexes['btemp'].get_loc(btemp)
+                cube['spatial_coherence'].isel(time=i, btemp=j)[:] = coh
+            else:
+                cube['spatial_coherence_'+str(btemp)].isel(time=i)[:] = coh
     #cube.to_netcdf(outnc, mode='w', unlimited_dims=['time'])
     #del cube # clean memory
     if doatmo:
