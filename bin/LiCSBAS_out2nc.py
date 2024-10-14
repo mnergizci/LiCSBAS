@@ -674,7 +674,13 @@ def main(argv=None):
         encode = {'time': {'dtype': 'i4'}}
     
     cube.to_netcdf(outfile, encoding=encode)
-    
+    if alignsar:
+        print('Trying to compress additionally')
+        cmd = 'nccopy -d 5 '+outfile+' '+outfile+'.tmp.nc'
+        os.system(cmd)
+        if os.path.exists(outfile+'.tmp.nc'):
+            os.system('mv '+outfile+'.tmp.nc '+outfile)
+        
     #if alignsar:
     #    # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
     #    del cube
