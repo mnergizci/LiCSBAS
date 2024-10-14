@@ -299,7 +299,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
             for btemp in btemps:
                 cube = cube.assign({'spatial_coherence_'+str(btemp): new_var})
-                cube['spatial_coherence_'+str(btemp)].attrs['description']='Spatial coherence of Btemp = '+str(btemp)' days estimated per epoch.'
+                cube['spatial_coherence_'+str(btemp)].attrs['description']='Spatial coherence of Btemp = '+str(btemp)+' days estimated per epoch.'
         #
         t=cube.indexes['time']
         searchstring='/*/*.cc'
