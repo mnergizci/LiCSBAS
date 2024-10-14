@@ -536,6 +536,8 @@ def main(argv=None):
         if os.path.basename(cumfile) == 'cum_filt.h5':
             print('WARNING, we will indeed import cum_filt datacube as requested but for AlignSAR, the output cum will be the unfiltered version')
         cumfile = cumfile.replace('cum.h5','cum_filt.h5') # just adjusting to ensure all signatures in the input h5 (but output will be from unfiltered version!)
+        if not 'loop_ph_avg_abs' in extracols:
+            extracols.append('loop_ph_avg_abs')
     
     cube = loadall2cube(cumfile, extracols = extracols)
     
