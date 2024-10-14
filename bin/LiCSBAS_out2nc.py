@@ -401,7 +401,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
 
 def alignsar_rename(cube):
     def _updatecube(cube, varname, unittext = None, desctext = None, newvarname = None):
-        print(varname)
+        #print(varname)
         if varname in cube:
             if unittext:
                 cube[varname].attrs['unit'] = unittext
@@ -663,9 +663,14 @@ def main(argv=None):
             'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
             'stc': {'zlib': True, 'complevel': 9},
             'time': {'dtype': 'i4'}}
-        cube.to_netcdf(outfile, encoding=encode)
     else:
-        cube.to_netcdf(outfile, encoding={'time': {'dtype': 'i4'}})
+        # if not compress then at least encode only time to keep standard NetCDF:
+        encode = {'time': {'dtype': 'i4'}}
+    try:
+        cube.to_netcdf(outfile, encoding=encode)
+    except:
+        print('Error in netcdf, trying debug')
+        cube.to_netcdf(outfile)
     #if alignsar:
     #    # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
     #    del cube
