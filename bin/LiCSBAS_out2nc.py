@@ -401,6 +401,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
 
 def alignsar_rename(cube):
     def _updatecube(cube, varname, unittext = None, desctext = None, newvarname = None):
+        print(varname)
         if varname in cube:
             if unittext:
                 cube[varname].attrs['unit'] = unittext
