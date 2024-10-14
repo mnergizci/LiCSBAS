@@ -284,9 +284,9 @@ def toalignsar(tsdir, ncfile, outncfile, filestoadd = []):
         print('calculating mean amp and amp stab index')
         cube['amp_mean']=cube.amplitude.mean(dim='time')
         cube['amp_std']=cube.amplitude.std(dim='time')
-        cube['amplitude_dispersion_index']=(cube.amp_std**2)/cube['amp_mean']
-        cube['ampstab'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
-        cube['ampstab'].values[cube['ampstab'] <= 0] = 0.00001
+        cube['amp_dispersion_index']=(cube.amp_std**2)/cube['amp_mean']
+        cube['amp_stability_index'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
+        cube['amp_stability_index'].values[cube['amp_stability_index'] <= 0] = 0.00001
     if docoh:
         # will set only 12 and 24 day cohs for now
         btemps = [12, 24]
@@ -323,18 +323,19 @@ def toalignsar(tsdir, ncfile, outncfile, filestoadd = []):
         else:
             var = cube['cum'] # will do 3D set
             new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
-            varname = 'atmospheric_phase_screen'
+            varname = 'atmosphere_external'
             cube = cube.assign({varname: new_var})
-            print('Importing GACOS as APS')
+            print('Importing GACOS as atmosphere based on external model')
             cube = import_tifs2cube_simple(gacosdir, cube, searchstring='/*.sltd.geo.tif', varname=varname, thirddim='time',
                                     apply_func=rad2mm)
             cube[varname]=cube[varname].where(cube[varname]!=0)
             # w.r.t. ref point 
             cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
+            cube[varname] = cube[varname] - cube[varname][0]  # must be referred to the reference epoch (first epoch)
         print('Getting residuals from filtering assuming atmo-correction')
         cumfile = os.path.join(tsdir, 'cum.h5')
         cumnf = xr.open_dataset(cumfile)
-        varname = 'filter_APS'
+        varname = 'atmosphere_resid_filter'
         var = cube['cum'] # will do 3D set
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
         cube = cube.assign({varname: new_var})
@@ -342,16 +343,18 @@ def toalignsar(tsdir, ncfile, outncfile, filestoadd = []):
             cube[varname].isel(time=i)[:] = np.flipud(cumnf.cum[i].values) - cube['cum'][i].values
         # to same ref point (might have changed)
         cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
-        if 'atmospheric_phase_screen' in cube:
-            cube['atmosphere']=cube['atmospheric_phase_screen']+cube['filter_APS']
-            cube=cube.drop_vars('atmospheric_phase_screen')
-        else:
-            cube=cube.rename({'filter_APS':'atmosphere'})
+        # 2024-10-14: after AlignSAR meeting: we should actually keep cum being unfiltered... thus changing here (lazy):
+        cube['cum'] = cube['cum'] + cube[varname]
+        #if 'atmosphere_external' in cube:
+        #    cube['atmosphere']=cube['atmosphere_external']+cube['filter_APS']
+        #    cube=cube.drop_vars('atmosphere_external')
+        #else:
+        #    cube=cube.rename({'filter_APS':'atmosphere'})
         # also adding height
-        cube['hgt'] = cube.vel.copy()
-        cube.hgt.values = np.flipud(cumnf.hgt.values)
-        cube.hgt.attrs['unit']='m'
-        cube['hgt']=cube.hgt.where(cube.hgt!=0)
+        cube['DEM'] = cube.vel.copy()
+        cube['DEM'].values = np.flipud(cumnf.hgt.values)
+        cube['DEM'].attrs['unit']='m'
+        cube['DEM']=cube['DEM'].where(cube['DEM'] != 0)
     #
     if filestoadd:
         for tif in filestoadd:
@@ -399,15 +402,18 @@ def alignsar_rename(cube):
     cube.loop_ph_avg_abs.attrs['description']='Mean absolute value of phase loop closure residual'
     cube.loop_ph_avg_abs.attrs['unit']='rad'
     cube = cube.rename_vars({'loop_ph_avg_abs':'mean_abs_loop_phase_closure'})
-    cube.vstd.attrs['description']='Standard deviation of the velocity'
+    cube.vstd.attrs['description']='Standard deviation of the estimated linear velocity'
+    cube = cube.rename_vars({'vstd': 'linear_velocity_std'})
     cube.stc.attrs['description']='Spatio-temporal consistency as minimum RMS of double differences of time series in space and time between the pixel and adjacent pixels'
-    cube.ampstab.attrs['description']='Amplitude stability calculated as 1 - mean/variance of the amplitudes'
+    cube = cube.rename_vars({'stc': 'spatiotemporal_consistency'})
+    cube['amp_dispersion_index'].attrs['description'] = 'Amplitude dispersion index calculated as variance/mean of the amplitudes'
+    cube['amp_stability_index'].attrs['description']='Amplitude stability calculated as 1 - mean/variance of the amplitudes'
     cube.spatial_coherence.attrs['description']='Spatial coherence of given Btemp where time represents second epoch of the interferometric pair'
-    cube.atmosphere.attrs['description']='Errors due to atmosphere estimated from GACOS and spatio-temporal filtering'
-    cube.atmosphere.attrs['unit']='mm'
-    cube['filter_APS'].attrs['description']='Errors due to atmosphere estimated from spatio-temporal filtering'
-    cube['filter_APS'].attrs['unit']='mm'
-    cube.hgt.attrs['description']='Height map extracted from Copernicus DEM'
+    cube['atmosphere_external'].attrs['description']='Errors due to atmosphere estimated from GACOS (double-difference to keep consistent datacube)'
+    cube['atmosphere_external'].attrs['unit']='mm'
+    cube['atmosphere_resid_filter'].attrs['description']='Errors due to residual atmosphere (after applying GACOS corrections) estimated from spatio-temporal filtering'
+    cube['atmosphere_resid_filter'].attrs['unit']='mm'
+    cube.DEM.attrs['description']='Height map extracted from Copernicus DEM'
     return cube
 
 
@@ -603,15 +609,6 @@ def main(argv=None):
     else:
         cube.to_netcdf(outfile, encoding={'time': {'dtype': 'i4'}})
     if alignsar:
-        '''
-        alignsar:
-        - load cohs2cube, amplitude
-        - do mean ampl and amplitude dispersion
-        - add atmo error (LB16 edit)
-        - add land cover var
-        - add metadata to the cube
-        - add flowcharts to MUC - general and (updated) LiCSBAS
-        '''
         # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
         del cube
         cube = toalignsar(os.path.dirname(cumfile), outfile, outfile+'.tmp.nc')
