@@ -531,7 +531,12 @@ def main(argv=None):
         print("  "+str(err.msg), file=sys.stderr)
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
-
+    
+    if alignsar:
+        if os.path.basename(cumfile) == 'cum_filt.h5':
+            print('WARNING, we will indeed import cum_filt datacube as requested but for AlignSAR, the output cum will be the unfiltered version')
+        cumfile = cumfile.replace('cum.h5','cum_filt.h5') # just adjusting to ensure all signatures in the input h5 (but output will be from unfiltered version!)
+    
     cube = loadall2cube(cumfile, extracols = extracols)
     
     if apply_mask:
