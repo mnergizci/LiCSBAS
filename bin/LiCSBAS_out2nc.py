@@ -650,6 +650,12 @@ def main(argv=None):
     #masked.to_netcdf(outfile)
     #just to make sure it is written..
     #check if it does not invert data!
+    
+    # strange error regarding the grid mapping. solving:
+    for var in list(cube.data_vars):
+        if 'grid_mapping' in cube[var].attrs:
+            del cube[var].attrs['grid_mapping']
+    
     cube.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
     cube.rio.write_crs("EPSG:4326", inplace=True)
     if compress:
@@ -666,11 +672,9 @@ def main(argv=None):
     else:
         # if not compress then at least encode only time to keep standard NetCDF:
         encode = {'time': {'dtype': 'i4'}}
-    try:
-        cube.to_netcdf(outfile, encoding=encode)
-    except:
-        print('Error in netcdf, trying debug')
-        cube.to_netcdf(outfile)
+    
+    cube.to_netcdf(outfile, encoding=encode)
+    
     #if alignsar:
     #    # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
     #    del cube
