@@ -12,7 +12,7 @@ This script outputs a standard NetCDF4 file using LiCSBAS results
 Usage
 =====
 LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
-     [--ref_geo lon1/lon2/lat1/lat2] [--clip_geo lon1/lon2/lat1/lat2] [-A]
+     [--ref_geo lon1/lon2/lat1/lat2] [--clip_geo lon1/lon2/lat1/lat2] [--alignsar] [--addtif test.tif]
 
  -i  Path to input cum file (Default: cum_filt.h5)
  -o  Output netCDF4 file (Default: output.nc)
@@ -24,10 +24,11 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
  --postfilter will interpolate VEL only through empty areas and filter in space
  --apply_mask  Will apply mask to all relevant variables
  --extracol Will add extra layer from files in folder TS*/results - e.g. --extracol loop_ph_avg_abs
+ --addtif   Optionally you can directly include your external tif file as new data layer (it will get resampled using nearest neigbour interpolation)
 """
 #%% Change log
 '''
-v1.1 20241012 ML
+v1.1 20241012+ ML
  - allowing extras for AlignSAR cube
 v1.05 20240420 ML
  - fixed masking (apply_mask), improved metadata (to be improved further)
@@ -518,11 +519,12 @@ def main(argv=None):
     alignsar = False
     centre_refx, centre_refy = np.nan, np.nan
     extracols = ['loop_ph_avg_abs']
-
+    filestoadd = []
+    
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "addtif=", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -535,6 +537,9 @@ def main(argv=None):
                 outfile = a
             elif o == '--extracol':
                 extracols.append(a)
+            elif o == '--addtif':
+                print('Final datacube will include imported '+a)
+                filestoadd.append(a)
             elif o == '-m':
                 imd_m = a
             elif (o == '-C') or (o=='--compress'):
@@ -628,7 +633,7 @@ def main(argv=None):
     cube.attrs['filtered_version'] = cube.attrs['filtered_version']*1
     
     # alignsar (RAM-demanding version):
-    cube = toalignsar(os.path.dirname(cumfile), cube)
+    cube = toalignsar(os.path.dirname(cumfile), cube, filestoadd = filestoadd)
     
     #only now will clip - this way the reference area can be outside the clip, if needed
     if cliparea_geo:
