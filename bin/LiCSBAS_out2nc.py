@@ -634,7 +634,8 @@ def main(argv=None):
     cube.attrs['filtered_version'] = cube.attrs['filtered_version']*1
     
     # alignsar (RAM-demanding version):
-    cube = toalignsar(os.path.dirname(cumfile), cube, filestoadd = filestoadd)
+    if alignsar:
+        cube = toalignsar(os.path.dirname(cumfile), cube, filestoadd = filestoadd)
     
     #only now will clip - this way the reference area can be outside the clip, if needed
     if cliparea_geo:
@@ -651,7 +652,7 @@ def main(argv=None):
     #just to make sure it is written..
     #check if it does not invert data!
     
-    # strange error regarding the grid mapping. solving:
+    # strange error regarding the grid mapping. seen only in alignsar way. solving:
     for var in list(cube.data_vars):
         if 'grid_mapping' in cube[var].attrs:
             del cube[var].attrs['grid_mapping']
