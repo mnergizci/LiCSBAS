@@ -659,7 +659,7 @@ def main(argv=None):
     
     cube.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
     cube.rio.write_crs("EPSG:4326", inplace=True)
-    if compress:
+    if (compress and not alignsar):
         if postfilter:
             encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9},
             'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
