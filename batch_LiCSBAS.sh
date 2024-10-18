@@ -87,6 +87,7 @@ p15_n_ifg_noloop_thre=""	# default: 500 - setting this much higher than orig sin
 p15_n_loop_err_thre=""	# default: 5
 p15_n_loop_err_ratio_thre=""	# default: 0.7 - in future we will switch to this ratio term, instead of n_loop_err
 p15_resid_rms_thre=""	# default: 50 mm, but setting much higher than orig since it depends on (automatic) ref point, must be optimised
+p15_avg_phasebias="" # default: not used. Setting 1 or 1.2 rad is good option
 p16_filtwidth_km=""	# default: 2 km
 p16_filtwidth_yr=""	# default: avg_interval*3 yr
 p16_deg_deramp=""	# 1, bl, or 2. default: no deramp
@@ -433,6 +434,7 @@ if [ $start_step -le 15 -a $end_step -ge 15 ];then
   if [ ! -z $p15_n_ifg_noloop_thre ];then p15_op="$p15_op -i $p15_n_ifg_noloop_thre"; fi
   if [ ! -z $p15_n_loop_err_thre ];then p15_op="$p15_op -l $p15_n_loop_err_thre"; fi
   if [ ! -z $p15_n_loop_err_ratio_thre ];then p15_op="$p15_op -L $p15_n_loop_err_ratio_thre"; fi
+  if [ ! -z $p15_avg_phasebias ];then p15_op="$p15_op --avg_phase_bias $p15_avg_phasebias"; fi
   if [ ! -z $p15_resid_rms_thre ];then p15_op="$p15_op -r $p15_resid_rms_thre"; fi
   if [ ! -z $p15_vmin ];then p15_op="$p15_op --vmin $p15_vmin"; fi
   if [ ! -z $p15_vmax ];then p15_op="$p15_op --vmax $p15_vmax"; fi

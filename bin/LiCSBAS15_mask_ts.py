@@ -12,7 +12,7 @@ Input & output files
 Inputs in TS_GEOCml*/ :
  - results/[vel, coh_avg, n_unw, vstd, maxTlen, n_gap, stc,
             n_ifg_noloop, n_loop_err, resid_rms, n_nullify
-            coh_avg_XX, n_loop_err_rat]
+            coh_avg_XX, n_loop_err_rat, loop_ph_avg_abs]
  - info/13parameters.txt
  
 Outputs in TS_GEOCml*/
@@ -44,7 +44,7 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
  -L temporary solution before we switch -l to the ratio
  -r  Threshold of resid_rms (RMS of residuals in inversion (mm))
  --v[min|max]  Min|Max value for output figure of velocity (Default: auto)
- --avg_phase_bias  Threshold of Will plot and use for masking the avg absolute phase loop closure error
+ --avg_phase_bias  Threshold of the average absolute loop phase misclosure (phase bias) [rad] to use for masking (Default: not use. --avg_phase_bias 1 can be recommended)
  --keep_isolated  Keep (not mask) isolated pixels
                   (Default: they are masked by stc)
  --noautoadjust  Do not auto adjust threshold when all pixels are masked
