@@ -8,6 +8,8 @@ Python3 library of time series inversion functions for LiCSBAS.
 =========
 Changelog
 =========
+20241020 ML
+ - added calc with offset dates
 20240930 ML
  - (finally) found the bug causing nans in inversion of some datasets. Fixed by removing the scipy.sparse functionality. Perhaps just csr_array would do or other tweaking?
 20240423 ML
@@ -777,3 +779,70 @@ def censored_lstsq_slow(A, B, M):
         print('')
     return X
 '''
+
+def calc_vel_offsets(cum, imdates_dt, offsetdates):
+    """
+    Calculate vconst, velocity, and offsets for given dates. ML 20241022
+
+    Inputs:
+      cum    : cumulative phase block for each point (n_pt, n_im)
+      imdates_dt : acquisition dates as ordinal number (n_im)
+      offsetdates : earthquake event dates as datetime.date
+
+    Returns:
+      result : vconst, vel, estimated offsets (n_vars, n_pt)
+      Gdesc :  description of the 'result' content (n_vars)
+
+    """
+    dt_cum = np.float32((np.array(imdates_dt) - imdates_dt[0]) / 365.25)
+    n_pt, n_im = cum.shape
+    result = np.zeros((2, n_pt), dtype=np.float32)*np.nan #[vconst, vel]
+
+    G = np.stack((np.ones_like(dt_cum), dt_cum), axis=1)
+    #vconst = np.zeros((n_pt), dtype=np.float32)*np.nan
+    #vel = np.zeros((n_pt), dtype=np.float32)*np.nan
+
+    bool_pt_full = np.all(~np.isnan(cum), axis=1)
+    n_pt_full = bool_pt_full.sum()
+
+    offsetcol_prev = np.zeros_like(imdates_dt)
+    Gdesc = ['vconst', 'vel']
+
+    for offdate in offsetdates:
+        # dt_cum_offset = dt_cum.copy()
+        # coseismic offset
+        TT = np.array(imdates_dt) >= offdate.toordinal()
+        offsetcol = (TT > 0).astype(int)
+        if np.array_equal(offsetcol, offsetcol_prev):
+            # skipping this offset
+            continue
+        if np.all(offsetcol == 1):
+            continue
+        offsetcol_prev = offsetcol
+        # all ok, adding to G matrix
+        G = np.insert(G, G.shape[-1], offsetcol, axis=1)
+        Gdesc.append('offset_' + offdate.strftime('%Y%m%d'))
+        # and allocate extended result
+        result = np.insert(result, result.shape[0], np.zeros((1, n_pt), dtype=np.float32) * np.nan, axis=0)
+
+
+    if n_pt_full!=0:
+        print('  Solving {0:6}/{1:6}th points with full cum at a time...'.format(n_pt_full, n_pt), flush=True)
+
+        ## Sovle
+        result[:, bool_pt_full] = np.linalg.lstsq(G, cum[bool_pt_full, :].transpose(), rcond=None)[0]
+
+    ### Solve other points with nan point by point.
+    cum_tmp = cum[~bool_pt_full, :].transpose()
+    mask = (~np.isnan(cum_tmp))
+    cum_tmp[np.isnan(cum_tmp)] = 0
+    print('  Next, solve {0} points including nan point-by-point...'.format(n_pt-n_pt_full), flush=True)
+
+    result[:, ~bool_pt_full] = censored_lstsq_slow(G, cum_tmp, mask) #(n_im+1, n_pt)
+
+    #vconst = result[0, :]
+    #vel = result[1, :]
+    #
+    #return vel, vconst
+
+    return result, Gdesc

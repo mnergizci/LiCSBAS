@@ -5,7 +5,8 @@ v1.3.3 20210910 Yu Morishita, GSI
 ========
 Overview
 ========
-This script calculates velocity and its standard deviation from cum*.h5 and outputs them as a float32 file. Amplitude and time offset of the annual displacement can also be calculated by --sin option.
+This script calculates velocity and its standard deviation from cum*.h5 and outputs them as a float32 file.
+Amplitude and time offset of the annual displacement can also be calculated by --sin option.
 
 =====
 Usage
@@ -26,10 +27,13 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfile] [-r x1:x
          *.amp and *.dt (time difference wrt Jan 1) are output
  --mask  Path to mask file for ref phase calculation (Default: No mask)
  --png   Make png file (Default: Not make png)
+ --eqoffsets  Estimate also offsets for earthquakes in the region - auto-found for M6.5+
 
 """
 #%% Change log
 '''
+2024-10-22 Milan Lazecky, ULeeds
+ - added eqoffsets
 v1.3.3 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
 v1.3.2 20210125 Yu Morishita, GSI
@@ -90,6 +94,7 @@ def main(argv=None):
     vstdflag = False
     sinflag = False
     pngflag = False
+    eqoffsetsflag = False
     cmap = SCM.roma.reversed()
     cmap_vstd = 'viridis_r'
     cmap_amp = 'viridis_r'
@@ -99,7 +104,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "vstd", "sin", "png", "ref_geo=", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "vstd", "sin", "eqoffsets", "png", "ref_geo=", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -126,6 +131,9 @@ def main(argv=None):
                 maskfile = a
             elif o == '--png':
                 pngflag = True
+            elif o == '--eqoffsets':
+                eqoffsetsflag = True
+                print('warning, new function - will estimate only linear vel trend + the offsets')
 
         if not os.path.exists(cumfile):
             raise Usage('No {} exists! Use -i option.'.format(cumfile))
@@ -135,6 +143,20 @@ def main(argv=None):
         print("  "+str(err.msg), file=sys.stderr)
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
+
+
+    if eqoffsetsflag:
+        print('getting earthquakes over the region')
+        eqoffsets = get_earthquake_dates(cumfile, minmag=6.5, maxdepth=60)
+        print('identified '+str(len(eqoffsets))+' earthquake candidates to solve')
+        print('')
+        try:
+            import pandas as pd
+            pd.DataFrame({'date': offsetdates}).to_csv('eqoffsets.txt', index=False)
+            print('stored to eqoffsets.txt file')
+        except:
+            # no pandas
+            print('(no pandas, not saving now)')
 
 
     #%% Read info
@@ -239,22 +261,36 @@ def main(argv=None):
     bool_allnan = np.all(np.isnan(cum_tmp), axis=0)
     cum_tmp = cum_tmp.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
 
+    if eqoffsetsflag:
+        print('Calc vel and earthquake offsets')
+        result, datavars = inv_lib.calc_vel(cum_tmp, imdates_dt, eqoffsets)
+        for i in range(len(datavars)):
+            dvarname = datavars[i]
+            print('storing '+dvar)
+            dvar = np.zeros((length, width), dtype=np.float32)*np.nan
+            dvar[~bool_allnan] = result[i,:]
+            outvarfile = outfile+'.'+dvarname
+            dvar.tofile(outvarfile)
+            if pngflag:
+                pngfile = outvarfile + '.png'
+                # title = 'n_im: {}, Ref X/Y {}:{}/{}:{}'.format(n_im, refx1, refx2, refy1, refy2)
+                plot_lib.make_im_png(dvar, pngfile, cmap, dvarname)
+    else:
+        if not sinflag: ## Linear function
+            print('Calc velocity...')
+            vel[~bool_allnan], vconst[~bool_allnan] = inv_lib.calc_vel(cum_tmp, dt_cum)
+            vel.tofile(outfile)
+        else: ## Linear+sin function
+            print('Calc velocity and annual components...')
+            amp = np.zeros((length, width), dtype=np.float32)*np.nan
+            delta_t = np.zeros((length, width), dtype=np.float32)*np.nan
+            ampfile = outfile.replace('vel', 'amp')
+            dtfile = outfile.replace('vel', 'dt')
 
-    if not sinflag: ## Linear function
-        print('Calc velocity...')
-        vel[~bool_allnan], vconst[~bool_allnan] = inv_lib.calc_vel(cum_tmp, dt_cum)
-        vel.tofile(outfile)
-    else: ## Linear+sin function
-        print('Calc velocity and annual components...')
-        amp = np.zeros((length, width), dtype=np.float32)*np.nan
-        delta_t = np.zeros((length, width), dtype=np.float32)*np.nan
-        ampfile = outfile.replace('vel', 'amp')
-        dtfile = outfile.replace('vel', 'dt')
-
-        vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp, dt_cum, imdates[0])
-        vel.tofile(outfile)
-        amp.tofile(ampfile)
-        delta_t.tofile(dtfile)
+            vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp, dt_cum, imdates[0])
+            vel.tofile(outfile)
+            amp.tofile(ampfile)
+            delta_t.tofile(dtfile)
 
     ### vstd
     if vstdflag:
