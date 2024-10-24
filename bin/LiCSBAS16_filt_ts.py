@@ -432,6 +432,8 @@ def main(argv=None):
         maskfile = os.path.join(resultsdir, 'mask')
         mask = io_lib.read_img(maskfile, length, width)
         mask[mask==0] = np.nan ## 0->nan
+        # if mask is involved, apply to cum already:
+        cum_org = cum_org * mask[np.newaxis,:,:]
     else:
         mask = np.ones((length, width), dtype=np.float32)
         mask[np.isnan(cum_org[0, :, :])] = np.nan
