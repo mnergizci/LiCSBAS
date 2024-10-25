@@ -95,6 +95,7 @@ def main(argv=None):
     sinflag = False
     pngflag = False
     eqoffsetsflag = False
+    minmag = 6.5
     cmap = SCM.roma.reversed()
     cmap_vstd = 'viridis_r'
     cmap_amp = 'viridis_r'
@@ -147,7 +148,7 @@ def main(argv=None):
 
     if eqoffsetsflag:
         print('getting earthquakes over the region')
-        eqoffsets = get_earthquake_dates(cumfile, minmag=6.5, maxdepth=60)
+        eqoffsets = tools_lib.get_earthquake_dates(cumfile, minmag=minmag, maxdepth=60)
         print('identified '+str(len(eqoffsets))+' earthquake candidates to solve')
         print('')
         try:
