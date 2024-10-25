@@ -267,7 +267,7 @@ def main(argv=None):
         result, datavars = inv_lib.calc_vel_offsets(cum_tmp, imdates_dt, eqoffsets)
         for i in range(len(datavars)):
             dvarname = datavars[i]
-            print('storing '+dvar)
+            print('storing '+dvarname)
             dvar = np.zeros((length, width), dtype=np.float32)*np.nan
             dvar[~bool_allnan] = result[i,:]
             outvarfile = outfile+'.'+dvarname
