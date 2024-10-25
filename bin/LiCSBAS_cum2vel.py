@@ -264,7 +264,7 @@ def main(argv=None):
 
     if eqoffsetsflag:
         print('Calc vel and earthquake offsets')
-        result, datavars = inv_lib.calc_vel(cum_tmp, imdates_dt, eqoffsets)
+        result, datavars = inv_lib.calc_vel_offsets(cum_tmp, imdates_dt, eqoffsets)
         for i in range(len(datavars)):
             dvarname = datavars[i]
             print('storing '+dvar)
