@@ -249,7 +249,6 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
     filestoadd should be a list of tif files (with full path) that should be imported'''
     docoh = True
     coh_in_4d = False
-    doamp = True
     doatmo = True
     #cube=xr.open_dataset(ncfile) # only opening, not loading to memory
     workdir=os.path.dirname(tsdir)
@@ -313,19 +312,37 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             btemp = datediff_pair(pair)
             if not btemp in btemps:
                 continue
-            epochdt = pd.Timestamp(pair.split('_')[1])
-            if not epochdt in t:
+            eintime = False
+            for epochstr in pair.split('_'):
+                epochdt = pd.Timestamp(epochstr)
+                if epochdt in t:
+                    eintime = True
+            if not eintime:
                 continue
-            coh=np.fromfile(cc,np.uint8)
-            coh=coh.reshape(cube.vel.shape)
-            coh = (np.flipud(coh)/255).astype(np.float32)
-            coh[coh==0]=np.nan
-            i = t.get_loc(epochdt)
-            if coh_in_4d:
-                j = cube.indexes['btemp'].get_loc(btemp)
-                cube['spatial_coherence'].isel(time=i, btemp=j)[:] = coh
-            else:
-                cube['spatial_coherence_'+str(btemp)].isel(time=i)[:] = coh
+            # at least one epoch is within the cc here, loading
+            coh = np.fromfile(cc, np.uint8)
+            coh = coh.reshape(cube.vel.shape)
+            coh = (np.flipud(coh) / 255).astype(np.float32)
+            coh[coh == 0] = np.nan
+            for epochstr in pair.split('_'):
+                #epochdt = pd.Timestamp(pair.split('_')[1])
+                epochdt = pd.Timestamp(epochstr)
+                if not epochdt in t:
+                    continue
+                i = t.get_loc(epochdt)
+                cohcount = coh*0+1
+                if coh_in_4d:
+                    j = cube.indexes['btemp'].get_loc(btemp)
+                    prevcoh = cube['spatial_coherence'].isel(time=i, btemp=j).values
+                    prevcohcount = prevcoh*0+1
+                    totalcount = cohcount+prevcohcount
+                    cube['spatial_coherence'].isel(time=i, btemp=j)[:] = (coh+prevcoh)/totalcount
+                else:
+                    prevcoh = cube['spatial_coherence_'+str(btemp)].isel(time=i).values
+                    prevcohcount = prevcoh * 0 + 1
+                    totalcount = cohcount + prevcohcount
+                    #cube['spatial_coherence_'+str(btemp)].isel(time=i)[:] = coh
+                    cube['spatial_coherence_' + str(btemp)].isel(time=i)[:] = (coh+prevcoh)/totalcount
     #cube.to_netcdf(outnc, mode='w', unlimited_dims=['time'])
     #del cube # clean memory
     if doatmo:
