@@ -153,7 +153,8 @@ def main(argv=None):
         print('')
         try:
             import pandas as pd
-            pd.DataFrame({'date': offsetdates}).to_csv('eqoffsets.txt', index=False)
+            outxt = os.path.join(os.path.dirname(cumfile), 'info', 'offsets.txt')
+            pd.DataFrame({'date': offsetdates}).to_csv(outxt, index=False)
             print('stored to eqoffsets.txt file')
         except:
             # no pandas

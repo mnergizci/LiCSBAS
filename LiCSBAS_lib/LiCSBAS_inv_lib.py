@@ -780,7 +780,7 @@ def censored_lstsq_slow(A, B, M):
     return X
 '''
 
-def calc_vel_offsets(cum, imdates_dt, offsetdates):
+def calc_vel_offsets(cum, imdates_dt, offsetdates, trunc_last_days = 180):
     """
     Calculate vconst, velocity, and offsets for given dates. ML 20241022
 
@@ -788,6 +788,7 @@ def calc_vel_offsets(cum, imdates_dt, offsetdates):
       cum    : cumulative phase block for each point (n_pt, n_im)
       imdates_dt : acquisition dates as ordinal number (n_im)
       offsetdates : earthquake event dates as datetime.date
+      trunc_last_days : if the offset is within the last trunc_last_days, it will set velocity estimate to not use such. TODO: may get to problems in short datasets
 
     Returns:
       result : vconst, vel, estimated offsets (n_vars, n_pt)
