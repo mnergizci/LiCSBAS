@@ -33,18 +33,21 @@ Inputs in GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [-m minbtemp] [-s]
+LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxbtemp maxbtemp] [--minbtemp minbtemp] [-s]
 
  -d  Path to the GEOCml* dir containing stack of unw data.
  -t  Path to the output TS_GEOCml* dir. (Default: TS_GEOCml*)
  -c  Threshold of average coherence (Default: 0.05)
  -u  Threshold of coverage of unw data (Default: 0.3)
- -m  Minimal Btemp in days (Default: 0)
+ --minbtemp  Minimal Btemp in days (Default: 0 = not use)
+ --maxbtemp  Maximal Btemp in days (Default: 0 = not use)
  -s  Check for coregistration error in the form of a significant azimuthal ramp
 
 """
 #%% Change log
 '''
+20241028 ML
+ - add also max btemp
 20240115 ML
  - add min btemp parameter (to avoid fading bias in agri areas, we recommend setting minbtemp=12 for S1. Or nullify with smaller threshold in step 1-2)
 v1.4 20221011 Qi Ou, Uni of Leeds
@@ -109,11 +112,12 @@ def main(argv=None):
     unw_cov_thre = 0.3
     check_coreg_slope = False
     minbtemp = 0
+    maxbtemp = 0 # 0 means not use
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:m:s", ["help"])
+            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "maxbtemp=",])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -128,8 +132,10 @@ def main(argv=None):
                 coh_thre = float(a)
             elif o == '-u':
                 unw_cov_thre = float(a)
-            elif o == '-m':
+            elif o == '--minbtemp':
                 minbtemp = float(a)
+            elif o == '--maxbtemp':
+                maxbtemp = float(a)
             elif o == '-s':
                 check_coreg_slope = True
 
@@ -415,12 +421,25 @@ def main(argv=None):
     if len(bad_ifgdates) == n_ifg:
         raise ValueError('All ifgs are regarded as bad!\nChange the parameters or check the input ifgs.\n')
 
-    # Not use ifgs above given btemp
+    # Not use ifgs below given btemp
     if minbtemp>0:
         btemps = tools_lib.calc_temporal_baseline(ifgdates)
-        bad_ifgdates += ifgdates[btemps < minbtemp]
+        remsel = ifgdates[btemps < minbtemp]
+        bad_ifgdates += remsel
+        print('Disabling '+str(len(remsel)))+' interferograms below min Btemp = '+str(minbtemp)+' days.')
         bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
         bad_ifgdates = list(set(bad_ifgdates))
+
+
+    # Not use ifgs above given btemp
+    if maxbtemp>0:
+        btemps = tools_lib.calc_temporal_baseline(ifgdates)
+        remsel = ifgdates[btemps > maxbtemp]
+        bad_ifgdates += remsel
+        print('Disabling '+str(len(remsel)))+' interferograms above max Btemp = '+str(maxbtemp)+' days.')
+        bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
+        bad_ifgdates = list(set(bad_ifgdates))
+
 
     #%% Identify removed image and output file
     good_ifgdates = list(set(ifgdates)-set(bad_ifgdates))
