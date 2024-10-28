@@ -410,9 +410,45 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             cube[varname].values = data.values
             cube[varname].attrs = {'grid_mapping': 'spatial_ref'}
     #
-    print('renaming some vars')
+    print('Converting to the AlignSAR standard datacube')
     cube = alignsar_rename(cube)
+    cube = alignsar_global_metadata(cube)
     #cube.to_netcdf(outncfile)  # uncompressed
+    return cube
+
+
+def alignsar_global_metadata(cube):
+    print('WARNING, global metadata are set in default values, valid for the AlignSAR InSAR TS demo datacube - please change manually')
+    print('(especially things such as incidence angle, frame time etc)')
+    resolution = float(cube.lon[2] - cube.lon[1])
+    frtime = '05:11:50'
+    #
+    cube.attrs['processing_level'] = 'InSAR'
+    cube.attrs['date_created'] = str(dt.datetime.now())
+    cube.attrs['creator_name'] = 'Milan Lazecky'
+    cube.attrs['creator_email'] = 'M.Lazecky@leeds.ac.uk'
+    cube.attrs['creator_url'] = 'https://comet.nerc.ac.uk/COMET-LiCS-portal'
+    cube.attrs['institution'] = 'University of Leeds'
+    cube.attrs['project'] = 'AlignSAR'
+    cube.attrs['publisher_name'] = cube.attrs['creator_name']  # 'N/A'
+    cube.attrs['publisher_email'] = cube.attrs['creator_email']  # 'N/A'
+    cube.attrs['publisher_url'] = cube.attrs['creator_url']  # 'N/A'
+    cube.attrs['geospatial_lat_min'] = float(cube.lat.min())
+    cube.attrs['geospatial_lat_max'] = float(cube.lat.max())
+    cube.attrs['geospatial_lon_min'] = float(cube.lon.min())
+    cube.attrs['geospatial_lon_max'] = float(cube.lon.max())
+    cube.attrs['sar_date_time'] = 'N/A'  # not for multitemporal datacube really..
+    cube.attrs['sar_reference_date_time'] = str(cube.time[0].values).split('T')[0] + 'T' + frtime
+    cube.attrs['sar_instrument_mode'] = 'TOPS'
+    cube.attrs['sar_looks_range'] = round(resolution * 111111 / 2.3)  # 7 originally
+    cube.attrs['sar_looks_azimuth'] = round(resolution * 111111 / 14)  # 2 originally, but then again..
+    cube.attrs['sar_pixel_spacing_azimuth'] = 13.95
+    cube.attrs['sar_processing_software'] = 'LiCSAR, LiCSBAS'
+    cube.attrs['sar_absolute_orbit'] = '-'
+    cube.attrs['sar_relative_orbit'] = '22D'
+    cube.attrs['sar_view_azimuth'] = -169.9
+    cube.attrs['sar_view_incidence_angle'] = 33.8
+    cube.attrs['sar_slc_crop'] = '-'
     return cube
 
 
@@ -424,6 +460,9 @@ def alignsar_rename(cube):
                 cube[varname].attrs['unit'] = unittext
             if desctext:
                 cube[varname].attrs['description'] = desctext
+            # AlignSAR other local params:
+            cube[varname].attrs['range'] = '('+str(np.nanmin(cube[varname]))+', '+str(np.nanmax(cube[varname]))+')'
+            cube[varname].attrs['format'] = str(cube[varname].dtype)
             if newvarname:
                 cube = cube.rename_vars({varname:newvarname})
         else:
