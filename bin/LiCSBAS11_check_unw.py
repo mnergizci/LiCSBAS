@@ -402,6 +402,30 @@ def main(argv=None):
 
     fstats.close()
 
+    ### Raise error if all ifgs are bad
+    if len(bad_ifgdates) == n_ifg:
+        raise ValueError('All ifgs are regarded as bad!\nChange the parameters or check the input ifgs.\n')
+
+    # Not use ifgs below given btemp
+    if minbtemp > 0:
+        btemps = tools_lib.calc_temporal_baseline(ifgdates)
+        # remsel = ifgdates[np.array(btemps) < minbtemp]
+        remsel = list(np.array(ifgdates)[np.array(btemps) < minbtemp])
+        bad_ifgdates += remsel
+        print('Disabling ' + str(len(remsel)) + ' interferograms below min Btemp = ' + str(minbtemp) + ' days.')
+        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
+        bad_ifgdates = list(set(bad_ifgdates))
+
+    # Not use ifgs above given btemp
+    if maxbtemp > 0:
+        btemps = tools_lib.calc_temporal_baseline(ifgdates)
+        # remsel = ifgdates[np.array(btemps) > maxbtemp]
+        remsel = list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
+        bad_ifgdates += remsel
+        print('Disabling ' + str(len(remsel)) + ' interferograms above max Btemp = ' + str(maxbtemp) + ' days.')
+        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
+        bad_ifgdates = list(set(bad_ifgdates))
+
     ### Output list of bad ifg
     bad_ifgfile = os.path.join(infodir, '11bad_ifg.txt')
     print('\n{0}/{1} ifgs are discarded from further processing.'.format(len(bad_ifgdates), n_ifg))
@@ -416,31 +440,6 @@ def main(argv=None):
             for i, ifgd in enumerate(bad_ifgdates):
                 print('{}'.format(ifgd), file=f)
                 print('{}  {:5.3f}  {:5.3f}'.format(ifgd, rate_cov[ixs_bad_ifgdates[i]],  coh_avg_ifg[ixs_bad_ifgdates[i]]), flush=True)
-
-    ### Raise error if all ifgs are bad
-    if len(bad_ifgdates) == n_ifg:
-        raise ValueError('All ifgs are regarded as bad!\nChange the parameters or check the input ifgs.\n')
-
-    # Not use ifgs below given btemp
-    if minbtemp>0:
-        btemps = tools_lib.calc_temporal_baseline(ifgdates)
-        #remsel = ifgdates[np.array(btemps) < minbtemp]
-        remsel =  list(np.array(ifgdates)[np.array(btemps) < minbtemp])
-        bad_ifgdates += remsel
-        print('Disabling '+str(len(remsel))+' interferograms below min Btemp = '+str(minbtemp)+' days.')
-        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
-        bad_ifgdates = list(set(bad_ifgdates))
-
-
-    # Not use ifgs above given btemp
-    if maxbtemp>0:
-        btemps = tools_lib.calc_temporal_baseline(ifgdates)
-        #remsel = ifgdates[np.array(btemps) > maxbtemp]
-        remsel = list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
-        bad_ifgdates += remsel
-        print('Disabling '+str(len(remsel))+' interferograms above max Btemp = '+str(maxbtemp)+' days.')
-        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
-        bad_ifgdates = list(set(bad_ifgdates))
 
 
     #%% Identify removed image and output file
