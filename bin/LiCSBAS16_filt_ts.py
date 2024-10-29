@@ -63,6 +63,7 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
               0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  --ex_range_geo  Range EXCLUDED in deramp and hgt_linear in geographical
                  coordinates (deg).
+ --from_model path/to/model.h5  Use externally calculated model to perform residual-based filtering (in dev further. see LiCSBAS_cum2vel.py to generate this)
 
 Note: Spatial filter consume large memory. If the processing is stacked, try
  - --n_para 1
@@ -596,7 +597,6 @@ def main(argv=None):
     # Cleaning memory - means need to get the refpoint_cum_org first
     refpoint_cum_org = cum[:, refy1s, refx1s]
     del cum
-    cumh5.close()
 
     # adding back model to the filtered residuals
     if inputresidflag:
@@ -700,7 +700,7 @@ def main(argv=None):
         else:
             print('  {} not exist in results dir. Skip'.format(index))
 
-    # cumh5.close()
+    cumh5.close()
     cumfh5.close()
 
 
