@@ -409,13 +409,14 @@ def wls_nsbas(i):
 
 
 #%%
-def calc_vel(cum, dt_cum):
+def calc_vel(cum, dt_cum, return_G = False):
     """
     Calculate velocity.
 
     Inputs:
       cum    : cumulative phase block for each point (n_pt, n_im)
       dt_cum : Cumulative days for each image (n_im)
+      return_G: optionally return G matrix
 
     Returns:
       vel    : Velocity (n_pt)
@@ -448,11 +449,15 @@ def calc_vel(cum, dt_cum):
     vconst = result[0, :]
     vel = result[1, :]
 
-    return vel, vconst
+    if return_G:
+        # careful, we switch the output params to conform with G
+        return vconst, vel, G
+    else:
+        return vel, vconst
 
 
 #%%
-def calc_velsin(cum, dt_cum, imd0):
+def calc_velsin(cum, dt_cum, imd0, return_G = False):
     """
     Calculate velocity and coeffcients of sin (annual) function.
 
@@ -460,6 +465,7 @@ def calc_velsin(cum, dt_cum, imd0):
       cum    : cumulative phase block for each point (n_pt, n_im)
       dt_cum : Cumulative days for each image (n_im)
       imd0   : Date of first acquistion (str, yyyymmdd)
+      return_G: optionally return G matrix (careful..)
 
     Returns:
       vel    : Velocity (n_pt)
@@ -510,7 +516,11 @@ def calc_velsin(cum, dt_cum, imd0):
     delta_t[delta_t < 0] = delta_t[delta_t < 0]+365.25 #0-365.25
     delta_t[delta_t > 365.25] = delta_t[delta_t > 365.25]-365.25
 
-    return vel, vconst, amp, delta_t
+    if return_G:
+        # careful, we switch the output params to conform with G - AND, actually also coef_s/c
+        return vconst, vel, coef_s, coef_c, amp, delta_t, G
+    else:
+        return vel, vconst, amp, delta_t
 
 
 
@@ -780,7 +790,7 @@ def censored_lstsq_slow(A, B, M):
     return X
 '''
 
-def calc_vel_offsets(cum, imdates_dt, offsetdates, trunc_last_days = 180):
+def calc_vel_offsets(cum, imdates_dt, offsetdates, return_G = False, trunc_last_days = 180):
     """
     Calculate vconst, velocity, and offsets for given dates. ML 20241022
 
@@ -788,6 +798,7 @@ def calc_vel_offsets(cum, imdates_dt, offsetdates, trunc_last_days = 180):
       cum    : cumulative phase block for each point (n_pt, n_im)
       imdates_dt : acquisition dates as ordinal number (n_im)
       offsetdates : earthquake event dates as datetime.date
+      return_G : will also return the formed G matrix
       trunc_last_days : if the offset is within the last trunc_last_days, it will set velocity estimate to not use such. TODO: may get to problems in short datasets
 
     Returns:
@@ -845,5 +856,28 @@ def calc_vel_offsets(cum, imdates_dt, offsetdates, trunc_last_days = 180):
     #vel = result[1, :]
     #
     #return vel, vconst
+    if return_G:
+        return result, Gdesc, G
+    else:
+        return result, Gdesc
 
-    return result, Gdesc
+
+def get_model_cum(G, params_sorted):
+    """ Will get the model cum displacements, using formed G and corresponding parameters.
+
+    Inputs:
+        G (np.array) :  shape of (time, modelparams)
+        params_sorted (list of arrays):  the model parameter estimates, e.g. [vel, vconst]
+
+    Returns:
+        np.array : same shape as the cum layer
+    """
+    t, x, y = G.shape[0], params_sorted[0].shape[0], params_sorted[0].shape[1]
+    out = np.zeros((t, x, y), dtype=np.float32)
+    # this way below is little less memory demanding:
+    for i in range(len(params_sorted)):
+        ivals = G[:,i]
+        m = params_sorted[i]
+        out = m * np.repeat(ivals[:, np.newaxis], x*y, axis=1).reshape((t,x,y)) + out
+    #
+    return out

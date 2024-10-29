@@ -890,12 +890,13 @@ def get_earthquake_dates(cumfile, minmag = 6.5, maxdepth=60):
                     minlatitude=min(lat1, lat2),
                     minlongitude=min(lon1, lon2))
     offsetdates = []
+    print('Setting offset dates')  # TODO - better to set the offsets at the centre time between the epochs
     for e in events:
         offdate = e.time.date()
         if center_time_dt:
             if e.time.strftime('%Y%m%d') in imdates:
                 if e.time.time() < center_time_dt:
-                    print('checking the event time, an event will be set towards previous epoch')
+                    #print('checking the event time, an event will be set towards previous epoch')
                     offdate = offdate - dt.timedelta(days=1)
         offsetdates.append(offdate)
 

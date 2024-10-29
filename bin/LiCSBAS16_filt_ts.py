@@ -72,6 +72,8 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
 """
 #%% Change log
 '''
+20241029 Milan Lazecky
+ - allow running the filter starting from model residuals --- do not use before deramping
 v1.6.0 20230116 Yu Morishita
  - Add --demerr option to estimate/remove DEM error phase
 v1.5.3 20230602 M. Lazecky and Pedro E. Bedon, Uni of Leeds
@@ -167,6 +169,7 @@ def main(argv=None):
     maskflag = True
     filterflag = True
     demerrflag = False
+    inputresidflag = False
     gpu = False
 
     try:
@@ -190,7 +193,7 @@ def main(argv=None):
     cmap_wrap = SCM.romaO
     q = multi.get_context('fork')
     compress = 'gzip'
-
+    modelfile = ''
 
     #%% Read options
     try:
@@ -198,7 +201,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu"])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -237,7 +240,9 @@ def main(argv=None):
                 ex_range_geo_str = a
             elif o == '--gpu':
                 gpu = True
-
+            elif o == '--from_model':
+                modelfile = a
+                inputresidflag = True
         if not tsadir:
             raise Usage('No tsa directory given, -t is not optional!')
         elif not os.path.isdir(tsadir):
@@ -476,6 +481,11 @@ def main(argv=None):
         p.map(deramp_wrapper2, range(1, n_im))
         p.close()
         del cum_org
+
+        # %% if the input should be residuals from given model
+    if inputresidflag:
+        print('in dev')
+        # load modelfile model_cum as h5, and remove from cum to get resids that will then get processed
 
         # %% DEM err
     if demerrflag:
