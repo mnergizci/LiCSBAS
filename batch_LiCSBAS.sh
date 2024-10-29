@@ -120,6 +120,8 @@ p05_outGEOCmldir_suffix="" # default: clip
 p05_n_para=$n_para   # default: # of usable CPU
 p11_GEOCmldir=""	# default: $GEOCmldir
 p11_TSdir=""	# default: TS_$GEOCmldir
+p11_minbtemp=""  # default: 0 (not use)
+p11_maxbtemp=""  # default: 0 (not use)
 p120_ignoreconncomp="n" # y/n
 p12_GEOCmldir=""        # default: $GEOCmldir
 p12_TSdir=""    # default: TS_$GEOCmldir
@@ -321,6 +323,8 @@ if [ $start_step -le 11 -a $end_step -ge 11 ];then
   if [ ! -z $p11_TSdir ];then p11_op="$p11_op -t $p11_TSdir"; fi
   if [ ! -z $p11_unw_thre ];then p11_op="$p11_op -u $p11_unw_thre"; fi
   if [ ! -z $p11_coh_thre ];then p11_op="$p11_op -c $p11_coh_thre"; fi
+  if [ ! -z $p11_minbtemp ];then p11_op="$p11_op --minbtemp $p11_minbtemp"; fi
+  if [ ! -z $p11_maxbtemp ];then p11_op="$p11_op --minbtemp $p11_maxbtemp"; fi
   if [ $p11_s_param == "y" ];then p11_op="$p11_op -s"; fi
   if [ $check_only == "y" ];then
     echo "LiCSBAS11_check_unw.py $p11_op"
