@@ -17,7 +17,7 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
  -s  Start date of period to calculate velocity (Default: first date)
  -e  End date of period to calculate velocity (Default: last date)
  -i  Path to input cum file (Default: cum_filt.h5)
- -o  Output filename root string - will use to name modeled variables (Default: yyyymmdd_yyyymmdd.vel[.mskd])
+ -o  Output filename root string - will use to name modeled variables (Default: yyyymmdd_yyyymmdd -> yyyymmdd_yyyymmdd.vel[.mskd])
  -r  Reference area (Default: same as info/*ref.txt)
      Note: x1/y1 range 0 to width-1, while x2/y2 range 1 to width
      0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
@@ -159,14 +159,14 @@ def main(argv=None):
         print('identified '+str(len(eqoffsets))+' earthquake candidates to solve')
         print('')
         try:
-            import pandas as pd
             outxt = os.path.join(os.path.dirname(cumfile), 'info', 'eqoffsets.txt')
-            pd.DataFrame({'date': eqoffsets}).to_csv(outxt, index=False)
+            with open(outxt, 'w') as f:
+                for i in eqoffsets:
+                    print('{}'.format(i), file=f)
             print('stored to file:')
             print(outxt)
         except:
-            # no pandas
-            print('(no pandas, not saving now)')
+            print('some error storing eqoffsets to '+outxt+'. Continuing')
 
 
     #%% Read info
