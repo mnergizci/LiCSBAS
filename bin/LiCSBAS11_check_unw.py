@@ -424,20 +424,22 @@ def main(argv=None):
     # Not use ifgs below given btemp
     if minbtemp>0:
         btemps = tools_lib.calc_temporal_baseline(ifgdates)
-        remsel = ifgdates[btemps < minbtemp]
+        #remsel = ifgdates[np.array(btemps) < minbtemp]
+        remsel =  list(np.array(ifgdates)[np.array(btemps) < minbtemp])
         bad_ifgdates += remsel
         print('Disabling '+str(len(remsel))+' interferograms below min Btemp = '+str(minbtemp)+' days.')
-        bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
+        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
         bad_ifgdates = list(set(bad_ifgdates))
 
 
     # Not use ifgs above given btemp
     if maxbtemp>0:
         btemps = tools_lib.calc_temporal_baseline(ifgdates)
-        remsel = ifgdates[btemps > maxbtemp]
+        #remsel = ifgdates[np.array(btemps) > maxbtemp]
+        remsel = list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
         bad_ifgdates += remsel
         print('Disabling '+str(len(remsel))+' interferograms above max Btemp = '+str(maxbtemp)+' days.')
-        bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
+        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
         bad_ifgdates = list(set(bad_ifgdates))
 
 
