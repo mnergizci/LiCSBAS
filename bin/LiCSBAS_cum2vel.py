@@ -138,7 +138,7 @@ def main(argv=None):
             elif o == '--png':
                 pngflag = True
             elif o == '--eqoffsets':
-                minmag = a
+                minmag = float(a)
                 eqoffsetsflag = True
                 print('warning, new function - will estimate only linear vel trend + the offsets')
             elif o == '--export_model':

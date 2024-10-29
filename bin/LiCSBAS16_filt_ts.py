@@ -484,7 +484,12 @@ def main(argv=None):
 
         # %% if the input should be residuals from given model
     if inputresidflag:
-        print('in dev')
+        modelh5 = h5.File(modelfile, 'r')
+        cum_model = modelh5['cum_model'][()]
+        cum = cum - cum_model
+        del cum_model
+        modelh5.close()
+        # print('in dev')
         # load modelfile model_cum as h5, and remove from cum to get resids that will then get processed
 
         # %% DEM err
@@ -588,10 +593,23 @@ def main(argv=None):
     refy2s, refx2s = refy1s+1, refx1s+1
     print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
 
+    # Cleaning memory - means need to get the refpoint_cum_org first
+    refpoint_cum_org = cum[:, refy1s, refx1s]
+    del cum
+    cumh5.close()
+
+    # adding back model to the filtered residuals
+    if inputresidflag:
+        # read again
+        modelh5 = h5.File(modelfile, 'r')
+        cum_model = modelh5['cum_model'][()]
+        cum_filt = cum_filt + cum_model
+        del cum_model
+        modelh5.close()
+
     ### Rerferencing cumulative displacement to new stable ref
     for i in range(n_im):
-        cum_filt[i, :, :] = cum_filt[i, :, :] - cum[i, refy1s, refx1s]
-    del cum
+        cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
 
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
@@ -616,6 +634,10 @@ def main(argv=None):
 
     #%% Calc filtered velocity
     print('\nCalculate velocity of filtered time series...', flush=True)
+    if inputresidflag:
+        print('\n(note you may want to check LiCSBAS_cum2vel.py for more options than linear trend only)', flush=True)
+        print('')
+
     G = np.stack((np.ones_like(dt_cum), dt_cum), axis=1)
     vconst = np.zeros((length, width), dtype=np.float32)*np.nan
     vel = np.zeros((length, width), dtype=np.float32)*np.nan
@@ -678,7 +700,7 @@ def main(argv=None):
         else:
             print('  {} not exist in results dir. Skip'.format(index))
 
-    cumh5.close()
+    # cumh5.close()
     cumfh5.close()
 
 
