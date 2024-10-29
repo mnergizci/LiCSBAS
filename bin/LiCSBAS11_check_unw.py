@@ -426,6 +426,10 @@ def main(argv=None):
         # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
         bad_ifgdates = list(set(bad_ifgdates))
 
+    # regenerating full ixs:
+    ixs_ifgdates = np.array(range(len(ifgdates)))
+    ixs_bad_ifgdates = ixs_ifgdates[np.isin(ifgdates, bad_ifgdates)]
+
     ### Output list of bad ifg
     bad_ifgfile = os.path.join(infodir, '11bad_ifg.txt')
     print('\n{0}/{1} ifgs are discarded from further processing.'.format(len(bad_ifgdates), n_ifg))
