@@ -250,6 +250,15 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
     docoh = True
     coh_in_4d = False
     doatmo = True
+    # first fix vel as we load it from cum_filt!
+    try:
+        velfile = os.path.join(tsdir, 'results', 'vel')
+        vel = np.fromfile(velfile, np.float32)
+        vel = vel.reshape(cube.vel.shape)
+        vel = np.flipud(vel)
+        cube.vel.values = vel
+    except:
+        print('some error loading vel')
     #cube=xr.open_dataset(ncfile) # only opening, not loading to memory
     workdir=os.path.dirname(tsdir)
     mldircode=tsdir.split('/')[-1].split('_')[-1]
@@ -340,6 +349,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
                 else:
                     prevcoh = cube['spatial_coherence_'+str(btemp)].isel(time=i).values
                     prevcohcount = prevcoh * 0 + 1
+                    prevcohcount[np.isnan(prevcohcount)]=0
                     totalcount = cohcount + prevcohcount
                     #cube['spatial_coherence_'+str(btemp)].isel(time=i)[:] = coh
                     cube['spatial_coherence_' + str(btemp)].isel(time=i)[:] = (coh+prevcoh)/totalcount
@@ -477,7 +487,8 @@ def alignsar_rename(cube):
     cube = _updatecube(cube, 'vel', newvarname = 'linear_velocity',
                 unittext = 'mm/year',
                 desctext = 'Linear displacement trend estimated from the cumulative displacements')
-    cube.bperp.attrs['description']='Perpendicular baseline'
+    if 'bperp' in cube:
+        cube.bperp.attrs['description']='Perpendicular baseline'
     cube = _updatecube(cube, 'coh', newvarname = 'mean_coherence',
                 unittext = 'unitless',
                 desctext = 'Mean spatial coherence of the dataset')
