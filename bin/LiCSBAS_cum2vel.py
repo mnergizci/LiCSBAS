@@ -95,6 +95,7 @@ def main(argv=None):
     refarea_geo = []
     maskfile = []
     vstdflag = False
+    stcflag = False
     sinflag = False
     pngflag = False
     eqoffsetsflag = False
@@ -131,6 +132,7 @@ def main(argv=None):
                 refarea_geo = a
             elif o == '--vstd':
                 vstdflag = True
+                stcflag = True
             elif o == '--sin':
                 sinflag = True
             elif o == '--mask':
@@ -336,9 +338,19 @@ def main(argv=None):
         vstd = np.zeros((length, width), dtype=np.float32)*np.nan
 
         print('Calc vstd...')
+        if offsetsflag or eqoffsetsflag:
+            cum_tmp = cum_tmp - model.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
+
         vstd[~bool_allnan] = inv_lib.calc_velstd_withnan(cum_tmp, dt_cum)
         vstd.tofile(vstdfile)
 
+        if stcflag:
+            stcfile = outfile + '.stc' + suffix_mask
+            stc = inv_lib.calc_stc(cum_tmp)
+
+            openmode = 'w'
+            with open(stcfile, openmode) as f:
+                stc.tofile(f)
 
     #%% Make png if specified
     if pngflag:

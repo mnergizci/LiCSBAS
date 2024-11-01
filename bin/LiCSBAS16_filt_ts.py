@@ -41,6 +41,7 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
  [--hgt_linear] [--hgt_min int] [--hgt_max int] [--nomask] [--n_para int]
  [--range x1:x2/y1:y2 | --range_geo lon1/lon2/lat1/lat2]
  [--ex_range x1:x2/y1:y2 | --ex_range_geo lon1/lon2/lat1/lat2]
+ [--from_model path/to/model.h5]
 
  -t  Path to the TS_GEOCml* dir.
  -s  Width of spatial filter in km (Default: 2 km)
