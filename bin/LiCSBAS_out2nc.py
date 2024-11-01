@@ -430,6 +430,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
 def alignsar_global_metadata(cube):
     print('WARNING, global metadata are set in default values, valid for the AlignSAR InSAR TS demo datacube - please change manually')
     print('(especially things such as incidence angle, frame time etc)')
+    cube.attrs['filtered_version'] = 0  # this is because of the workaround we did before...
     resolution = float(cube.lon[2] - cube.lon[1])
     frtime = '05:11:50'
     #
