@@ -18,6 +18,8 @@ Output files
      - yyyymmdd_yyyymmdd.geo.cc.tif
     [- yyyymmdd_yyyymmdd.geo.diff_pha.tif] (if --get_pha is used)
     [- yyyymmdd_yyyymmdd.geo.diff_unfiltered_pha.tif] (if --get_pha is used)
+    [- yyyymmdd_yyyymmdd.geo.s(bovldiff).adf.mm.tif] (if --sbovl is used)
+    [- yyyymmdd_yyyymmdd.geo.s(bovldiff).adf.cc.tif] (if --sbovl is used)
   [- *.geo.mli.tif (using just one first epoch)]
    - *.geo.E.tif
    - *.geo.N.tif
@@ -41,10 +43,12 @@ LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] 
  --get_gacos  Download GACOS data as well if available
  --get_mli  Download MLI (multilooked intensity) data as well if available
  --n_para  Number of parallel downloading (Default: 4)
-
+ --sbovl Download sbovl or bovl from portal to process!
 """
 #%% Change log
 '''
+v1.14.2.1 Muhammet Nergizci, UoL 
+ - Added to download of sbovl or bovl as flagged -b
 v1.14.2 20230608 Milan Lazecky, UoL
  - Added (optional) download of phase (for reunw) and mli
 v1.6.3 20201207 Yu Morishita, GSI
@@ -114,6 +118,7 @@ def main(argv=None):
     get_gacos = False
     get_mli = False
     get_pha = False
+    sbovl = False
     n_para = 4
 
     q = multi.get_context('fork')
@@ -122,7 +127,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hf:s:e:", ["help", "get_gacos", "get_mli", "get_pha", "n_para="])
+            opts, args = getopt.getopt(argv[1:], "hf:s:e:", ["help", "get_gacos", "get_mli", "get_pha", "n_para=", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -143,6 +148,8 @@ def main(argv=None):
                 get_pha = True
             elif o == '--n_para':
                 n_para = int(a)
+            elif o == '--sbovl':
+                sbovl= True
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -359,6 +366,8 @@ def main(argv=None):
     exts = ['unw', 'cc']
     if get_pha:
         exts = exts + ['diff_pha', 'diff_unfiltered_pha'] # some ifgs do not have unfiltered version, so getting both
+    if sbovl:
+        exts = exts + ['bovldiff.adf.mm', 'bovldiff.adf.cc','sbovldiff.adf.mm', 'sbovldiff.adf.cc']
     for ext in exts:
         print(ext + ' data:')
         args = [(i, n_ifg,

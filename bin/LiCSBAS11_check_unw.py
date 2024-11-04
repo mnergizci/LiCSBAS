@@ -11,8 +11,10 @@ Input & output files
 ===============
 Inputs in GEOCml*/ :
  - yyyymmdd_yyyymmdd/
-   - yyyymmdd_yyyymmdd.unw[.png]
+   - yyyymmdd_yyyymmdd.unw[.png] 
    - yyyymmdd_yyyymmdd.cc
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (if --sbovl is used)
  - slc.mli[.par|.png]
  - baselines (can be dummy)
  - EQA.dem_par
@@ -33,18 +35,24 @@ Inputs in GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [-m minbtemp] [-s]
+LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxbtemp maxbtemp] [--minbtemp minbtemp] [-s] [--sbovl]
 
  -d  Path to the GEOCml* dir containing stack of unw data.
  -t  Path to the output TS_GEOCml* dir. (Default: TS_GEOCml*)
  -c  Threshold of average coherence (Default: 0.05)
  -u  Threshold of coverage of unw data (Default: 0.3)
- -m  Minimal Btemp in days (Default: 0)
+ --minbtemp  Minimal Btemp in days (Default: 0 = not use)
+ --maxbtemp  Maximal Btemp in days (Default: 0 = not use)
  -s  Check for coregistration error in the form of a significant azimuthal ramp
+ --sbovl only applying step 11 for sbovl 
 
 """
 #%% Change log
 '''
+20241030 M Nergizci
+- add sbovl flag
+20241028 ML
+ - add also max btemp
 20240115 ML
  - add min btemp parameter (to avoid fading bias in agri areas, we recommend setting minbtemp=12 for S1. Or nullify with smaller threshold in step 1-2)
 v1.4 20221011 Qi Ou, Uni of Leeds
@@ -109,11 +117,12 @@ def main(argv=None):
     unw_cov_thre = 0.3
     check_coreg_slope = False
     minbtemp = 0
-
+    maxbtemp = 0 # 0 means not use
+    sbovl = False
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:m:s", ["help"])
+            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "maxbtemp=","sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -128,11 +137,16 @@ def main(argv=None):
                 coh_thre = float(a)
             elif o == '-u':
                 unw_cov_thre = float(a)
-            elif o == '-m':
+            elif o == '--minbtemp':
                 minbtemp = float(a)
+            elif o == '--maxbtemp':
+                maxbtemp = float(a)
             elif o == '-s':
                 check_coreg_slope = True
+            elif o == '--sbovl':
+                sbovl = True
 
+        
         if not ifgdir:
             raise Usage('No data directory given, -d is not optional!')
         elif not os.path.isdir(ifgdir):
@@ -145,7 +159,9 @@ def main(argv=None):
         print("  "+str(err.msg), file=sys.stderr)
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
-
+    if sbovl:
+        coh_thre=0.8
+        
     print("\ncoh_thre     : {}".format(coh_thre), flush=True)
     print("unw_cov_thre : {}".format(unw_cov_thre), flush=True)
 
@@ -166,6 +182,7 @@ def main(argv=None):
     os.mkdir(ifg_rasdir)
     os.mkdir(bad_ifg_rasdir)
 
+    
     netdir = os.path.join(tsadir, 'network')
     if not os.path.exists(netdir): os.mkdir(netdir)
 
@@ -192,7 +209,10 @@ def main(argv=None):
     for ifgix, ifgd in enumerate(ifgdates):
         if np.mod(ifgix,100) == 0:
             print("  {0:3}/{1:3}th unw checked for dimension and readability".format(ifgix, n_ifg), flush=True)
-        unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+        if sbovl:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+        else:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
         try:
             unw = io_lib.read_img(unwfile, length, width)
         except:
@@ -236,12 +256,16 @@ def main(argv=None):
     for ifgix, ifgd in enumerate(ifgdates):
         if np.mod(ifgix,100) == 0:
             print("  {0:3}/{1:3}th unw to identify valid area...".format(ifgix, n_ifg), flush=True)
-        unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+        if sbovl:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+        else:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+        
         unw = io_lib.read_img(unwfile, length, width)
 
         unw[unw == 0] = np.nan # Fill 0 with nan
         n_unw += ~np.isnan(unw) # Summing number of unnan unw
-
+        
     ## Identify valid area and calc rate_cov
     bool_valid = (n_unw>=n_im)
     n_unw_valid = bool_valid.sum()
@@ -254,7 +278,10 @@ def main(argv=None):
         if np.mod(ifgix,100) == 0:
             print("  {0:3}/{1:3}th cc and unw...".format(ifgix, n_ifg), flush=True)
         ## unw
-        unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+        if sbovl:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+        else:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
         unw = io_lib.read_img(unwfile, length, width)
 
         unw[unw == 0] = np.nan # Fill 0 with nan
@@ -262,7 +289,10 @@ def main(argv=None):
         n_unw_ifg.append((~np.isnan(unw)).sum())
 
         ## cc
-        ccfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
+        if sbovl:
+            ccfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.cc')
+        else:
+            ccfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
         if os.path.getsize(ccfile) == length*width:
             coh = io_lib.read_img(ccfile, length, width, np.uint8)
             coh = coh.astype(np.float32)/255
@@ -286,7 +316,7 @@ def main(argv=None):
             else:
                 slope_ifg.append(0)
                 r_square_ifg.append(0)
-
+                
     if check_coreg_slope:
         ## identify epochs with more than 1 coreg_errors captured by threshold:
         primarylist = []
@@ -320,7 +350,11 @@ def main(argv=None):
     ## Read bperp data or dummy
     bperp_file = os.path.join(ifgdir, 'baselines')
     if os.path.exists(bperp_file):
-        bperp = io_lib.read_bperp_file(bperp_file, imdates)
+        try:
+            bperp = io_lib.read_bperp_file(bperp_file, imdates)
+        except:
+            print('some error in the baselines file - setting dummy values')
+            bperp = np.random.random(n_im).tolist()
     else: #dummy
         bperp = np.random.random(n_im).tolist()
 
@@ -341,7 +375,10 @@ def main(argv=None):
         print('# ifg dates         bperp   dt unw_cov  coh_av', file=fstats)
 
     ### Identify suffix of raster image (png, ras or bmp?)
-    unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0]+'.unw')
+    if sbovl:
+        unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0]+'.sbovldiff.adf.mm')
+    else:
+        unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0]+'.unw')
     if os.path.exists(unwfile+'.ras'):
         suffix = '.ras'
     elif os.path.exists(unwfile+'.bmp'):
@@ -356,7 +393,10 @@ def main(argv=None):
 
     for i, ifgd in enumerate(ifgdates):
         if suffix:
-            rasname = ifgdates[i]+'.unw'+suffix
+            if sbovl:
+                rasname = ifgdates[i]+'.sbovldiff.adf.mm'+suffix
+            else:
+                rasname = ifgdates[i]+'.unw'+suffix
             rasorg = os.path.join(ifgdir, ifgdates[i], rasname)
 
             if not os.path.exists(rasorg):
@@ -392,6 +432,34 @@ def main(argv=None):
 
     fstats.close()
 
+    ### Raise error if all ifgs are bad
+    if len(bad_ifgdates) == n_ifg:
+        raise ValueError('All ifgs are regarded as bad!\nChange the parameters or check the input ifgs.\n')
+
+    # Not use ifgs below given btemp
+    if minbtemp > 0:
+        btemps = tools_lib.calc_temporal_baseline(ifgdates)
+        # remsel = ifgdates[np.array(btemps) < minbtemp]
+        remsel = list(np.array(ifgdates)[np.array(btemps) < minbtemp])
+        bad_ifgdates += remsel
+        print('Disabling ' + str(len(remsel)) + ' interferograms below min Btemp = ' + str(minbtemp) + ' days.')
+        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
+        bad_ifgdates = list(set(bad_ifgdates))
+
+    # Not use ifgs above given btemp
+    if maxbtemp > 0:
+        btemps = tools_lib.calc_temporal_baseline(ifgdates)
+        # remsel = ifgdates[np.array(btemps) > maxbtemp]
+        remsel = list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
+        bad_ifgdates += remsel
+        print('Disabling ' + str(len(remsel)) + ' interferograms above max Btemp = ' + str(maxbtemp) + ' days.')
+        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
+        bad_ifgdates = list(set(bad_ifgdates))
+
+    # regenerating full ixs:
+    ixs_ifgdates = np.array(range(len(ifgdates)))
+    ixs_bad_ifgdates = ixs_ifgdates[np.isin(ifgdates, bad_ifgdates)]
+
     ### Output list of bad ifg
     bad_ifgfile = os.path.join(infodir, '11bad_ifg.txt')
     print('\n{0}/{1} ifgs are discarded from further processing.'.format(len(bad_ifgdates), n_ifg))
@@ -407,16 +475,6 @@ def main(argv=None):
                 print('{}'.format(ifgd), file=f)
                 print('{}  {:5.3f}  {:5.3f}'.format(ifgd, rate_cov[ixs_bad_ifgdates[i]],  coh_avg_ifg[ixs_bad_ifgdates[i]]), flush=True)
 
-    ### Raise error if all ifgs are bad
-    if len(bad_ifgdates) == n_ifg:
-        raise ValueError('All ifgs are regarded as bad!\nChange the parameters or check the input ifgs.\n')
-
-    # Not use ifgs above given btemp
-    if minbtemp>0:
-        btemps = tools_lib.calc_temporal_baseline(ifgdates)
-        bad_ifgdates += ifgdates[btemps < minbtemp]
-        bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
-        bad_ifgdates = list(set(bad_ifgdates))
 
     #%% Identify removed image and output file
     good_ifgdates = list(set(ifgdates)-set(bad_ifgdates))

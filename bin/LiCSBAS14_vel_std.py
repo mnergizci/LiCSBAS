@@ -140,7 +140,6 @@ def main(argv=None):
     imdates = cumh5['imdates'][()].astype(str).tolist()
     cum = cumh5['cum']
     n_im, length, width = cum.shape
-
     imdates_dt = [dt.datetime.strptime(imd, '%Y%m%d').toordinal() for imd in imdates]
     dt_cum = np.float32((np.array(imdates_dt)-imdates_dt[0])/365.25)
 
