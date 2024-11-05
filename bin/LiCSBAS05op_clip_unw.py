@@ -327,7 +327,6 @@ def main(argv=None):
             print(refstr, file=f)
         # finally cum[_filt].h5
         import xarray as xr # TODO - add xarray to requirements and push this up
-        import numpy as np
         a = os.path.join(in_dir, 'cum.h5')
         a = xr.open_dataset(a)
         dtype = a.refarea.values.dtype  # .replace('159','333')
