@@ -35,7 +35,8 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
 #%% Change log
 '''
 2024-10-22 Milan Lazecky, ULeeds
- - added eqoffsets
+ - added eqoffsets (TODO: external offsets file)
+ - recalc vstd and stc based on residuals from the model with offsets
 v1.3.3 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
 v1.3.2 20210125 Yu Morishita, GSI
@@ -104,6 +105,7 @@ def main(argv=None):
     minmag = 6.5
     cmap = SCM.roma.reversed()
     cmap_vstd = 'viridis_r'
+    cmap_stc = 'viridis_r'
     cmap_amp = 'viridis_r'
     cmap_dt = SCM.romaO.reversed()
     compress = 'gzip'
@@ -272,16 +274,17 @@ def main(argv=None):
 
     ### Extract not nan points
     bool_allnan = np.all(np.isnan(cum_tmp), axis=0)
-    cum_tmp = cum_tmp.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
-
+    cum_tmp_resh = cum_tmp.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
+    #
     # get the output model h5 file ready:
     modh5file = os.path.join(os.path.dirname(cumfile), 'model.h5')
     modh5 = h5.File(modh5file, 'w')
 
     if eqoffsetsflag:
         print('Calc vel and earthquake offsets')
-        result, datavarnames, G = inv_lib.calc_vel_offsets(cum_tmp, imdates_dt, eqoffsets, return_G = True)
+        result, datavarnames, G = inv_lib.calc_vel_offsets(cum_tmp_resh, imdates_dt, eqoffsets, return_G = True)
         params_sorted = []
+        print('')
         for i in range(len(datavarnames)):
             dvarname = datavarnames[i]
             print('storing '+dvarname)
@@ -305,7 +308,7 @@ def main(argv=None):
     else:
         if not sinflag: ## Linear function
             print('Calc velocity...')
-            vconst[~bool_allnan], vel[~bool_allnan], G = inv_lib.calc_vel(cum_tmp, dt_cum, return_G = True)
+            vconst[~bool_allnan], vel[~bool_allnan], G = inv_lib.calc_vel(cum_tmp_resh, dt_cum, return_G = True)
             if exportmodelfile:
                 model = inv_lib.get_model_cum(G, [vconst, vel])
             vel.tofile(velfile)
@@ -319,10 +322,10 @@ def main(argv=None):
                 coef_s = np.zeros((length, width), dtype=np.float32)*np.nan
                 coef_c = np.zeros((length, width), dtype=np.float32) * np.nan
                 vconst[~bool_allnan], vel[~bool_allnan], coef_s[~bool_allnan], coef_c[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan], G = inv_lib.calc_velsin(
-                    cum_tmp, dt_cum, imdates[0], return_G = True)
+                    cum_tmp_resh, dt_cum, imdates[0], return_G = True)
                 model = inv_lib.get_model_cum(G, [vconst, vel, coef_s, coef_c])
             else:
-                vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp, dt_cum, imdates[0])
+                vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp_resh, dt_cum, imdates[0])
             vel.tofile(velfile)
             amp.tofile(ampfile)
             delta_t.tofile(dtfile)
@@ -339,13 +342,23 @@ def main(argv=None):
 
         print('Calc vstd...')
         if offsetsflag or eqoffsetsflag:
-            cum_tmp = cum_tmp - model.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
+            cum_tmp_resh = cum_tmp_resh - model.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
 
-        vstd[~bool_allnan] = inv_lib.calc_velstd_withnan(cum_tmp, dt_cum)
+        vstd[~bool_allnan] = inv_lib.calc_velstd_withnan(cum_tmp_resh, dt_cum)
         vstd.tofile(vstdfile)
+        #
+        #_cum = cum[:, rows[0]-row_ex1:rows[1]+row_ex2, :].reshape(n_im, lengththis+row_ex1+row_ex2, width)
 
+        ### Calc STC
+        #stc = inv_lib.calc_stc(_cum, gpu=gpu)[row_ex1:lengththis+row_ex1, :] ## original length
+        #
         if stcflag:
+            print('Calc stc...')
+            # here, stc calc accepts nans and need 3D cube - so getting the original cum_tmp then
             stcfile = outfile + '.stc' + suffix_mask
+            # cum_tmp = cum_tmp.reshape(n_im, length, width) # this will not work!
+            if offsetsflag or eqoffsetsflag:
+                cum_tmp = cum_tmp - model  # or should this be transposed?
             stc = inv_lib.calc_stc(cum_tmp)
 
             openmode = 'w'
@@ -364,7 +377,16 @@ def main(argv=None):
             plot_lib.make_im_png(delta_t, dtfile+'.png', cmap_dt, title)
 
         if vstdflag:
-            plot_lib.make_im_png(vstd, vstdfile+'.png', cmap_vstd, title)
+            title = 'STD of velocity (mm/yr)'
+            cmin = np.nanpercentile(vstd, 1)
+            cmax = np.nanpercentile(vstd, 99)
+            plot_lib.make_im_png(vstd, vstdfile+'.png', cmap_vstd, title, cmin, cmax)
+
+        if stcflag:
+            title = 'Spatio-temporal consistency (mm)'
+            cmin = np.nanpercentile(stc, 1)
+            cmax = np.nanpercentile(stc, 99)
+            plot_lib.make_im_png(stc, stcfile + '.png', cmap_stc, title, cmin, cmax)
 
 
     #%% Finish
@@ -378,6 +400,8 @@ def main(argv=None):
     print('Output: {}'.format(velfile), flush=True)
     if vstdflag:
         print('        {}'.format(vstdfile), flush=True)
+    if stcflag:
+        print('        {}'.format(stcfile), flush=True)
     if sinflag:
         print('        {}'.format(ampfile), flush=True)
         print('        {}'.format(dtfile), flush=True)
