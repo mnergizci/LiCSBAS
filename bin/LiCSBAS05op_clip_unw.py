@@ -150,8 +150,8 @@ def main(argv=None):
             raise Usage('Both -r and -g given, use either -r or -g not both!')
         elif not os.path.isdir(in_dir):
             raise Usage('No {} dir exists!'.format(in_dir))
-        elif not os.path.exists(os.path.join(in_dir, 'slc.mli.par')):
-            raise Usage('No slc.mli.par file exists in {}!'.format(in_dir))
+        #elif not os.path.exists(os.path.join(in_dir, 'slc.mli.par')):
+        #    raise Usage('No slc.mli.par file exists in {}!'.format(in_dir))
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -179,6 +179,10 @@ def main(argv=None):
         out_dir_pars = out_dir
 
     mlipar = os.path.join(in_dir_pars, 'slc.mli.par')
+    if not os.path.exists(mlipar):
+        print('ERROR: No slc.mli.par file exists in '+in_dir_pars)
+        return 2
+
     width = int(io_lib.get_param_par(mlipar, 'range_samples'))
     length = int(io_lib.get_param_par(mlipar, 'azimuth_lines'))
 
