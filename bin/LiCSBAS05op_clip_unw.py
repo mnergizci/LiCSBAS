@@ -2,6 +2,7 @@
 """
 
 This script clips a specified rectangular area of interest from unw and cc data. The clipping can make the data size smaller and processing faster, and improve the result of Step 1-2 (loop closure). Existing files are not re-created to save time, i.e., only the newly available data will be processed. This step is optional.
+In case of TS* directory is the input, it will clip the results of step 13 instead.
 
 ===============
 Input & output files
@@ -40,6 +41,8 @@ LiCSBAS05op_clip_unw.py -i in_dir -o out_dir [-r x1:x2/y1:y2] [-g lon1/lon2/lat1
 """
 #%% Change log
 '''
+20241105 Milan Lazecky, Uni of Leeds
+ - enabling cutting TS results
 v1.2.6 20230804 Jack McGrath, Uni of Leeds
  - Add poly clipping
 v1.2.5 20210105 Yu Morishita, GSI
@@ -160,11 +163,22 @@ def main(argv=None):
     #%% Read info and make dir
     in_dir = os.path.abspath(in_dir)
     out_dir = os.path.abspath(out_dir)
+    if os.path.exists(os.path.join(in_dir, 'results')):
+        tsdirflag = True
+        print('the input is TS directory, clipping results and h5 files')
+        in_dir_pars = os.path.join(in_dir, 'info')
+        out_dir_pars = os.path.join(out_dir, 'info')
+        in_dir_res = os.path.join(in_dir, 'results')
+        out_dir_res = os.path.join(out_dir, 'results')
+        if not os.path.exists(os.path.join(in_dir, 'cum.h5')):
+            print('ERROR: No cum.h5 in the TS directory - please clip the GEOCmlX directory instead')
+            return 2
+    else:
+        tsdirflag = False
+        in_dir_pars = in_dir
+        out_dir_pars = out_dir
 
-    ifgdates = tools_lib.get_ifgdates(in_dir)
-    n_ifg = len(ifgdates)
-
-    mlipar = os.path.join(in_dir, 'slc.mli.par')
+    mlipar = os.path.join(in_dir_pars, 'slc.mli.par')
     width = int(io_lib.get_param_par(mlipar, 'range_samples'))
     length = int(io_lib.get_param_par(mlipar, 'azimuth_lines'))
 
@@ -176,7 +190,7 @@ def main(argv=None):
     else: ## C-band
         cycle = 3  # 2pi*3/cycle for png
 
-    dempar = os.path.join(in_dir, 'EQA.dem_par')
+    dempar = os.path.join(in_dir_pars, 'EQA.dem_par')
     lat1 = float(io_lib.get_param_par(dempar, 'corner_lat')) # north
     lon1 = float(io_lib.get_param_par(dempar, 'corner_lon')) # west
     postlat = float(io_lib.get_param_par(dempar, 'post_lat')) # negative
@@ -187,6 +201,16 @@ def main(argv=None):
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
 
+    if not os.path.exists(out_dir_pars):
+        os.mkdir(out_dir_pars)
+
+    if tsdirflag:
+        if not os.path.exists(out_dir_res):
+            os.mkdir(out_dir_res)
+
+    if not tsdirflag:
+        ifgdates = tools_lib.get_ifgdates(in_dir)
+        n_ifg = len(ifgdates)
 
     #%% Check and set range to be clipped
     ### Read -r or -g option
@@ -210,13 +234,13 @@ def main(argv=None):
         with open(poly_file) as f:
             poly_strings_all = f.readlines()
 
-        dempar = os.path.join(in_dir, 'EQA.dem_par')
-        lat1 = float(io_lib.get_param_par(dempar, 'corner_lat')) # north
-        lon1 = float(io_lib.get_param_par(dempar, 'corner_lon')) # west
-        postlat = float(io_lib.get_param_par(dempar, 'post_lat')) # negative
-        postlon = float(io_lib.get_param_par(dempar, 'post_lon')) # positive
-        lat2 = lat1+postlat*(length-1) # south
-        lon2 = lon1+postlon*(width-1) # east
+        #dempar = os.path.join(in_dir, 'EQA.dem_par')
+        #lat1 = float(io_lib.get_param_par(dempar, 'corner_lat')) # north
+        #lon1 = float(io_lib.get_param_par(dempar, 'corner_lon')) # west
+        #postlat = float(io_lib.get_param_par(dempar, 'post_lat')) # negative
+        #postlon = float(io_lib.get_param_par(dempar, 'post_lon')) # positive
+        #lat2 = lat1+postlat*(length-1) # south
+        #lon2 = lon1+postlon*(width-1) # east
         #lon, lat = np.arange(lon1, lon2+postlon, postlon), np.arange(lat1, lat2+postlat, postlat)
         lon, lat = np.linspace(lon1, lon2, width), np.linspace(lat1, lat2, length)
         for poly_str in poly_strings_all:
@@ -243,13 +267,13 @@ def main(argv=None):
     print("  Width/Length: {}/{} -> {}/{}".format(width, length, width_c, length_c))
     print("", flush=True)
 
-    clipareafile = os.path.join(out_dir, 'cliparea.txt')
+    clipareafile = os.path.join(out_dir_pars, 'cliparea.txt')
     with open(clipareafile, 'w') as f: f.write(range_str)
 
 
     #%% Make clipped par files
-    mlipar_c = os.path.join(out_dir, 'slc.mli.par')
-    dempar_c = os.path.join(out_dir, 'EQA.dem_par')
+    mlipar_c = os.path.join(out_dir_pars, 'slc.mli.par')
+    dempar_c = os.path.join(out_dir_pars, 'EQA.dem_par')
 
     ### slc.mli.par
     with open(mlipar, 'r') as f: file = f.read()
@@ -265,63 +289,108 @@ def main(argv=None):
     file = re.sub(r'corner_lon:\s*{}'.format(lon1), 'corner_lon: {}'.format(lon1_c), file)
     with open(dempar_c, 'w') as f: f.write(file)
 
-
-    #%% Clip or copy other files than unw and cc
-    files = sorted(glob.glob(os.path.join(in_dir, '*')))
-    for file in files:
-        if os.path.isdir(file):
-            continue  #not copy directory
-        elif file==mlipar or file==dempar:
-            continue  #not copy
-        elif os.path.getsize(file) == width*length*4: ##float file
-            print('Clip {}'.format(os.path.basename(file)), flush=True)
-            data = io_lib.read_img(file, length, width)
-            data = data[y1:y2, x1:x2]
+    if tsdirflag:
+        # clip only results and h5 files to the new directory, copy 'info'
+        print('Warning, resetting ref point to contain whole area aka mean (cum data are corrected but not step 12)')
+        # results dir:
+        files = sorted(glob.glob(os.path.join(in_dir_res, '*')))
+        for file in files:
+            if os.path.isdir(file):
+                continue  #not copy directory
+            elif os.path.getsize(file) == width*length*4: ##float file
+                print('Clip {}'.format(os.path.basename(file)), flush=True)
+                data = io_lib.read_img(file, length, width)
+                data = data[y1:y2, x1:x2]
+                filename = os.path.basename(file)
+                outfile = os.path.join(out_dir_res, filename)
+                data.tofile(outfile)
+        # info dir:
+        txtfiles = sorted(glob.glob(os.path.join(in_dir_pars, '*.txt')))
+        for file in txtfiles:
             filename = os.path.basename(file)
-            outfile = os.path.join(out_dir, filename)
-            data.tofile(outfile)
-        elif file==os.path.join(in_dir, 'slc.mli.png'):
-            print('Recreate slc.mli.png', flush=True)
-            mli = io_lib.read_img(os.path.join(out_dir, 'slc.mli'), length_c, width_c)
-            pngfile = os.path.join(out_dir, 'slc.mli.png')
-            plot_lib.make_im_png(mli, pngfile, 'gray', 'MLI', cbar=False)
-        elif file==os.path.join(in_dir, 'hgt.png'):
-            print('Recreate hgt.png', flush=True)
-            hgt = io_lib.read_img(os.path.join(out_dir, 'hgt'), length_c, width_c)
-            vmax = np.nanpercentile(hgt, 99)
-            vmin = -vmax/3 ## bnecause 1/4 of terrain is blue
-            pngfile = os.path.join(out_dir, 'hgt.png')
-            plot_lib.make_im_png(hgt, pngfile, 'terrain', 'DEM (m)', vmin, vmax, cbar=True)
-        else:
-            print('Copy {}'.format(os.path.basename(file)), flush=True)
-            shutil.copy(file, out_dir)
+            if filename[0] == '1':
+                if int(filename[:2])<16:
+                    if not os.path.exists(os.path.join(out_dir_pars, filename)):
+                        shutil.copy(file, out_dir_pars)
+        # setting the full ref area
+        refstr = '0:'+str(width_c)+'/0:'+str(length_c)
+        refnm = '13ref.txt'
+        #reffiles = sorted(glob.glob(os.path.join(in_dir_pars, '*ref.txt')))
+        #for reffile in reffiles:
+        #    refnm = os.path.basename(reffile)
+        refsfile = os.path.join(out_dir_pars, refnm)
+        with open(refsfile, 'w') as f:
+            print(refstr, file=f)
+        # finally cum[_filt].h5
+        import xarray as xr # TODO - add xarray to requirements and push this up
+        import numpy as np
+        a = os.path.join(in_dir, 'cum.h5')
+        a = xr.open_dataset(a)
+        dtype = a.refarea.values.dtype  # .replace('159','333')
+        a['refarea'].values = np.array(refstr, dtype=dtype)
+        b = a.sel(phony_dim_0=slice(y1, y2), phony_dim_1=slice(x1, x2))
+        b['cum'].values = b['cum'].values - b['cum'].mean(dim=['phony_dim_0', 'phony_dim_1']).values[:, np.newaxis,
+                                            np.newaxis]
+        b.vel.values = b.vel.values - b.vel.mean().values
+        b.to_netcdf(out_dir+'/cum.h5')
+        # np.array('159:160/254:255', dtype=dtype)
+    else:
+        #%% Clip or copy other files than unw and cc
+        files = sorted(glob.glob(os.path.join(in_dir, '*')))
+        for file in files:
+            if os.path.isdir(file):
+                continue  #not copy directory
+            elif file==mlipar or file==dempar:
+                continue  #not copy
+            elif os.path.getsize(file) == width*length*4: ##float file
+                print('Clip {}'.format(os.path.basename(file)), flush=True)
+                data = io_lib.read_img(file, length, width)
+                data = data[y1:y2, x1:x2]
+                filename = os.path.basename(file)
+                outfile = os.path.join(out_dir, filename)
+                data.tofile(outfile)
+            elif file==os.path.join(in_dir, 'slc.mli.png'):
+                print('Recreate slc.mli.png', flush=True)
+                mli = io_lib.read_img(os.path.join(out_dir, 'slc.mli'), length_c, width_c)
+                pngfile = os.path.join(out_dir, 'slc.mli.png')
+                plot_lib.make_im_png(mli, pngfile, 'gray', 'MLI', cbar=False)
+            elif file==os.path.join(in_dir, 'hgt.png'):
+                print('Recreate hgt.png', flush=True)
+                hgt = io_lib.read_img(os.path.join(out_dir, 'hgt'), length_c, width_c)
+                vmax = np.nanpercentile(hgt, 99)
+                vmin = -vmax/3 ## bnecause 1/4 of terrain is blue
+                pngfile = os.path.join(out_dir, 'hgt.png')
+                plot_lib.make_im_png(hgt, pngfile, 'terrain', 'DEM (m)', vmin, vmax, cbar=True)
+            else:
+                print('Copy {}'.format(os.path.basename(file)), flush=True)
+                shutil.copy(file, out_dir)
 
 
-    #%% Clip unw and cc
-    print('\nClip unw and cc', flush=True)
-    ### First, check if already exist
-    ifgdates2 = []
-    for ifgix, ifgd in enumerate(ifgdates):
-        out_dir1 = os.path.join(out_dir, ifgd)
-        unwfile_c = os.path.join(out_dir1, ifgd+'.unw')
-        ccfile_c = os.path.join(out_dir1, ifgd+'.cc')
-        compfile_c = os.path.join(out_dir1, ifgd+'.conncomp')
-        if not (os.path.exists(unwfile_c) and os.path.exists(ccfile_c)):
-            ifgdates2.append(ifgd)
+        #%% Clip unw and cc
+        print('\nClip unw and cc', flush=True)
+        ### First, check if already exist
+        ifgdates2 = []
+        for ifgix, ifgd in enumerate(ifgdates):
+            out_dir1 = os.path.join(out_dir, ifgd)
+            unwfile_c = os.path.join(out_dir1, ifgd+'.unw')
+            ccfile_c = os.path.join(out_dir1, ifgd+'.cc')
+            compfile_c = os.path.join(out_dir1, ifgd+'.conncomp')
+            if not (os.path.exists(unwfile_c) and os.path.exists(ccfile_c)):
+                ifgdates2.append(ifgd)
 
-    n_ifg2 = len(ifgdates2)
-    if n_ifg-n_ifg2 > 0:
-        print("  {0:3}/{1:3} clipped unw and cc already exist. Skip".format(n_ifg-n_ifg2, n_ifg), flush=True)
+        n_ifg2 = len(ifgdates2)
+        if n_ifg-n_ifg2 > 0:
+            print("  {0:3}/{1:3} clipped unw and cc already exist. Skip".format(n_ifg-n_ifg2, n_ifg), flush=True)
 
-    if n_ifg2 > 0:
-        ### Clip with parallel processing
-        if n_para > n_ifg2:
-            n_para = n_ifg2
+        if n_ifg2 > 0:
+            ### Clip with parallel processing
+            if n_para > n_ifg2:
+                n_para = n_ifg2
 
-        print('  {} parallel processing...'.format(n_para), flush=True)
-        p = q.Pool(n_para)
-        p.map(clip_wrapper, range(n_ifg2))
-        p.close()
+            print('  {} parallel processing...'.format(n_para), flush=True)
+            p = q.Pool(n_para)
+            p.map(clip_wrapper, range(n_ifg2))
+            p.close()
 
 
     #%% Finish
@@ -357,7 +426,7 @@ def clip_wrapper(ifgix):
     coh = io_lib.read_img(ccfile, length, width, dtype=ccformat)
 
     ### Clip
-    unw[bool_mask] = np.nan
+    unw[bool_mask] = 0 # np.nan
     coh[bool_mask] = 0 # Can't convert int coh to nan
     
     unw = unw[y1:y2, x1:x2]
@@ -372,7 +441,7 @@ def clip_wrapper(ifgix):
 
     if os.path.exists(compfile):
         comp = io_lib.read_img(compfile, length, width, dtype=ccformat)
-        comp[bool_mask] = np.nan
+        comp[bool_mask] = 0 #np.nan
         comp = comp[y1:y2, x1:x2]
         comp.tofile(os.path.join(out_dir1, ifgd + '.conncomp'))
 
