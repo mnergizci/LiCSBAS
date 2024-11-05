@@ -873,7 +873,7 @@ def get_earthquake_dates(cumfile, minmag = 6.5, maxdepth=60):
             return False
         return center_time_dt
 
-    frame = os.path.realpath(cumfile).split('/')[-2]
+    frame = os.path.realpath(cumfile).split('/')[-3]
     print('based on directory, assuming LiCSAR frame '+frame)
     print('(used only to get center_time)')
     center_time_dt = _get_frametime(frame)

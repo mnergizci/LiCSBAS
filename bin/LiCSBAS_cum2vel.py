@@ -6,6 +6,7 @@ Overview
 ========
 This script calculates velocity and its standard deviation from cum*.h5 and outputs them as a float32 file.
 Amplitude and time offset of the annual displacement can also be calculated by --sin option.
+It can estimate offsets based on earthquake event datetime or external offsets.txt file. This will not work with --sin. However --vstd would in such case be calculated from residuals.
 
 =====
 Usage
@@ -101,7 +102,9 @@ def main(argv=None):
     pngflag = False
     eqoffsetsflag = False
     offsetsflag = False
+    offsetsfile = []
     exportmodelfile = []
+    modelflag = False
     minmag = 6.5
     cmap = SCM.roma.reversed()
     cmap_vstd = 'viridis_r'
@@ -135,6 +138,7 @@ def main(argv=None):
             elif o == '--vstd':
                 vstdflag = True
                 stcflag = True
+                modelflag = True
             elif o == '--sin':
                 sinflag = True
             elif o == '--mask':
@@ -143,12 +147,19 @@ def main(argv=None):
                 pngflag = True
             elif o == '--eqoffsets':
                 minmag = float(a)
-                eqoffsetsflag = True
-                print('warning, new function - will estimate only linear vel trend + the offsets')
+                eqoffsetsflag = True)
+            elif o == '--offsets':
+                offsetsfile = a
+                offsetsflag = True
             elif o == '--export_model':
                 exportmodelfile = a
+                modelflag = True
         if not os.path.exists(cumfile):
             raise Usage('No {} exists! Use -i option.'.format(cumfile))
+        if sinflag and (eqoffsetsflag or offsetsflag):
+            raise Usage('--sin does not (yet) work together with offsets estimation - cancelling')
+        if offsetsflag:
+            raise Usage('Sorry, this functionality is not implemented yet - please raise Issue on github')
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -276,11 +287,12 @@ def main(argv=None):
     bool_allnan = np.all(np.isnan(cum_tmp), axis=0)
     cum_tmp_resh = cum_tmp.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
     #
-    # get the output model h5 file ready:
-    modh5file = os.path.join(os.path.dirname(cumfile), 'model.h5')
-    modh5 = h5.File(modh5file, 'w')
+    if exportmodelfile:
+        # get the output model h5 file ready:
+        modh5file = os.path.join(os.path.dirname(cumfile), 'model.h5')
+        modh5 = h5.File(modh5file, 'w')
 
-    if eqoffsetsflag:
+    if eqoffsetsflag or offsetsflag:
         print('Calc vel and earthquake offsets')
         result, datavarnames, G = inv_lib.calc_vel_offsets(cum_tmp_resh, imdates_dt, eqoffsets, return_G = True)
         params_sorted = []
@@ -293,15 +305,16 @@ def main(argv=None):
             outvarfile = outfile+'.'+dvarname+suffix_mask
             dvar.tofile(outvarfile)
             if exportmodelfile:
-                # to the h5
+                # also export to the h5 (why not)
                 modh5.create_dataset(dvarname, data=dvar, compression=compress)
-                # add as inputs for the last step
+            if modelflag:
+                # add as inputs for the model
                 params_sorted.append(dvar)
             if pngflag:
                 pngfile = outvarfile + '.png'
                 # title = 'n_im: {}, Ref X/Y {}:{}/{}:{}'.format(n_im, refx1, refx2, refy1, refy2)
                 plot_lib.make_im_png(dvar, pngfile, cmap, dvarname)
-        if exportmodelfile:
+        if modelflag:
             model = inv_lib.get_model_cum(G, params_sorted)
         #
         del G
@@ -309,7 +322,7 @@ def main(argv=None):
         if not sinflag: ## Linear function
             print('Calc velocity...')
             vconst[~bool_allnan], vel[~bool_allnan], G = inv_lib.calc_vel(cum_tmp_resh, dt_cum, return_G = True)
-            if exportmodelfile:
+            if modelflag:
                 model = inv_lib.get_model_cum(G, [vconst, vel])
             vel.tofile(velfile)
         else: ## Linear+sin function
@@ -318,7 +331,7 @@ def main(argv=None):
             delta_t = np.zeros((length, width), dtype=np.float32)*np.nan
             ampfile = outfile+'.amp'+suffix_mask
             dtfile = outfile+'.dt'+suffix_mask
-            if exportmodelfile:
+            if modelflag:
                 coef_s = np.zeros((length, width), dtype=np.float32)*np.nan
                 coef_c = np.zeros((length, width), dtype=np.float32) * np.nan
                 vconst[~bool_allnan], vel[~bool_allnan], coef_s[~bool_allnan], coef_c[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan], G = inv_lib.calc_velsin(
