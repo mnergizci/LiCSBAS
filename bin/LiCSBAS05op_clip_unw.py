@@ -337,6 +337,31 @@ def main(argv=None):
         b.vel.values = b.vel.values - b.vel.mean().values
         b.to_netcdf(out_dir+'/cum.h5')
         # np.array('159:160/254:255', dtype=dtype)
+        # forgotten 13params file:
+        inparmfile = os.path.join(in_dir_pars, '13parameters.txt')
+        n_im_all = int(io_lib.get_param_par(inparmfile, 'n_im'))
+        n_im = int(io_lib.get_param_par(inparmfile, 'n_im'))
+        with open(os.path.join(out_dir_pars, '13parameters.txt'), "w") as f:
+            print('range_samples:  {}'.format(width), file=f)
+            print('azimuth_lines:  {}'.format(length), file=f)
+            for keyw in ['n_im_all', 'n_im', 'n_ifg_all', 'n_ifg', 'n_ifg_bad']:
+                gg = int(io_lib.get_param_par(inparmfile, keyw))
+                print(keyw+':     {}'.format(gg), file=f)
+            n_unw_thre = float(io_lib.get_param_par(inparmfile, 'n_unw_thre'))
+            print('n_unw_thre:     {}'.format(n_unw_thre), file=f)
+            print('ref_area:       {}'.format(refstr), file=f)
+            memory_size = io_lib.get_param_par(inparmfile, 'memory_size')
+            print('memory_size:    {} MB'.format(memory_size), file=f)
+            n_patch = int(io_lib.get_param_par(inparmfile, 'n_patch'))
+            print('n_patch:        {}'.format(n_patch), file=f)
+            inv_alg = io_lib.get_param_par(inparmfile, 'inv_alg')
+            print('inv_alg:        {}'.format(inv_alg), file=f)
+            gamma = float(io_lib.get_param_par(inparmfile, 'gamma'))
+            print('gamma:          {}'.format(gamma), file=f)
+            pixsp_r = float(io_lib.get_param_par(inparmfile, 'pixsp_r'))
+            print('pixel_spacing_r: {:.2f} m'.format(pixsp_r), file=f)
+            pixsp_a = float(io_lib.get_param_par(inparmfile, 'pixsp_a'))
+            print('pixel_spacing_a: {:.2f} m'.format(pixsp_a), file=f)
     else:
         #%% Clip or copy other files than unw and cc
         files = sorted(glob.glob(os.path.join(in_dir, '*')))
