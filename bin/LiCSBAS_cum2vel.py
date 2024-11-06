@@ -147,7 +147,7 @@ def main(argv=None):
                 pngflag = True
             elif o == '--eqoffsets':
                 minmag = float(a)
-                eqoffsetsflag = True)
+                eqoffsetsflag = True
             elif o == '--offsets':
                 offsetsfile = a
                 offsetsflag = True
