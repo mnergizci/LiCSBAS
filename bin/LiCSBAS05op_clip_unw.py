@@ -339,8 +339,6 @@ def main(argv=None):
         # np.array('159:160/254:255', dtype=dtype)
         # forgotten 13params file:
         inparmfile = os.path.join(in_dir_pars, '13parameters.txt')
-        n_im_all = int(io_lib.get_param_par(inparmfile, 'n_im'))
-        n_im = int(io_lib.get_param_par(inparmfile, 'n_im'))
         with open(os.path.join(out_dir_pars, '13parameters.txt'), "w") as f:
             print('range_samples:  {}'.format(width), file=f)
             print('azimuth_lines:  {}'.format(length), file=f)
@@ -358,9 +356,9 @@ def main(argv=None):
             print('inv_alg:        {}'.format(inv_alg), file=f)
             gamma = float(io_lib.get_param_par(inparmfile, 'gamma'))
             print('gamma:          {}'.format(gamma), file=f)
-            pixsp_r = float(io_lib.get_param_par(inparmfile, 'pixsp_r'))
+            pixsp_r = float(io_lib.get_param_par(inparmfile, 'pixel_spacing_r'))
             print('pixel_spacing_r: {:.2f} m'.format(pixsp_r), file=f)
-            pixsp_a = float(io_lib.get_param_par(inparmfile, 'pixsp_a'))
+            pixsp_a = float(io_lib.get_param_par(inparmfile, 'pixel_spacing_a'))
             print('pixel_spacing_a: {:.2f} m'.format(pixsp_a), file=f)
     else:
         #%% Clip or copy other files than unw and cc
