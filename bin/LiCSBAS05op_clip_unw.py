@@ -331,8 +331,18 @@ def main(argv=None):
         a = xr.open_dataset(a)
         dtype = a.refarea.values.dtype  # .replace('159','333')
         a['refarea'].values = np.array(refstr, dtype=dtype)
-        b = a.sel(phony_dim_0=slice(y1, y2), phony_dim_1=slice(x1, x2))
-        b['cum'].values = b['cum'].values - b['cum'].mean(dim=['phony_dim_0', 'phony_dim_1']).values[:, np.newaxis,
+        # now.. it is weird but phony_dim_X differs in meaning! -- very fast ugly workaround (only assuming position 0 or 2+ for time):
+        dim_l, dim_w = a.coh_avg.dims
+        for dimc in a.cum.dims:
+            if dimc not in [dim_l, dim_w]:
+                dim_t = dimc
+        if dim_t == 'phony_dim_0':
+            b = a.sel(phony_dim_1=slice(y1, y2), phony_dim_2=slice(x1, x2))
+            b['cum'].values = b['cum'].values - b['cum'].mean(dim=['phony_dim_1', 'phony_dim_2']).values[:, np.newaxis,
+                                            np.newaxis]
+        else:
+            b = a.sel(phony_dim_0=slice(y1, y2), phony_dim_1=slice(x1, x2))
+            b['cum'].values = b['cum'].values - b['cum'].mean(dim=['phony_dim_0', 'phony_dim_1']).values[:, np.newaxis,
                                             np.newaxis]
         b.vel.values = b.vel.values - b.vel.mean().values
         b.to_netcdf(out_dir+'/cum.h5')
