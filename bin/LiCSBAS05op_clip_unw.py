@@ -342,6 +342,7 @@ def main(argv=None):
         with open(os.path.join(out_dir_pars, '13parameters.txt'), "w") as f:
             print('range_samples:  {}'.format(width), file=f)
             print('azimuth_lines:  {}'.format(length), file=f)
+            print('wavelength:     {}'.format(wavelength), file=f)
             for keyw in ['n_im_all', 'n_im', 'n_ifg_all', 'n_ifg', 'n_ifg_bad']:
                 gg = int(io_lib.get_param_par(inparmfile, keyw))
                 print(keyw+':     {}'.format(gg), file=f)
