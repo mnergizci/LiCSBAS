@@ -340,8 +340,8 @@ def main(argv=None):
         # forgotten 13params file:
         inparmfile = os.path.join(in_dir_pars, '13parameters.txt')
         with open(os.path.join(out_dir_pars, '13parameters.txt'), "w") as f:
-            print('range_samples:  {}'.format(width), file=f)
-            print('azimuth_lines:  {}'.format(length), file=f)
+            print('range_samples:  {}'.format(width_c), file=f)
+            print('azimuth_lines:  {}'.format(length_c), file=f)
             print('wavelength:     {}'.format(wavelength), file=f)
             for keyw in ['n_im_all', 'n_im', 'n_ifg_all', 'n_ifg', 'n_ifg_bad']:
                 gg = int(io_lib.get_param_par(inparmfile, keyw))
