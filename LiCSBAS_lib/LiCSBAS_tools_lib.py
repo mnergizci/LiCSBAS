@@ -49,6 +49,11 @@ from matplotlib.colors import LinearSegmentedColormap as LSC
 from matplotlib import pyplot as plt
 import matplotlib.path as path
 try:
+    from scipy import interpolate
+except:
+    print('scipy not installed. no interpolation tools')
+
+try:
     import networkx as nx
 except:
     print('networkx is not installed. Some LiCSBAS Plus functions will not work')
@@ -250,6 +255,22 @@ def download_data(url, file, n_retry=3):
     print("    Error while downloading from {}".format(url),
           file=sys.stderr, flush=True)
     return # fail
+
+
+def interpolate_2d(inarray, method='linear'):
+    ''' A simple interpolation - without assessing pixels outside of the filled convex hull.
+    Methods as 'nearest', 'linear', or 'cubic'
+    '''
+    array = np.ma.masked_invalid(inarray)
+    x = np.arange(0, array.shape[1])
+    y = np.arange(0, array.shape[0])
+    xx, yy = np.meshgrid(x, y)
+    x1 = xx[~array.mask]
+    y1 = yy[~array.mask]
+    newarr = array[~array.mask]
+    newarr = interpolate.griddata((x1, y1), newarr.ravel(), (xx, yy), method=method)
+    newarr = np.array(newarr)
+    return newarr
 
 
 #%%
