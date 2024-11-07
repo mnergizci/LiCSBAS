@@ -57,6 +57,8 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
 """
 #%% Change log
 '''
+20241107 ML, UoL
+ - updated mask_ts.png
 20240628 ML, UoL
  - use of avg_phase_bias
 20231121 ML, UoL
@@ -257,25 +259,28 @@ def main(argv=None):
         # orig figure
         #names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err_rat', 'resid_rms'] # TODO: set n_loop_err_rat instead for masking!
     '''
-    if 'loop_ph_avg_abs' in thre_dict:
-        print('Using loop_ph_avg_abs parameter instead of n_loop_err')
-        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'loop_ph_avg_abs', 'resid_rms']
-        units = ['', '', 'mm/yr', 'yr', '', 'mm', '', 'rad', 'mm']
-    else:
-        print('WARNING, 2024/01 change in DEV branch - n_loop_err_ratio is used (before nullification if done)')
-        #names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err', 'resid_rms']
-        if os.path.exists(os.path.join(resultsdir, 'n_loop_err_rat')):
-            names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err_rat', 'resid_rms']
-        elif os.path.exists(os.path.join(resultsdir, 'n_loop_err')):
-            names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err', 'resid_rms']
-        else:
-            raise Usage('no n_loop_err information - cancelling. Please rerun step 12 or contact dev team on recommendations how to skip this step.')
-        units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
 
+    # rearranging:
+    if os.path.exists(os.path.join(resultsdir, 'n_loop_err_rat')):
+        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err_rat', 'resid_rms']
+    elif os.path.exists(os.path.join(resultsdir, 'n_loop_err')):
+        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err', 'resid_rms']
+    else:
+        raise Usage('no n_loop_err information - cancelling. Please rerun step 12 or contact dev team on recommendations how to skip this step.')
+    units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
     gt_lt = ['lt', 'lt', 'gt', 'lt', 'gt', 'gt', 'gt', 'gt', 'gt']  ## > or <
     ## gt: greater values than thre are masked
     ## lt: more little values than thre are masked (coh_avg, n_unw, maxTlen)
 
+    if 'n_loop_err' in thre_dict and 'n_loop_err' not in names:
+        names += ['n_loop_err']
+        units += ['']
+        gt_lt += ['gt']
+
+    if 'loop_ph_avg_abs' in thre_dict:
+        names += ['loop_ph_avg_abs']
+        units += ['rad']
+        gt_lt += ['gt']
 
     ### Get size and ref
     width = int(io_lib.get_param_par(inparmfile, 'range_samples'))
@@ -456,7 +461,7 @@ def main(argv=None):
         add_subplot(fig2, i2, data[i], vmins[i], vmaxs[i], cmaps[i], titles[i])
 
 
-    ## Next 9 noise indices
+    ## Next 9+ noise indices
     mask_nan = mask.copy()
     mask_nan[mask==0] = np.nan
     for i, name in enumerate(names):
