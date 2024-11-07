@@ -117,7 +117,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "maxbtemp=",])
+            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "maxbtemp="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -409,8 +409,7 @@ def main(argv=None):
     # Not use ifgs below given btemp
     if minbtemp > 0:
         btemps = tools_lib.calc_temporal_baseline(ifgdates)
-        # remsel = ifgdates[np.array(btemps) < minbtemp]
-        remsel = list(np.array(ifgdates)[np.array(btemps) < minbtemp])
+        remsel = list(np.array(ifgdates)[np.array(btemps) <= minbtemp])
         bad_ifgdates += remsel
         print('Disabling ' + str(len(remsel)) + ' interferograms below min Btemp = ' + str(minbtemp) + ' days.')
         # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
@@ -419,8 +418,7 @@ def main(argv=None):
     # Not use ifgs above given btemp
     if maxbtemp > 0:
         btemps = tools_lib.calc_temporal_baseline(ifgdates)
-        # remsel = ifgdates[np.array(btemps) > maxbtemp]
-        remsel = list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
+        remsel = list(np.array(ifgdates)[np.array(btemps) >= maxbtemp])
         bad_ifgdates += remsel
         print('Disabling ' + str(len(remsel)) + ' interferograms above max Btemp = ' + str(maxbtemp) + ' days.')
         # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
