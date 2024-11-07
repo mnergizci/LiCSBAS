@@ -41,7 +41,7 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
  -i  Threshold of n_ifg_noloop (number of ifgs with no loop)
  -l  Threshold of n_loop_err (number of loop_err) - in case of nullification in step 12, this will apply the threshold on n_nullify
  NOTE: we now test and will update the -l parameter to be a ratio (<=1 where 1 means all bad). Future: default: 0.7
- -L temporary solution before we switch -l to the ratio
+ -L  Threshold of n_loop_err_ratio (number of loop_err divided by number of loops). Use number 0-1. (preferred solution)
  -r  Threshold of resid_rms (RMS of residuals in inversion (mm))
  --v[min|max]  Min|Max value for output figure of velocity (Default: auto)
  --avg_phase_bias  Threshold of the average absolute loop phase misclosure (phase bias) [rad] to use for masking (Default: not use. --avg_phase_bias 1 can be recommended)
@@ -116,7 +116,7 @@ class Usage(Exception):
 
 #%%
 def add_subplot(fig, i, data, vmin, vmax, cmap, title):
-    ax = fig.add_subplot(3, 4, i+1) #index start from 1
+    ax = fig.add_subplot(3, 5, i+1) #index start from 1
     im = ax.imshow(data, vmin=vmin, vmax=vmax, cmap=cmap, interpolation='nearest')
     fig.colorbar(im)
     ax.set_title('{0}'.format(title))
