@@ -65,7 +65,7 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
  --ex_range_geo  Range EXCLUDED in deramp and hgt_linear in geographical
                  coordinates (deg).
  --from_model path/to/model.h5  Use externally calculated model to perform residual-based filtering (in dev further. see LiCSBAS_cum2vel.py to generate this)
- --interpolate_nans   This will use linear interpolation on output cum_filt to fill nanned pixels. Note, mask is still applied (if not disabled by --nomask)
+ --interpolate_nans   This will use the filter to fill nan values (in unmasked data). If temporal filtering is disabled, it will use linear interpolation in space instead.
 
 Note: Spatial filter consume large memory. If the processing is stacked, try
  - --n_para 1
@@ -885,9 +885,9 @@ def filter_wrapper(i):
     ### Third, LP in space and subtract from original
     if filtwidth_km == 0.0:
         _cum_filt = cum[i, :, :] ## No spatial
-        if interpolateflag:
-            # this will interpolate the cum_filt for nan points outside of the mask (that comes from step 15)
-            _cum_filt = tools_lib.interpolate_2d(_cum_filt, method='linear') * mask
+        #if interpolateflag:
+        #    # this will interpolate the cum_filt for nan points outside of the mask (that comes from step 15)
+        #    _cum_filt = tools_lib.interpolate_2d(_cum_filt, method='linear') * mask
     else:
         with warnings.catch_warnings(): ## To silence warning
             if i ==0: cum_hpt = cum_hpt+sys.float_info.epsilon ##To distinguish from 0 of filtered nodata
@@ -899,9 +899,9 @@ def filter_wrapper(i):
             cum_hptlps[cum_hptlps == 0] = np.nan ## fill 0 with nan
 
         _cum_filt = cum[i, :, :] - cum_hptlps
-        if interpolateflag:
-            # this will interpolate the cum_filt for nan points outside of the mask (that comes from step 15)
-            _cum_filt = tools_lib.interpolate_2d(_cum_filt, method='linear') * mask
+        #if interpolateflag:
+        #    # this will interpolate the cum_filt for nan points outside of the mask (that comes from step 15)
+        #    _cum_filt = tools_lib.interpolate_2d(_cum_filt, method='linear') * mask
 
         ### Output comparison image
         data3 = [np.angle(np.exp(1j*(data/coef_r2m/cycle))*cycle) for data in [cum[i, :, :]*mask, cum_hptlps*mask, _cum_filt*mask]]
@@ -909,6 +909,15 @@ def filter_wrapper(i):
         pngfile = os.path.join(filtcumdir, imdates[i]+'_filt.png')
         plot_lib.make_3im_png(data3, pngfile, cmap_wrap, title3, vmin=-np.pi, vmax=np.pi, cbar=False)
 
+    # Optionally interpolating the (unmasked) nan values of pixels
+    if interpolateflag:
+        if filtwidth_yr == 0.0: # in case of no temporal filter applied, let's interpolate only bilinearly in space
+            _cum_filt = tools_lib.interpolate_2d(_cum_filt, method='linear') * mask
+        else:  # but if it WAS applied, we can use the low pass filter version to estimate the cum value - should be better
+            nanpixels = np.isnan(_cum_filt)
+            _cum_filt[nanpixels] = cum_lpt[nanpixels]
+            _cum_filt = _cum_filt * mask
+        #
     return _cum_filt
 
 
