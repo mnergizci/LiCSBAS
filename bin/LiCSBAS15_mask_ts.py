@@ -221,45 +221,6 @@ def main(argv=None):
     maskts_png = os.path.join(tsadir,'mask_ts.png')
     maskts2_png = os.path.join(tsadir,'mask_ts_masked.png')
 
-    #if os.path.exists(os.path.join(resultsdir, 'n_nullify')):
-    #    names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_nullify', 'resid_rms']  ## noise indices
-    #else:
-    #    names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err', 'resid_rms'] ## noise indices
-    #    # TODO: coh_mindays/lt (instead of vstd as: ['n_unw', 'coh_avg', 'coh_mindays', ...])
-    '''
-    if os.path.exists(os.path.join(resultsdir, 'n_nullify_rat')):
-        # debug here
-        cohfreqfile = glob.glob(resultsdir + '/coh_avg_*.png')
-        if len(cohfreqfile)>0:
-            cohfreqfile = cohfreqfile[0]
-            cohfreq = cohfreqfile.split('_')[-1].split('.')[0] #str
-            names = [ 'n_unw', 'coh_avg', 'coh_avg_'+cohfreq, 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_nullify_rat',
-                     'resid_rms']  ## noise indices
-            gt_lt = ['lt', 'lt', 'lt', 'lt', 'gt', 'gt', 'gt', 'gt', 'gt']  ## > or <
-            units = ['', '', '', 'yr', '', 'mm', '', '', 'mm']
-            if use_coh_freq:
-                thre_dict['coh_avg_' + cohfreq] = thre_dict['coh_avg']
-                thre_dict['coh_avg'] = 0
-            else:
-                thre_dict['coh_avg_' + cohfreq] = 0.05
-        else:
-            if use_coh_freq:
-                print('Warning, you request use of most frequent coherence for masking but this is not generated (rerun step 12). Using coh_avg only.')
-            names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_nullify_rat',
-                     'resid_rms']  ## noise indices
-            gt_lt = ['lt', 'lt', 'gt', 'lt', 'gt', 'gt', 'gt', 'gt', 'gt']  ## > or <
-            units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
-    elif os.path.exists(os.path.join(resultsdir, 'n_nullify')):
-        # temporary for the 'version inbetween'
-        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_nullify',
-                 'resid_rms']  ## noise indices
-        gt_lt = ['lt', 'lt', 'gt', 'lt', 'gt', 'gt', 'gt', 'gt', 'gt']  ## > or <
-        units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
-    else:
-        # orig figure
-        #names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err_rat', 'resid_rms'] # TODO: set n_loop_err_rat instead for masking!
-    '''
-
     # rearranging:
     if os.path.exists(os.path.join(resultsdir, 'n_loop_err_rat')):
         names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err_rat', 'resid_rms']
@@ -292,21 +253,7 @@ def main(argv=None):
     
     #%% Determine default thresholds depending on frequency band
     if not 'maxTlen' in thre_dict: thre_dict['maxTlen'] = 1
-    '''
-    # 20231122 update:
-    if (not 'n_nullify_rat' in thre_dict) and ('n_nullify_rat' in names):
-        thre_dict['n_nullify_rat'] = 0.9
-    if (not 'n_nullify' in thre_dict) and ('n_nullify' in names):
-        if 'n_loop_err' in thre_dict:
-            # if we used -l, we can use the same number for the n_nullify
-            thre_dict['n_nullify'] = thre_dict['n_loop_err']
-        else:
-            try:
-                with open(os.path.join(tsadir, '12loop', 'loop_info.txt'), 'r') as fp:
-                    thre_dict['n_nullify'] = int((len(fp.readlines()) - 4)/3)   # set threshold as 'bad in all loops'
-            except:
-                thre_dict['n_nullify'] = 1000
-    '''
+
     if (not 'n_loop_err_rat' in thre_dict) and ('n_loop_err_rat' in names):
         thre_dict['n_loop_err_rat'] = 0.7
     if not 'n_ifg_noloop' in thre_dict:
@@ -321,7 +268,7 @@ def main(argv=None):
         if not 'vstd' in thre_dict: thre_dict['vstd'] = 200
         if not 'n_gap' in thre_dict: thre_dict['n_gap'] = 1
         if not 'stc' in thre_dict: thre_dict['stc'] = 10
-        if not 'n_loop_err' in thre_dict: thre_dict['n_loop_err'] = 1
+        if (not 'n_loop_err' in thre_dict) and ('n_loop_err' in names): thre_dict['n_loop_err'] = 1
         if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 10
     if wavelength < 0.2: ## C-band
         if not 'coh_avg' in thre_dict: thre_dict['coh_avg'] = 0.05
@@ -329,7 +276,7 @@ def main(argv=None):
         if not 'vstd' in thre_dict: thre_dict['vstd'] = 100
         if not 'n_gap' in thre_dict: thre_dict['n_gap'] = 10
         if not 'stc' in thre_dict: thre_dict['stc'] = 10 # tested as more appropriate
-        if not 'n_loop_err' in thre_dict: thre_dict['n_loop_err'] = 5
+        if (not 'n_loop_err' in thre_dict) and ('n_loop_err' in names): thre_dict['n_loop_err'] = 5
         if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 50 # as the ref point would cause issues
     
     thre_dict['n_unw'] = int(n_im*thre_dict['n_unw_r'])
