@@ -1273,6 +1273,7 @@ def loop_closure_4th(args, da):
         ns_loop_bad.loc[:, :, ifgd13] = ns_loop_bad.loc[:, :, ifgd13] + (1 * ~is_ok).astype(np.int8)
     #ns_loop_err1 = np.array(ns_loop_err1, dtype=np.int16)
     print('storing the average loop phase closure error')
+    nonan_count[nonan_count==0] = np.nan # avoid infinity
     file = os.path.join(resultsdir, 'loop_ph_avg')
     #np.float32(loop_ph_wrapped_sum/n_loop).tofile(file)
     np.float32(loop_ph_wrapped_sum / nonan_count).tofile(file)
@@ -1289,7 +1290,8 @@ def loop_closure_4th(args, da):
     np.float32(nonan_count).tofile(file)
     file = os.path.join(resultsdir, 'debug_loop_ph_wrapped_sum_abs')
     np.float32(loop_ph_wrapped_sum_abs).tofile(file)
-
+    file = os.path.join(resultsdir, 'loop_ph_wrapped_sum') # but the sum can be actually useful (!?)
+    np.float32(loop_ph_wrapped_sum).tofile(file)
     del nonan_count
     del loop_ph_wrapped_sum_abs
     del loop_ph_wrapped_sum
