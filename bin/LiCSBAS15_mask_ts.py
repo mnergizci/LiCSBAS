@@ -439,11 +439,17 @@ def main(argv=None):
     #%% Output thumbnail png
     if length > width:
         figsize_y = 9
-        figsize_x = int(figsize_y*4/3*width/length+2)
+        if len(names) == 12:
+            figsize_x = int(figsize_y*4/3*width/length+2)
+        else:
+            figsize_x = int(figsize_y * 5 / 3 * width / length + 2)   # adding extra column
         if figsize_x < 6: figsize_x = 6
     else:
         figsize_x = 12
-        figsize_y = int(figsize_x/4*3*length/width)
+        if len(names) == 12:
+            figsize_y = int(figsize_x/4*3*length/width)
+        else:
+            figsize_y = int(figsize_x / 5 * 3 * length / width)
         if figsize_y < 4: figsize_y = 4
     
     fig = plt.figure(figsize = (figsize_x, figsize_y))
