@@ -106,6 +106,7 @@ with warnings.catch_warnings(): ## To silence user warning
     warnings.simplefilter('ignore', UserWarning)
     matplotlib.use('Agg')
 from matplotlib import pyplot as plt
+from matplotlib.patches import Rectangle
 plt.rcParams['axes.titlesize'] = 10
 
 class Usage(Exception):
@@ -115,14 +116,19 @@ class Usage(Exception):
 
 
 #%%
-def add_subplot(fig, i, data, vmin, vmax, cmap, title):
+def add_subplot(fig, i, data, vmin, vmax, cmap, title, refarea = None, refcolor = 'red'):
+    ''' refarea should be as tuple, e.g. (refx1, refx2, refy1, refy2)'''
     ax = fig.add_subplot(3, 5, i+1) #index start from 1
     im = ax.imshow(data, vmin=vmin, vmax=vmax, cmap=cmap, interpolation='nearest')
     fig.colorbar(im)
     ax.set_title('{0}'.format(title))
     ax.set_xticklabels([])
     ax.set_yticklabels([])
-
+    if refarea:
+        refx1, refx2, refy1, refy2 = refarea
+        rect = Rectangle((refx1-0.5, refy1-0.5), refx2-refx1, refy2-refy1, fill=False, edgecolor=refcolor, linewidth=1)
+        ax.add_patch(rect)
+    return ax
 
 #%% Main
 def main(argv=None):
@@ -250,7 +256,24 @@ def main(argv=None):
 
     n_im = int(io_lib.get_param_par(inparmfile, 'n_im'))
 
-    
+    # %% Get both 12 and 13 ref points, used only for plotting:
+    infodir = os.path.join(tsadir, 'info')
+    ref12file = os.path.join(infodir, '120ref.txt') # first checking if the 120ref exists (would be prioritised by step 12)
+    if not os.path.exists(ref12file):
+        ref12file = os.path.join(infodir, '12ref.txt')
+    ref13file = os.path.join(infodir, '13ref.txt')
+
+    with open(ref12file, "r") as f:
+        ref12area = f.read().split()[0]  # str, x1/x2/y1/y2
+
+    ref12x1, ref12x2, ref12y1, ref12y2 = [int(s) for s in re.split('[:/]', refarea)]
+
+    with open(ref13file, "r") as f:
+        ref13area = f.read().split()[0]  # str, x1/x2/y1/y2
+
+    ref13x1, ref13x2, ref13y1, ref13y2 = [int(s) for s in re.split('[:/]', refarea)]
+
+
     #%% Determine default thresholds depending on frequency band
     if not 'maxTlen' in thre_dict: thre_dict['maxTlen'] = 1
 
@@ -408,10 +431,19 @@ def main(argv=None):
     vmins = [vmin, vmin, 0]
     vmaxs = [vmax, vmax, 1]
     cmaps = [cmap_vel, cmap_vel, cmap_noise]
-    for i in range(3): 
-        add_subplot(fig, i, data[i], vmins[i], vmaxs[i], cmaps[i], titles[i])
+    refarea = (ref13x1, ref13x2, ref13y1, ref13y2)
+    refcolor = 'black'
+    for i in range(3):
+        ax1 = add_subplot(fig, i, data[i], vmins[i], vmaxs[i], cmaps[i], titles[i], refarea, refcolor)
         i2 = 0 if i==1 else 1 if i==0 else 2 # inv vel and vel.mskd
-        add_subplot(fig2, i2, data[i], vmins[i], vmaxs[i], cmaps[i], titles[i])
+        ax2 = add_subplot(fig2, i2, data[i], vmins[i], vmaxs[i], cmaps[i], titles[i], refarea, refcolor)
+    # for mask, also show the previous refarea from step 12:
+    rect1 = Rectangle((ref12x1 - 0.5, ref12y1 - 0.5), ref12x2 - ref12x1, ref12y2 - ref12y1, fill=False, edgecolor='red',
+                     linewidth=1)
+    rect2 = Rectangle((ref12x1 - 0.5, ref12y1 - 0.5), ref12x2 - ref12x1, ref12y2 - ref12y1, fill=False, edgecolor='red',
+                      linewidth=1)
+    ax1.add_patch(rect1)
+    ax2.add_patch(rect2)
 
 
     ## Next 9+ noise indices
@@ -432,9 +464,21 @@ def main(argv=None):
             vmin_n = 0
             vmax_n = thre_dict[name]*1.2
 
+        # add refp12(0) for loop_err, and refp13 for resid_rms:
+        # max: # names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err_rat', 'resid_rms', 'loop_ph_avg_abs', 'n_loop_err' ]
+        if name in ['n_loop_err_rat', 'loop_ph_avg_abs', 'n_loop_err']:
+            refarea = (ref12x1, ref12x2, ref12y1, ref12y2)
+            refcolor = 'red'
+        elif name in ['resid_rms', 'vstd']:
+            refarea = (ref13x1, ref13x2, ref13y1, ref13y2)
+            refcolor = 'black'
+        else:
+            refarea = None
+            refcolor = None
+
         title = '{} {}({})'.format(name, units[i], thre_dict[name])
-        add_subplot(fig, i+3, data, vmin_n, vmax_n, cmap, title)
-        add_subplot(fig2, i+3, data*mask_nan, vmin_n, vmax_n, cmap, title)
+        add_subplot(fig, i+3, data, vmin_n, vmax_n, cmap, title, refarea, refcolor)
+        add_subplot(fig2, i+3, data*mask_nan, vmin_n, vmax_n, cmap, title, refarea, refcolor)
         #i+3 because 3 data already plotted
               
 
