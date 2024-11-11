@@ -126,7 +126,7 @@ def add_subplot(fig, i, data, vmin, vmax, cmap, title, refarea = None, refcolor 
     ax.set_yticklabels([])
     if refarea:
         refx1, refx2, refy1, refy2 = refarea
-        rect = Rectangle((refx1-0.5, refy1-0.5), refx2-refx1, refy2-refy1, fill=False, edgecolor=refcolor, linewidth=1)
+        rect = Rectangle((refx1-0.5, refy1-0.5), refx2-refx1, refy2-refy1, fill=False, edgecolor=refcolor, linewidth=2)
         ax.add_patch(rect)
     return ax
 
