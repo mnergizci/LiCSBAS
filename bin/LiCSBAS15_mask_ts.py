@@ -126,8 +126,12 @@ def add_subplot(fig, i, data, vmin, vmax, cmap, title, refarea = None, refcolor 
     ax.set_yticklabels([])
     if refarea:
         refx1, refx2, refy1, refy2 = refarea
-        if refx2-refx1 < 5:
-            linewidth = 4
+        if refx2-refx1 < 5 and refy2-refy1 < 5:
+            linewidth = 2
+            refx1-=1
+            refx2 += 1
+            refy1 -= 1
+            refy2 += 1
         else:
             linewidth = 1
         rect = Rectangle((refx1-0.5, refy1-0.5), refx2-refx1, refy2-refy1, fill=False, edgecolor=refcolor, linewidth=linewidth)
