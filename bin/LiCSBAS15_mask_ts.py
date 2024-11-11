@@ -91,7 +91,7 @@ v1.0 20190724 Yu Morishita, Uni of Leeds and GSI
 #%% Import
 from LiCSBAS_meta import *
 import getopt
-import os, glob
+import os, glob, re
 os.environ['QT_QPA_PLATFORM']='offscreen'
 import sys
 import time
@@ -266,12 +266,12 @@ def main(argv=None):
     with open(ref12file, "r") as f:
         ref12area = f.read().split()[0]  # str, x1/x2/y1/y2
 
-    ref12x1, ref12x2, ref12y1, ref12y2 = [int(s) for s in re.split('[:/]', refarea)]
+    ref12x1, ref12x2, ref12y1, ref12y2 = [int(s) for s in re.split('[:/]', ref12area)]
 
     with open(ref13file, "r") as f:
         ref13area = f.read().split()[0]  # str, x1/x2/y1/y2
 
-    ref13x1, ref13x2, ref13y1, ref13y2 = [int(s) for s in re.split('[:/]', refarea)]
+    ref13x1, ref13x2, ref13y1, ref13y2 = [int(s) for s in re.split('[:/]', ref13area)]
 
 
     #%% Determine default thresholds depending on frequency band
