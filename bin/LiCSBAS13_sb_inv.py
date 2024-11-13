@@ -578,7 +578,7 @@ def main(argv=None):
             print('All nan in ref area in {}. Removing from processing.'.format(ifgd))
             #print('Rerun LiCSBAS12.')
             f.close()
-            nanserror.append(ifgs)
+            nanserror.append(ifgd)
             #return 1
             continue
 
