@@ -564,6 +564,7 @@ def main(argv=None):
     countf = width*refy1
     countl = width*lengththis # Number to be read
     ref_unw = []
+    nanserror = []
     for i, ifgd in enumerate(ifgdates):
         unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
         f = open(unwfile, 'rb')
@@ -574,14 +575,26 @@ def main(argv=None):
 
         unw[unw == 0] = np.nan
         if np.all(np.isnan(unw)):
-            print('All nan in ref area in {}.'.format(ifgd))
-            print('Rerun LiCSBAS12.')
+            print('All nan in ref area in {}. Removing from processing.'.format(ifgd))
+            #print('Rerun LiCSBAS12.')
             f.close()
-            return 1
+            nanserror.append(ifgs)
+            #return 1
+            continue
 
         ref_unw.append(np.nanmean(unw))
 
         f.close()
+
+    if nanserror:
+        print('There were still ifgs with all nan in ref area. Please rerun step 13')
+        print('you can check following file (remove it if you decide to change reference point):')
+        noref_ifgfile = os.path.join(infodir, '120bad_ifg.txt')
+        print(noref_ifgfile)
+        with open(noref_ifgfile, 'a') as f:
+            for i in nanserror:
+                print('{}'.format(i), file=f)
+        return 1
 
     #%% Open cum.h5 for output
     ### Decide here what to do re. cumh5file and reloading patches. Need to check that stored cumh5 file is the right size etc
