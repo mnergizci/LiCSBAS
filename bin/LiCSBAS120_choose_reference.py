@@ -361,7 +361,7 @@ def discard_ifg_with_all_nans_at_ref():
     # save list of no_ref_ifg to a text file in info directory
 
     print("{} ifgs are discarded due to all nan values in the reference window...".format(len(noref_ifg)))
-    with open(noref_ifgfile, 'a') as f:
+    with open(noref_ifgfile, 'w') as f:
         for i in noref_ifg:
             print('{}'.format(i), file=f)
             print('{}'.format(i))
