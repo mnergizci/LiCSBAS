@@ -43,7 +43,8 @@ order_op03_05="03 04 05"	# can change order e.g., 05 03 04
 do03op_GACOS="n"	# y/n
 do04op_mask="n"	# y/n
 do05op_clip="n"	# y/n
-p04_mask_coh_thre=""	# e.g. 0.2
+p04_mask_coh_thre_avg=""	# e.g. 0.2
+p04_mask_coh_thre_ifg=""	# e.g. 0.2
 p04_mask_range=""	# e.g. 10:100/20:200 (ix start from 0)
 p04_mask_range_file=""	# Name of file containing range list
 p05_clip_range=""	# e.g. 10:100/20:200 (ix start from 0)
@@ -269,7 +270,8 @@ if [ $step -eq 04 -a $start_step -le 04 -a $end_step -ge 04 ];then
     if [ ! -z $p04_outGEOCmldir_suffix ];then outGEOCmldir="$inGEOCmldir$p04_outGEOCmldir_suffix";
       else outGEOCmldir="${inGEOCmldir}mask"; fi
     p04_op="$p04_op -o $outGEOCmldir"
-    if [ ! -z $p04_mask_coh_thre ];then p04_op="$p04_op -c $p04_mask_coh_thre"; fi
+    if [ ! -z $p04_mask_coh_thre_avg ];then p04_op="$p04_op -c $p04_mask_coh_thre_avg"; fi
+    if [ ! -z $p04_mask_coh_thre_ifg ];then p04_op="$p04_op -s $p04_mask_coh_thre_ifg"; fi
     if [ ! -z $p04_mask_range ];then p04_op="$p04_op -r $p04_mask_range"; fi
     if [ ! -z $p04_mask_range_file ];then p04_op="$p04_op -f $p04_mask_range_file"; fi
     if [ ! -z $p04_n_para ];then p04_op="$p04_op --n_para $p04_n_para";
@@ -353,6 +355,9 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
     fi
   fi
   p12_op=""
+  if [ $cometdev -eq 1 ]; then
+     p12_nullify="y"
+  fi
   if [ ! -z $p12_GEOCmldir ];then p12_op="$p12_op -d $p12_GEOCmldir"; 
     else p12_op="$p12_op -d $GEOCmldir"; fi
   if [ ! -z $p12_TSdir ];then p12_op="$p12_op -t $p12_TSdir"; fi
@@ -363,16 +368,29 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
   if [ ! -z $p12_rm_ifg_list ];then p12_op="$p12_op --rm_ifg_list $p12_rm_ifg_list"; fi
   if [ ! -z $p12_n_para ];then p12_op="$p12_op --n_para $p12_n_para";
   elif [ ! -z $n_para ];then p12_op="$p12_op --n_para $n_para";fi
-  if [ $cometdev -eq 1 ]; then
-     extra='--nullify'
-    else
-     extra=''
-  fi
+
   if [ $check_only == "y" ];then
-    echo "LiCSBAS12_loop_closure.py $p12_op "$extra
+    echo "LiCSBAS12_loop_closure.py $p12_op "
   else
-    LiCSBAS12_loop_closure.py $extra $p12_op 2>&1 | tee -a $log
+    LiCSBAS12_loop_closure.py $p12_op 2>&1 | tee -a $log
     if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+  fi
+  # 2024/11/13: updated nullification may cause extra all-nans-in-ref area. Workaround - update reference point.
+  # Forcing this to always use p120 ..
+  if [ $p12_nullify == "y" ];then
+  #if [ $p120_use == "y" ]; then
+    dirset="-c $GEOCmldir -d $GEOCmldir -t $TSdir "
+    extra=""
+    if [ $p120_ignoreconncomp == "y" ]; then
+        extra="--ignore_comp"
+    fi
+    if [ $check_only == "y" ];then
+      echo "LiCSBAS120_choose_reference.py $dirset "$extra
+    else
+      LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
+      if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+    fi
+  #fi
   fi
 fi
 
