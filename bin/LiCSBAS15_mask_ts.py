@@ -323,7 +323,8 @@ def main(argv=None):
         if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 50 # as the ref point would cause issues
     
     thre_dict['n_unw'] = int(n_im*thre_dict['n_unw_r'])
-
+    if n_gap_use_merged:
+        thre_dict['n_gap_merged'] = thre_dict.pop('n_gap')
     
     #%% Read data
     velfile = os.path.join(resultsdir,'vel')
