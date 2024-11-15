@@ -204,35 +204,49 @@ def main(argv=None):
         with open(vstdfile, openmode) as f:
                 vstd.tofile(f)
 
-        if ransac:
-            vel2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
-            intercept2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
-            print('  Recalculating velocity using RANSAC algorithm...', flush=True)
-            '''
-            for the next release:
-            import dask
-            n_para = ...
-            get_vel_ransac_dask = dask.delayed(inv_lib.get_vel_ransac)
-            winsize=(100,dt_cum.shape[0])
-            cumda=da.from_array(cum_patch, chunks=winsize)
-            vel2int = get_vel_ransac2(dt_cum, cumda, True)
-            vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = vel2int.compute(num_workers=n_para)
-            '''
-            vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = inv_lib.get_vel_ransac(dt_cum, cum_patch, return_intercept=True)
-            
-            ### Output data and image
-            vel2file = os.path.join(resultsdir, 'vel2')
-            inter2file = os.path.join(resultsdir, 'intercept2')
-            with open(vel2file, openmode) as f:
-                vel2.tofile(f)
-            with open(inter2file, openmode) as f:
-                intercept2.tofile(f)
-
         #%% Finish patch
         elapsed_time2 = int(time.time()-start2)
         print('  Elapsed time for {0}th patch: {1} sec'.format(i+1, elapsed_time2))
-
-
+    
+    # calc n_gaps_merged
+    try:
+        gap = cumh5['gap']
+        ngaps_merge = np.diff(gap, axis=0)
+        ngaps_merge[ngaps_merge < 1] = 0
+        ngaps_merge = np.sum(ngaps_merge, axis=0)
+        ngap_file = os.path.join(resultsdir, 'n_gap_merged')
+        with open(ngap_file, 'w') as f:
+            ngaps_merge.tofile(f)
+    except:
+        print('Error calculating n_gaps_merged')
+    
+    if ransac:
+        openmode = 'w'
+        vel2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
+        intercept2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
+        print('  Recalculating velocity using RANSAC algorithm... (not parallel now)', flush=True)
+        '''
+        for the next release:
+        import dask
+        n_para = ...
+        get_vel_ransac_dask = dask.delayed(inv_lib.get_vel_ransac)
+        winsize=(100,dt_cum.shape[0])
+        cumda=da.from_array(cum_patch, chunks=winsize)
+        vel2int = get_vel_ransac2(dt_cum, cumda, True)
+        vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = vel2int.compute(num_workers=n_para)
+        '''
+        cum_patch = cum.reshape((n_im, n_pt_all)).transpose()
+        bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
+        vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = inv_lib.get_vel_ransac(dt_cum, cum_patch, return_intercept=True)
+        
+        ### Output data and image
+        vel2file = os.path.join(resultsdir, 'vel2')
+        inter2file = os.path.join(resultsdir, 'intercept2')
+        with open(vel2file, openmode) as f:
+            vel2.tofile(f)
+        with open(inter2file, openmode) as f:
+            intercept2.tofile(f)
+    
     #%% Close h5 file
     cumh5.close()
 
@@ -262,7 +276,13 @@ def main(argv=None):
         cmax = np.nanpercentile(vel2, 99)
         cmap_vel = SCM.roma.reversed()
         plot_lib.make_im_png(vel2, pngfile, cmap_vel, title, cmin, cmax)
-
+    
+    ngaps_merge = io_lib.read_img(ngap_file, length, width)
+    pngfile = ngap_file+'.png'
+    title = 'Number of gaps merged'
+    cmin = np.nanpercentile(ngaps_merge, 1)
+    cmax = np.nanpercentile(ngaps_merge, 99)
+    plot_lib.make_im_png(ngaps_merge, pngfile, cmap_noise_r, title, cmin, cmax)
 
     #%% Finish
     elapsed_time = time.time()-start
