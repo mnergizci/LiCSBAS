@@ -216,7 +216,7 @@ def main(argv=None):
         ngaps_merge = np.sum(ngaps_merge, axis=0)
         ngap_file = os.path.join(resultsdir, 'n_gap_merged')
         with open(ngap_file, 'w') as f:
-            ngaps_merge.tofile(f)
+            np.float32(ngaps_merge).tofile(f)
     except:
         print('Error calculating n_gaps_merged')
     
