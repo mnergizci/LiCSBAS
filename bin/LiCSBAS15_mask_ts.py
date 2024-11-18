@@ -12,7 +12,7 @@ Input & output files
 Inputs in TS_GEOCml*/ :
  - results/[vel, coh_avg, n_unw, vstd, maxTlen, n_gap, stc,
             n_ifg_noloop, n_loop_err, resid_rms, n_nullify
-            coh_avg_XX, n_loop_err_rat, loop_ph_avg_abs]
+            coh_avg_XX, n_loop_err_rat, loop_ph_avg_abs, n_gap_merged]
  - info/13parameters.txt
  
 Outputs in TS_GEOCml*/
@@ -28,7 +28,7 @@ Usage
 LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
   [-T maxTlen_thre] [-g n_gap_thre] [-s stc_thre] [-i n_ifg_noloop_thre]
   [-l n_loop_err_thre] [-r resid_rms_thre] [--vmin float] [--vmax float]
-  [--keep_isolated] [--noautoadjust] [--avg_phase_bias float]
+  [--keep_isolated] [--noautoadjust] [--avg_phase_bias float] [--n_gap_use_merged]
 
  -t  Path to the TS_GEOCml* dir.
  -c  Threshold of coh_avg (average coherence)
@@ -45,6 +45,7 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
  -r  Threshold of resid_rms (RMS of residuals in inversion (mm))
  --v[min|max]  Min|Max value for output figure of velocity (Default: auto)
  --avg_phase_bias  Threshold of the average absolute loop phase misclosure (phase bias) [rad] to use for masking (Default: not use. --avg_phase_bias 1 can be recommended)
+ --n_gap_use_merged   Would use merged n_gaps instead of original (merging neighbouring gaps to one)
  --keep_isolated  Keep (not mask) isolated pixels
                   (Default: they are masked by stc)
  --noautoadjust  Do not auto adjust threshold when all pixels are masked
@@ -57,6 +58,8 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
 """
 #%% Change log
 '''
+20241115 ML, UoL
+ - use of n_gaps_merge
 20241107 ML, UoL
  - updated mask_ts.png
 20240628 ML, UoL
@@ -158,6 +161,7 @@ def main(argv=None):
     use_coh_freq = False
     keep_isolated = False
     auto_adjust = True
+    n_gap_use_merged = False
     
     cmap_vel = SCM.roma.reversed()
     cmap_noise = 'viridis'
@@ -166,7 +170,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust"])
+            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -209,6 +213,8 @@ def main(argv=None):
                 keep_isolated = True
             elif o == '--noautoadjust':
                 auto_adjust = False
+            elif o == '--n_gap_use_merged':
+                n_gap_use_merged = True
 
         if not tsadir:
             raise Usage('No tsa directory given, -t is not optional!')
@@ -234,12 +240,18 @@ def main(argv=None):
     outparmfile = os.path.join(tsadir, 'info', '15parameters.txt')
     maskts_png = os.path.join(tsadir,'mask_ts.png')
     maskts2_png = os.path.join(tsadir,'mask_ts_masked.png')
-
+    
+    if not n_gap_use_merged:
+        ngapfile = 'n_gap'
+    else:
+        ngapfile = 'n_gap_merged'
+    
     # rearranging:
     if os.path.exists(os.path.join(resultsdir, 'n_loop_err_rat')):
-        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err_rat', 'resid_rms']
+        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', ngapfile, 'stc', 'n_ifg_noloop', 'n_loop_err_rat', 'resid_rms']
     elif os.path.exists(os.path.join(resultsdir, 'n_loop_err')):
-        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', 'n_gap', 'stc', 'n_ifg_noloop', 'n_loop_err', 'resid_rms']
+        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', ngapfile, 'stc', 'n_ifg_noloop', 'n_loop_err', 'resid_rms']
+        names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', ngapfile, 'stc', 'n_ifg_noloop', 'n_loop_err', 'resid_rms']
     else:
         raise Usage('no n_loop_err information - cancelling. Please rerun step 12 or contact dev team on recommendations how to skip this step.')
     units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
@@ -311,7 +323,8 @@ def main(argv=None):
         if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 50 # as the ref point would cause issues
     
     thre_dict['n_unw'] = int(n_im*thre_dict['n_unw_r'])
-
+    if n_gap_use_merged:
+        thre_dict['n_gap_merged'] = thre_dict.pop('n_gap')
     
     #%% Read data
     velfile = os.path.join(resultsdir,'vel')

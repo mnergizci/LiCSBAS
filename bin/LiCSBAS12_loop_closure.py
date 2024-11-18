@@ -1252,7 +1252,7 @@ def loop_closure_4th(args, da):
         ## Calculate loop phase taking into account ref phase
         loop_ph = unw12 + unw23 - unw13 - (ref_unw12 + ref_unw23 - ref_unw13)
         # once referred to point that is considered ok (high coh == probably no phase bias), check for unw error of ref
-        peaks, k = np.histogram(loop_ph, np.arange(-4.5, 5.5, 1)) # searching for k>=-4 to k<=+4 - perhaps just +-3 would be ok..
+        peaks, k = np.histogram(loop_ph, np.arange(-3.5, 4.5, 1)) # searching for k>=-3 to k<=+3
         loop_ph = loop_ph - round(k[np.argmax(peaks)]+0.1)*(2*np.pi)
         #
         one_array_loop = one_array.copy()
