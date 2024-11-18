@@ -29,14 +29,16 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
  --mask  Path to mask file for ref phase calculation (Default: No mask)
  --png   Make png file (Default: Not make png)
  --eqoffsets  minmag  Estimate also offsets for earthquakes above minmag (float) in the region (defaults to M6.5+)
- --offsets offsets.txt  Estimate offsets read from external txt file -- TODO
+ --offsets offsets.txt  Estimate offsets read from external txt file - must have lines in the form of yyyy-mm-dd
  --export_model modelfile.h5  Export the model time series to H5 file. Can be used for step 16 (Default: not export)
 
 """
 #%% Change log
 '''
+2024-11 ML, ULeeds:
+ - added also offsets 
 2024-10-22 Milan Lazecky, ULeeds
- - added eqoffsets (TODO: external offsets file)
+ - added eqoffsets
  - recalc vstd and stc based on residuals from the model with offsets
 v1.3.3 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
@@ -159,7 +161,9 @@ def main(argv=None):
         if sinflag and (eqoffsetsflag or offsetsflag):
             raise Usage('--sin does not (yet) work together with offsets estimation - cancelling')
         if offsetsflag:
-            raise Usage('Sorry, this functionality is not implemented yet - please raise Issue on github')
+            if not os.path.exists(offsetsfile):
+                raise Usage('Offsets file not provided')
+                #raise Usage('Sorry, this functionality is not implemented yet - please raise Issue on github')
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -170,18 +174,32 @@ def main(argv=None):
 
     if eqoffsetsflag:
         print('getting earthquakes over the region')
-        eqoffsets = tools_lib.get_earthquake_dates(cumfile, minmag=minmag, maxdepth=60)
-        print('identified '+str(len(eqoffsets))+' earthquake candidates to solve')
+        offsets = tools_lib.get_earthquake_dates(cumfile, minmag=minmag, maxdepth=60)
+        print('identified '+str(len(offsets))+' earthquake candidates to solve')
         print('')
         try:
             outxt = os.path.join(os.path.dirname(cumfile), 'info', 'eqoffsets.txt')
             with open(outxt, 'w') as f:
-                for i in eqoffsets:
+                for i in offsets:
                     print('{}'.format(i), file=f)
             print('stored to file:')
             print(outxt)
         except:
-            print('some error storing eqoffsets to '+outxt+'. Continuing')
+            print('some error storing earthquake offsets to '+outxt+'. Continuing')
+
+    if offsetsflag:
+        if not eqoffsetsflag:
+            offsets = []
+        with open(offsetsfile, 'r') as f:
+            for l in f:
+                try:
+                    offsets.append(dt.datetime.strptime(l.split()[0], '%Y-%m-%d').date())
+                except:
+                    print('a line from offsets file not loaded, continuing')
+        offsets = list(set(offsets))
+        print('Loaded '+str(len(offsets))+' offsets:')
+        print(offsets)
+        print('')
 
 
     #%% Read info
@@ -294,7 +312,7 @@ def main(argv=None):
 
     if eqoffsetsflag or offsetsflag:
         print('Calc vel and earthquake offsets')
-        result, datavarnames, G = inv_lib.calc_vel_offsets(cum_tmp_resh, imdates_dt, eqoffsets, return_G = True)
+        result, datavarnames, G = inv_lib.calc_vel_offsets(cum_tmp_resh, imdates_dt, offsets, return_G = True)
         params_sorted = []
         print('')
         for i in range(len(datavarnames)):
