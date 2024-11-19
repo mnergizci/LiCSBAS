@@ -38,9 +38,10 @@ Outputs in TS_GEOCml*/ :
 Usage
 =====
 LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
- [--hgt_linear] [--hgt_min int] [--hgt_max int] [--nomask] [--n_para int]
+ [--hgt_linear] [--hgt_min int] [--hgt_max int] [--demerr] [--nomask] [--n_para int]
  [--range x1:x2/y1:y2 | --range_geo lon1/lon2/lat1/lat2]
  [--ex_range x1:x2/y1:y2 | --ex_range_geo lon1/lon2/lat1/lat2]
+ [--from_model path/to/model.h5] [--interpolate_nans]
 
  -t  Path to the TS_GEOCml* dir.
  -s  Width of spatial filter in km (Default: 2 km)
@@ -63,6 +64,8 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
               0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  --ex_range_geo  Range EXCLUDED in deramp and hgt_linear in geographical
                  coordinates (deg).
+ --from_model path/to/model.h5  Use externally calculated model to perform residual-based filtering (in dev further. see LiCSBAS_cum2vel.py to generate this)
+ --interpolate_nans   This will use the filter to fill nan values (in unmasked data). If temporal filtering is disabled, it will use linear interpolation in space instead.
 
 Note: Spatial filter consume large memory. If the processing is stacked, try
  - --n_para 1
@@ -72,6 +75,10 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
 """
 #%% Change log
 '''
+20241107 ML
+ - added interpolate_nans and updated masking of final cum_filt data
+20241029 Milan Lazecky
+ - allow running the filter starting from model residuals --- do not use before deramping
 v1.6.0 20230116 Yu Morishita
  - Add --demerr option to estimate/remove DEM error phase
 v1.5.3 20230602 M. Lazecky and Pedro E. Bedon, Uni of Leeds
@@ -154,7 +161,7 @@ def main(argv=None):
     filtcumdir, filtincdir, imdates, cycle, coef_r2m, models, \
     filtwidth_yr, filtwidth_km, dt_cum, x_stddev, y_stddev, mask2, cmap_wrap
     global cum_org, cum_filt, gpu
-
+    global interpolateflag
 
     #%% Set default
     tsadir = []
@@ -167,6 +174,8 @@ def main(argv=None):
     maskflag = True
     filterflag = True
     demerrflag = False
+    inputresidflag = False
+    interpolateflag = False
     gpu = False
 
     try:
@@ -190,15 +199,15 @@ def main(argv=None):
     cmap_wrap = SCM.romaO
     q = multi.get_context('fork')
     compress = 'gzip'
-
+    modelfile = ''
 
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
-                            "nomask", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu"])
+                            "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -225,6 +234,8 @@ def main(argv=None):
                 maskflag = False
             elif o == '--nofilter':
                 filterflag = False
+            elif o == '--interpolate_nans':
+                interpolateflag = True
             elif o == '--n_para':
                 n_para = int(a)
             elif o == '--range':
@@ -237,7 +248,9 @@ def main(argv=None):
                 ex_range_geo_str = a
             elif o == '--gpu':
                 gpu = True
-
+            elif o == '--from_model':
+                modelfile = a
+                inputresidflag = True
         if not tsadir:
             raise Usage('No tsa directory given, -t is not optional!')
         elif not os.path.isdir(tsadir):
@@ -432,6 +445,10 @@ def main(argv=None):
         maskfile = os.path.join(resultsdir, 'mask')
         mask = io_lib.read_img(maskfile, length, width)
         mask[mask==0] = np.nan ## 0->nan
+        # if mask is involved, apply to cum already:
+        # cum_org = cum_org * mask[np.newaxis,:,:]
+        # 20240711: no, we will always want to filter through everthing and only then apply mask at the end..
+        # if this is not the case and you want to really drop pixels that are inputs to the filter, please uncomment the line above
     else:
         mask = np.ones((length, width), dtype=np.float32)
         mask[np.isnan(cum_org[0, :, :])] = np.nan
@@ -475,6 +492,16 @@ def main(argv=None):
         p.close()
         del cum_org
 
+        # %% if the input should be residuals from given model
+    if inputresidflag:
+        modelh5 = h5.File(modelfile, 'r')
+        cum_model = modelh5['cum_model'][()]
+        cum = cum - cum_model
+        del cum_model
+        modelh5.close()
+        # print('in dev')
+        # load modelfile model_cum as h5, and remove from cum to get resids that will then get processed
+
         # %% DEM err
     if demerrflag:
         print('\nEstimate DEM error component,', flush=True)
@@ -484,7 +511,7 @@ def main(argv=None):
         _vconst = np.zeros((length, width), dtype=np.float32) * np.nan
         _vel = np.zeros((length, width), dtype=np.float32) * np.nan
 
-        bool_unnan = ~np.isnan(cum[0, :, :]).reshape(length, width)  ## not all nan
+        bool_unnan = ~np.isnan(cum[0, :, :]*mask).reshape(length, width)  ## not all nan # 20241107 added mask
         cum_pt = cum.reshape(n_im, length * width)[:, bool_unnan.ravel()]  # n_im x n_pt
         n_pt_unnan = bool_unnan.sum()
         vconst_tmp = np.zeros((n_pt_unnan), dtype=np.float32) * np.nan
@@ -560,6 +587,8 @@ def main(argv=None):
     sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
     for i in range(n_im):
         sumsq_cum_wrt_med = sumsq_cum_wrt_med + (cum_filt[i, :, :]-np.nanmedian(cum_filt[i, :, :]))**2
+        ### we do not want ref point to contain nans
+        sumsq_cum_wrt_med[np.isnan(cum[i, :, :])] = np.nan
     rms_cum_wrt_med = np.sqrt(sumsq_cum_wrt_med/n_im)*mask
 
     ### Mask by minimum n_gap
@@ -576,10 +605,22 @@ def main(argv=None):
     refy2s, refx2s = refy1s+1, refx1s+1
     print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
 
+    # Cleaning memory - means need to get the refpoint_cum_org first
+    refpoint_cum_org = cum[:, refy1s, refx1s]
+    del cum
+
+    # adding back model to the filtered residuals
+    if inputresidflag:
+        # read again
+        modelh5 = h5.File(modelfile, 'r')
+        cum_model = modelh5['cum_model'][()]
+        cum_filt = cum_filt + cum_model
+        del cum_model
+        modelh5.close()
+
     ### Rerferencing cumulative displacement to new stable ref
     for i in range(n_im):
-        cum_filt[i, :, :] = cum_filt[i, :, :] - cum[i, refy1s, refx1s]
-    del cum
+        cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
 
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
@@ -604,6 +645,10 @@ def main(argv=None):
 
     #%% Calc filtered velocity
     print('\nCalculate velocity of filtered time series...', flush=True)
+    if inputresidflag:
+        print('\n(note you may want to check LiCSBAS_cum2vel.py for more options than linear trend only)', flush=True)
+        print('')
+
     G = np.stack((np.ones_like(dt_cum), dt_cum), axis=1)
     vconst = np.zeros((length, width), dtype=np.float32)*np.nan
     vel = np.zeros((length, width), dtype=np.float32)*np.nan
@@ -637,8 +682,12 @@ def main(argv=None):
         vel_mskd.tofile(velfile+'.mskd')
 
     print('\nWriting to HDF5 file...', flush=True)
-    cumfh5.create_dataset('vel', data=vel.reshape(length, width), compression=compress)
-    cumfh5.create_dataset('vintercept', data=vconst.reshape(length, width), compression=compress)
+    if maskflag:
+        print('\n(masked version)', flush=True)
+        cum_filt = cum_filt * mask[np.newaxis, :, :]
+
+    cumfh5.create_dataset('vel', data=vel.reshape(length, width)*mask, compression=compress)
+    cumfh5.create_dataset('vintercept', data=vconst.reshape(length, width)*mask, compression=compress)
     cumfh5.create_dataset('cum', data=cum_filt, compression=compress)
 
 
@@ -647,6 +696,8 @@ def main(argv=None):
     cumfh5.create_dataset('filtwidth_km', data=filtwidth_km)
     cumfh5.create_dataset('deramp_flag', data=deg_ramp)
     cumfh5.create_dataset('hgt_linear_flag', data=hgt_linearflag*1)
+    cumfh5.create_dataset('demerr_flag', data=demerrflag * 1)
+    cumfh5.create_dataset('masked', data=maskflag * 1)
 
     indices = ['coh_avg', 'hgt', 'n_loop_err', 'n_unw', 'slc.mli',
                'maxTlen', 'n_gap', 'n_ifg_noloop', 'resid_rms',
@@ -834,6 +885,9 @@ def filter_wrapper(i):
     ### Third, LP in space and subtract from original
     if filtwidth_km == 0.0:
         _cum_filt = cum[i, :, :] ## No spatial
+        #if interpolateflag:
+        #    # this will interpolate the cum_filt for nan points outside of the mask (that comes from step 15)
+        #    _cum_filt = tools_lib.interpolate_2d(_cum_filt, method='linear') * mask
     else:
         with warnings.catch_warnings(): ## To silence warning
             if i ==0: cum_hpt = cum_hpt+sys.float_info.epsilon ##To distinguish from 0 of filtered nodata
@@ -845,12 +899,25 @@ def filter_wrapper(i):
             cum_hptlps[cum_hptlps == 0] = np.nan ## fill 0 with nan
 
         _cum_filt = cum[i, :, :] - cum_hptlps
+        #if interpolateflag:
+        #    # this will interpolate the cum_filt for nan points outside of the mask (that comes from step 15)
+        #    _cum_filt = tools_lib.interpolate_2d(_cum_filt, method='linear') * mask
+
         ### Output comparison image
         data3 = [np.angle(np.exp(1j*(data/coef_r2m/cycle))*cycle) for data in [cum[i, :, :]*mask, cum_hptlps*mask, _cum_filt*mask]]
         title3 = ['Before filter ({}pi/cycle)'.format(cycle*2), 'Filter phase ({}pi/cycle)'.format(cycle*2), 'After filter ({}pi/cycle)'.format(cycle*2)]
         pngfile = os.path.join(filtcumdir, imdates[i]+'_filt.png')
         plot_lib.make_3im_png(data3, pngfile, cmap_wrap, title3, vmin=-np.pi, vmax=np.pi, cbar=False)
 
+    # Optionally interpolating the (unmasked) nan values of pixels
+    if interpolateflag:
+        if filtwidth_yr == 0.0: # in case of no temporal filter applied, let's interpolate only bilinearly in space
+            _cum_filt = tools_lib.interpolate_2d(_cum_filt, method='linear') * mask
+        else:  # but if it WAS applied, we can use the low pass filter version to estimate the cum value - should be better
+            nanpixels = np.isnan(_cum_filt)
+            _cum_filt[nanpixels] = cum_lpt[nanpixels]
+            _cum_filt = _cum_filt * mask
+        #
     return _cum_filt
 
 

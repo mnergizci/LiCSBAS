@@ -8,6 +8,8 @@ Python3 library of time series analysis tools for LiCSBAS.
 =========
 Changelog
 =========
+2024-10-22 Milan Lazecky, ULeeds
+ - Add function to get offsets regarding earthquakes (used by optional LiCSBAS_cum2vel)
 v1.8 20210309 Yu Morishita, GSI
  - Add GPU option to fit2dh (but not recommended)
 v1.7 20210205 Yu Morishita, GSI
@@ -47,10 +49,24 @@ from matplotlib.colors import LinearSegmentedColormap as LSC
 from matplotlib import pyplot as plt
 import matplotlib.path as path
 try:
+    from scipy import interpolate
+except:
+    print('scipy not installed. no interpolation tools')
+
+try:
     import networkx as nx
 except:
-    print('networkx is not installed. LiCSBAS Plus functions will not work')
+    print('networkx is not installed. Some LiCSBAS Plus functions will not work')
+import h5py as h5
+try:
+    import pandas as pd
+except:
+    print('no pandas installed. Recommended for earthquake offsets')
 
+try:
+    from libcomcat.search import search
+except:
+    print('libcomcat is not installed. Identification of earthquake offsets will not work')
 
 #%%
 def bl2xy(lon, lat, width, length, lat1, postlat, lon1, postlon):
@@ -239,6 +255,22 @@ def download_data(url, file, n_retry=3):
     print("    Error while downloading from {}".format(url),
           file=sys.stderr, flush=True)
     return # fail
+
+
+def interpolate_2d(inarray, method='linear'):
+    ''' A simple interpolation - without assessing pixels outside of the filled convex hull.
+    Methods as 'nearest', 'linear', or 'cubic'
+    '''
+    array = np.ma.masked_invalid(inarray)
+    x = np.arange(0, array.shape[1])
+    y = np.arange(0, array.shape[0])
+    xx, yy = np.meshgrid(x, y)
+    x1 = xx[~array.mask]
+    y1 = yy[~array.mask]
+    newarr = array[~array.mask]
+    newarr = interpolate.griddata((x1, y1), newarr.ravel(), (xx, yy), method=method)
+    newarr = np.array(newarr)
+    return newarr
 
 
 #%%
@@ -827,3 +859,68 @@ def xy2bl(x, y, lat1, dlat, lon1, dlon):
     lon = lon1+dlon*x
 
     return lat, lon
+
+#%%
+def get_earthquake_dates(cumfile, minmag = 6.5, maxdepth=60):
+    ''' ML, 20241022
+    Will return dates of earthquakes in the region covered by the cum file.
+    minmag, maxdepth = minimal magnitude and maximum depth [km] of the events to get the dates for.
+    '''
+    cumh5 = h5.File(cumfile, 'r')
+    imdates = cumh5['imdates'][()].astype(str).tolist()
+    cum = cumh5['cum']
+    sizet, sizex, sizey = cum.shape
+    lon1 = cumh5['corner_lon'][()]
+    lon2 = lon1 + cumh5['post_lon'][()] * sizex
+    lat1 = cumh5['corner_lat'][()]
+    lat2 = lat1 + cumh5['post_lat'][()] * sizey
+
+    # real datetime this time
+    imdates_dt = ([dt.datetime.strptime(imd, '%Y%m%d') for imd in imdates])
+
+    def _get_frametime(frame):
+        ''' attempt to get frame time for better precision'''
+        try:
+            track = str(int(frame[:3]))
+        except:
+            return False
+        web_path = 'https://gws-access.jasmin.ac.uk/public/nceo_geohazards/LiCSAR_products'
+        fullwebpath_metadata = os.path.join(web_path, track, frame, 'metadata', 'metadata.txt')
+        try:
+            a = pd.read_csv(fullwebpath_metadata, sep='=', header=None)
+            center_time = a[a[0] == 'center_time'][1].values[0]
+            center_time_dt = dt.datetime.strptime(center_time, '%H:%M:%S.%f').time()
+        except:
+            return False
+        return center_time_dt
+
+    frame = os.path.realpath(cumfile).split('/')[-3]
+    print('based on directory, assuming LiCSAR frame '+frame)
+    print('(used only to get center_time)')
+    center_time_dt = _get_frametime(frame)
+    if not center_time_dt:
+        print('Error getting center_time for this frame - events with the same day as acquisitions might be wrongly mapped as pre/post event.')
+
+    datein = imdates_dt[0]
+    dateout = imdates_dt[-1]
+    events = search(starttime=datein + dt.timedelta(days=1),
+                    endtime=dateout - dt.timedelta(days=1),
+                    minmagnitude=minmag, limit=2000, maxdepth=maxdepth,
+                    maxlongitude=max(lon1, lon2),
+                    maxlatitude=max(lat1, lat2),
+                    minlatitude=min(lat1, lat2),
+                    minlongitude=min(lon1, lon2))
+    offsetdates = []
+    print('Setting offset dates')  # TODO - better to set the offsets at the centre time between the epochs
+    for e in events:
+        offdate = e.time.date()
+        if center_time_dt:
+            if e.time.strftime('%Y%m%d') in imdates:
+                if e.time.time() < center_time_dt:
+                    #print('checking the event time, an event will be set towards previous epoch')
+                    offdate = offdate - dt.timedelta(days=1)
+        offsetdates.append(offdate)
+
+    offsetdates = list(set(offsetdates))
+    offsetdates.sort()
+    return offsetdates

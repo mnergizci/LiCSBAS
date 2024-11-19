@@ -564,6 +564,7 @@ def main(argv=None):
     countf = width*refy1
     countl = width*lengththis # Number to be read
     ref_unw = []
+    nanserror = []
     for i, ifgd in enumerate(ifgdates):
         unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
         f = open(unwfile, 'rb')
@@ -574,14 +575,26 @@ def main(argv=None):
 
         unw[unw == 0] = np.nan
         if np.all(np.isnan(unw)):
-            print('All nan in ref area in {}.'.format(ifgd))
-            print('Rerun LiCSBAS12.')
+            print('All nan in ref area in {}. Removing from processing.'.format(ifgd))
+            #print('Rerun LiCSBAS12.')
             f.close()
-            return 1
+            nanserror.append(ifgd)
+            #return 1
+            continue
 
         ref_unw.append(np.nanmean(unw))
 
         f.close()
+
+    if nanserror:
+        print('There were still ifgs with all nan in ref area. Please rerun step 13')
+        print('you can check following file (remove it if you decide to change reference point):')
+        noref_ifgfile = os.path.join(infodir, '120bad_ifg.txt')
+        print(noref_ifgfile)
+        with open(noref_ifgfile, 'a') as f:
+            for i in nanserror:
+                print('{}'.format(i), file=f)
+        return 1
 
     #%% Open cum.h5 for output
     ### Decide here what to do re. cumh5file and reloading patches. Need to check that stored cumh5 file is the right size etc
@@ -750,6 +763,7 @@ def main(argv=None):
             # if still ok, perform the main noloop routine
             if nullify_noloops:
                 print('  removing noloop_ifgs before inversion (in memory)')
+                orignounw = (unwpatch[~np.isnan(unwpatch)]).sum()
                 # step 2 for nullify_noloops: counting the noloops and nullying data from ifgs not forming any loop
                 try:
                     print('  with {} parallel processing...'.format(n_para), flush=True)
@@ -759,19 +773,18 @@ def main(argv=None):
                     # _result = np.array(
                     p.map(nullify_noloops_from_ori, range(n_para)) #, dtype=float)
                     p.close()
-                    #for nn in range(n_para):
-                    #    if nn == 0:
-                    #        unwpatch = _result[0, :, :]
-                    #    else:
-                    #        unwpatch += _result[nn, :, :]
-                    #unwpatch = unwpatch/n_para
-                    #del _result
+                    afternounw = (unwpatch[~np.isnan(unwpatch)]).sum()
+
                 except Exception as e:
                     print("ERROR nullifying noloops data:")
                     print(traceback.format_exc())
                     nullify_noloops = False
                     return 1
                 del hasdatapatch # no need anymore
+                print('')
+                print('  '+str(int(orignounw - afternounw))+'/'+str(int(orignounw))+' values dropped after noloop_ifg masking.')
+                print('')
+
 
             ### Calc variance from coherence for WLS
             if inv_alg == 'WLS':

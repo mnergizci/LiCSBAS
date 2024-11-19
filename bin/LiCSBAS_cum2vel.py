@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
-v1.3.3 20210910 Yu Morishita, GSI
 
 ========
 Overview
 ========
-This script calculates velocity and its standard deviation from cum*.h5 and outputs them as a float32 file. Amplitude and time offset of the annual displacement can also be calculated by --sin option.
+This script calculates velocity and its standard deviation from cum*.h5 and outputs them as a float32 file.
+Amplitude and time offset of the annual displacement can also be calculated by --sin option.
+It can estimate offsets based on earthquake event datetime or external offsets.txt file. This will not work with --sin. However --vstd would in such case be calculated from residuals.
 
 =====
 Usage
 =====
-LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfile] [-r x1:x2/y1:y2]
-    [--ref_geo lon1/lon2/lat1/lat2] [--vstd] [--sin] [--mask maskfile] [--png]
+LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [-r x1:x2/y1:y2]
+    [--ref_geo lon1/lon2/lat1/lat2] [--vstd] [--sin] [--mask maskfile] [--png] [--eqoffsets minmag] [--offsets offsets.txt]
+    [--export_model outmodelfile.h5]
 
  -s  Start date of period to calculate velocity (Default: first date)
  -e  End date of period to calculate velocity (Default: last date)
  -i  Path to input cum file (Default: cum_filt.h5)
- -o  Output vel file (Default: yyyymmdd_yyyymmdd.vel[.mskd])
+ -o  Output filename root string - will use to name modeled variables (Default: yyyymmdd_yyyymmdd -> yyyymmdd_yyyymmdd.vel[.mskd])
  -r  Reference area (Default: same as info/*ref.txt)
      Note: x1/y1 range 0 to width-1, while x2/y2 range 1 to width
      0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
@@ -26,10 +28,18 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfile] [-r x1:x
          *.amp and *.dt (time difference wrt Jan 1) are output
  --mask  Path to mask file for ref phase calculation (Default: No mask)
  --png   Make png file (Default: Not make png)
+ --eqoffsets  minmag  Estimate also offsets for earthquakes above minmag (float) in the region (defaults to M6.5+)
+ --offsets offsets.txt  Estimate offsets read from external txt file - must have lines in the form of yyyy-mm-dd
+ --export_model modelfile.h5  Export the model time series to H5 file. Can be used for step 16 (Default: not export)
 
 """
 #%% Change log
 '''
+2024-11 ML, ULeeds:
+ - added also offsets 
+2024-10-22 Milan Lazecky, ULeeds
+ - added eqoffsets
+ - recalc vstd and stc based on residuals from the model with offsets
 v1.3.3 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
 v1.3.2 20210125 Yu Morishita, GSI
@@ -60,6 +70,7 @@ import LiCSBAS_io_lib as io_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
+from LiCSBAS_meta import *
 
 class Usage(Exception):
     """Usage context manager"""
@@ -75,7 +86,7 @@ def main(argv=None):
         argv = sys.argv
 
     start = time.time()
-    ver="1.3.3"; date=20210910; author="Y. Morishita"
+    #ver="1.3.3"; date=20210910; author="Y. Morishita" # this is from LiCSBAS_meta now
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -88,18 +99,26 @@ def main(argv=None):
     refarea_geo = []
     maskfile = []
     vstdflag = False
+    stcflag = False
     sinflag = False
     pngflag = False
+    eqoffsetsflag = False
+    offsetsflag = False
+    offsetsfile = []
+    exportmodelfile = []
+    modelflag = False
+    minmag = 6.5
     cmap = SCM.roma.reversed()
     cmap_vstd = 'viridis_r'
+    cmap_stc = 'viridis_r'
     cmap_amp = 'viridis_r'
     cmap_dt = SCM.romaO.reversed()
-
+    compress = 'gzip'
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "vstd", "sin", "png", "ref_geo=", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "vstd", "sin", "eqoffsets=", "offsets=","export_model=","png", "ref_geo=", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -120,21 +139,67 @@ def main(argv=None):
                 refarea_geo = a
             elif o == '--vstd':
                 vstdflag = True
+                stcflag = True
+                modelflag = True
             elif o == '--sin':
                 sinflag = True
             elif o == '--mask':
                 maskfile = a
             elif o == '--png':
                 pngflag = True
-
+            elif o == '--eqoffsets':
+                minmag = float(a)
+                eqoffsetsflag = True
+            elif o == '--offsets':
+                offsetsfile = a
+                offsetsflag = True
+            elif o == '--export_model':
+                exportmodelfile = a
+                modelflag = True
         if not os.path.exists(cumfile):
             raise Usage('No {} exists! Use -i option.'.format(cumfile))
+        if sinflag and (eqoffsetsflag or offsetsflag):
+            raise Usage('--sin does not (yet) work together with offsets estimation - cancelling')
+        if offsetsflag:
+            if not os.path.exists(offsetsfile):
+                raise Usage('Offsets file not provided')
+                #raise Usage('Sorry, this functionality is not implemented yet - please raise Issue on github')
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
         print("  "+str(err.msg), file=sys.stderr)
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
+
+
+    if eqoffsetsflag:
+        print('getting earthquakes over the region')
+        offsets = tools_lib.get_earthquake_dates(cumfile, minmag=minmag, maxdepth=60)
+        print('identified '+str(len(offsets))+' earthquake candidates to solve')
+        print('')
+        try:
+            outxt = os.path.join(os.path.dirname(cumfile), 'info', 'eqoffsets.txt')
+            with open(outxt, 'w') as f:
+                for i in offsets:
+                    print('{}'.format(i), file=f)
+            print('stored to file:')
+            print(outxt)
+        except:
+            print('some error storing earthquake offsets to '+outxt+'. Continuing')
+
+    if offsetsflag:
+        if not eqoffsetsflag:
+            offsets = []
+        with open(offsetsfile, 'r') as f:
+            for l in f:
+                try:
+                    offsets.append(dt.datetime.strptime(l.split()[0], '%Y-%m-%d').date())
+                except:
+                    print('a line from offsets file not loaded, continuing')
+        offsets = list(set(offsets))
+        print('Loaded '+str(len(offsets))+' offsets:')
+        print(offsets)
+        print('')
 
 
     #%% Read info
@@ -209,8 +274,9 @@ def main(argv=None):
 
     ### Outfile
     if not outfile:
-        outfile = '{}_{}.vel{}'.format(imd_s, imd_e, suffix_mask)
+        outfile = '{}_{}'.format(imd_s, imd_e)
 
+    velfile = outfile + '.vel' + suffix_mask
 
     #%% Display info
     print('')
@@ -237,38 +303,102 @@ def main(argv=None):
 
     ### Extract not nan points
     bool_allnan = np.all(np.isnan(cum_tmp), axis=0)
-    cum_tmp = cum_tmp.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
+    cum_tmp_resh = cum_tmp.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
+    #
+    if exportmodelfile:
+        # get the output model h5 file ready:
+        modh5file = os.path.join(os.path.dirname(cumfile), 'model.h5')
+        modh5 = h5.File(modh5file, 'w')
 
+    if eqoffsetsflag or offsetsflag:
+        print('Calc vel and earthquake offsets')
+        result, datavarnames, G = inv_lib.calc_vel_offsets(cum_tmp_resh, imdates_dt, offsets, return_G = True)
+        params_sorted = []
+        print('')
+        for i in range(len(datavarnames)):
+            dvarname = datavarnames[i]
+            print('storing '+dvarname)
+            dvar = np.zeros((length, width), dtype=np.float32)*np.nan
+            dvar[~bool_allnan] = result[i,:]
+            outvarfile = outfile+'.'+dvarname+suffix_mask
+            dvar.tofile(outvarfile)
+            if exportmodelfile:
+                # also export to the h5 (why not)
+                modh5.create_dataset(dvarname, data=dvar, compression=compress)
+            if modelflag:
+                # add as inputs for the model
+                params_sorted.append(dvar)
+            if pngflag:
+                pngfile = outvarfile + '.png'
+                # title = 'n_im: {}, Ref X/Y {}:{}/{}:{}'.format(n_im, refx1, refx2, refy1, refy2)
+                plot_lib.make_im_png(dvar, pngfile, cmap, dvarname)
+        if modelflag:
+            model = inv_lib.get_model_cum(G, params_sorted)
+        #
+        del G
+    else:
+        if not sinflag: ## Linear function
+            print('Calc velocity...')
+            vconst[~bool_allnan], vel[~bool_allnan], G = inv_lib.calc_vel(cum_tmp_resh, dt_cum, return_G = True)
+            if modelflag:
+                model = inv_lib.get_model_cum(G, [vconst, vel])
+            vel.tofile(velfile)
+        else: ## Linear+sin function
+            print('Calc velocity and annual components...')
+            amp = np.zeros((length, width), dtype=np.float32)*np.nan
+            delta_t = np.zeros((length, width), dtype=np.float32)*np.nan
+            ampfile = outfile+'.amp'+suffix_mask
+            dtfile = outfile+'.dt'+suffix_mask
+            if modelflag:
+                coef_s = np.zeros((length, width), dtype=np.float32)*np.nan
+                coef_c = np.zeros((length, width), dtype=np.float32) * np.nan
+                vconst[~bool_allnan], vel[~bool_allnan], coef_s[~bool_allnan], coef_c[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan], G = inv_lib.calc_velsin(
+                    cum_tmp_resh, dt_cum, imdates[0], return_G = True)
+                model = inv_lib.get_model_cum(G, [vconst, vel, coef_s, coef_c])
+            else:
+                vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp_resh, dt_cum, imdates[0])
+            vel.tofile(velfile)
+            amp.tofile(ampfile)
+            delta_t.tofile(dtfile)
 
-    if not sinflag: ## Linear function
-        print('Calc velocity...')
-        vel[~bool_allnan], vconst[~bool_allnan] = inv_lib.calc_vel(cum_tmp, dt_cum)
-        vel.tofile(outfile)
-    else: ## Linear+sin function
-        print('Calc velocity and annual components...')
-        amp = np.zeros((length, width), dtype=np.float32)*np.nan
-        delta_t = np.zeros((length, width), dtype=np.float32)*np.nan
-        ampfile = outfile.replace('vel', 'amp')
-        dtfile = outfile.replace('vel', 'dt')
-
-        vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp, dt_cum, imdates[0])
-        vel.tofile(outfile)
-        amp.tofile(ampfile)
-        delta_t.tofile(dtfile)
+    if exportmodelfile:
+        print('Exporting model time series to '+modh5file)
+        modh5.create_dataset('cum_model', data=model, compression=compress)
+        modh5.close()
 
     ### vstd
     if vstdflag:
-        vstdfile = outfile.replace('vel', 'vstd')
+        vstdfile = outfile+'.vstd'+suffix_mask
         vstd = np.zeros((length, width), dtype=np.float32)*np.nan
 
         print('Calc vstd...')
-        vstd[~bool_allnan] = inv_lib.calc_velstd_withnan(cum_tmp, dt_cum)
-        vstd.tofile(vstdfile)
+        if offsetsflag or eqoffsetsflag:
+            cum_tmp_resh = cum_tmp_resh - model.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
 
+        vstd[~bool_allnan] = inv_lib.calc_velstd_withnan(cum_tmp_resh, dt_cum)
+        vstd.tofile(vstdfile)
+        #
+        #_cum = cum[:, rows[0]-row_ex1:rows[1]+row_ex2, :].reshape(n_im, lengththis+row_ex1+row_ex2, width)
+
+        ### Calc STC
+        #stc = inv_lib.calc_stc(_cum, gpu=gpu)[row_ex1:lengththis+row_ex1, :] ## original length
+        #
+        if stcflag:
+            print('Calc stc...')
+            # here, stc calc accepts nans and need 3D cube - so getting the original cum_tmp then
+            stcfile = outfile + '.stc' + suffix_mask
+            # cum_tmp = cum_tmp.reshape(n_im, length, width) # this will not work!
+            if offsetsflag or eqoffsetsflag:
+                cum_tmp = cum_tmp - model  # or should this be transposed?
+            stc = inv_lib.calc_stc(cum_tmp)
+
+            openmode = 'w'
+            with open(stcfile, openmode) as f:
+                stc.tofile(f)
 
     #%% Make png if specified
     if pngflag:
-        pngfile = outfile+'.png'
+        pngfile = velfile+'.png'
         title = 'n_im: {}, Ref X/Y {}:{}/{}:{}'.format(n_im, refx1, refx2, refy1, refy2)
         plot_lib.make_im_png(vel, pngfile, cmap, title)
 
@@ -278,7 +408,16 @@ def main(argv=None):
             plot_lib.make_im_png(delta_t, dtfile+'.png', cmap_dt, title)
 
         if vstdflag:
-            plot_lib.make_im_png(vstd, vstdfile+'.png', cmap_vstd, title)
+            title = 'STD of velocity (mm/yr)'
+            cmin = np.nanpercentile(vstd, 1)
+            cmax = np.nanpercentile(vstd, 99)
+            plot_lib.make_im_png(vstd, vstdfile+'.png', cmap_vstd, title, cmin, cmax)
+
+        if stcflag:
+            title = 'Spatio-temporal consistency (mm)'
+            cmin = np.nanpercentile(stc, 1)
+            cmax = np.nanpercentile(stc, 99)
+            plot_lib.make_im_png(stc, stcfile + '.png', cmap_stc, title, cmin, cmax)
 
 
     #%% Finish
@@ -289,9 +428,11 @@ def main(argv=None):
     print("\nElapsed time: {0:02}h {1:02}m {2:02}s".format(hour,minite,sec))
 
     print('\n{} Successfully finished!!\n'.format(os.path.basename(argv[0])))
-    print('Output: {}'.format(outfile), flush=True)
+    print('Output: {}'.format(velfile), flush=True)
     if vstdflag:
         print('        {}'.format(vstdfile), flush=True)
+    if stcflag:
+        print('        {}'.format(stcfile), flush=True)
     if sinflag:
         print('        {}'.format(ampfile), flush=True)
         print('        {}'.format(dtfile), flush=True)

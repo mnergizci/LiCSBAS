@@ -8,6 +8,8 @@ Python3 library of time series inversion functions for LiCSBAS.
 =========
 Changelog
 =========
+20241020 ML
+ - added calc with offset dates
 20240930 ML
  - (finally) found the bug causing nans in inversion of some datasets. Fixed by removing the scipy.sparse functionality. Perhaps just csr_array would do or other tweaking?
 20240423 ML
@@ -229,6 +231,12 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=Fal
             print('rolling back to simplified vel estimate (note vconst=0)')
             vel = result.sum(axis=0)/dt_cum[-1]
             vconst = np.zeros_like(vel)
+        # now need to return ref area that should be zero, back to zero
+        try:
+            vel[np.all(cum==0, axis=0)] = 0
+            vconst[np.all(cum==0, axis=0)] = 0
+        except:
+            print('a bug in not-tested return of ref point to zero. should be easy fix (and it actually does not bother)')
     else:
         # NSBAS result matrix: last 2 rows are vel and vconst
         inc = result[:n_im-1, :]
@@ -407,13 +415,14 @@ def wls_nsbas(i):
 
 
 #%%
-def calc_vel(cum, dt_cum):
+def calc_vel(cum, dt_cum, return_G = False):
     """
     Calculate velocity.
 
     Inputs:
       cum    : cumulative phase block for each point (n_pt, n_im)
       dt_cum : Cumulative days for each image (n_im)
+      return_G: optionally return G matrix
 
     Returns:
       vel    : Velocity (n_pt)
@@ -445,12 +454,19 @@ def calc_vel(cum, dt_cum):
 
     vconst = result[0, :]
     vel = result[1, :]
-
-    return vel, vconst
+    # reverting the zeroes to nan, although ref area will then be nan now.
+    vel[vel==0] = np.nan
+    vconst[vconst==0] = np.nan
+    
+    if return_G:
+        # careful, we switch the output params to conform with G
+        return vconst, vel, G
+    else:
+        return vel, vconst
 
 
 #%%
-def calc_velsin(cum, dt_cum, imd0):
+def calc_velsin(cum, dt_cum, imd0, return_G = False):
     """
     Calculate velocity and coeffcients of sin (annual) function.
 
@@ -458,6 +474,7 @@ def calc_velsin(cum, dt_cum, imd0):
       cum    : cumulative phase block for each point (n_pt, n_im)
       dt_cum : Cumulative days for each image (n_im)
       imd0   : Date of first acquistion (str, yyyymmdd)
+      return_G: optionally return G matrix (careful..)
 
     Returns:
       vel    : Velocity (n_pt)
@@ -508,7 +525,11 @@ def calc_velsin(cum, dt_cum, imd0):
     delta_t[delta_t < 0] = delta_t[delta_t < 0]+365.25 #0-365.25
     delta_t[delta_t > 365.25] = delta_t[delta_t > 365.25]-365.25
 
-    return vel, vconst, amp, delta_t
+    if return_G:
+        # careful, we switch the output params to conform with G - AND, actually also coef_s/c
+        return vconst, vel, coef_s, coef_c, amp, delta_t, G
+    else:
+        return vel, vconst, amp, delta_t
 
 
 
@@ -777,3 +798,95 @@ def censored_lstsq_slow(A, B, M):
         print('')
     return X
 '''
+
+def calc_vel_offsets(cum, imdates_dt, offsetdates, return_G = False, trunc_last_days = 180):
+    """
+    Calculate vconst, velocity, and offsets for given dates. ML 20241022
+
+    Inputs:
+      cum    : cumulative phase block for each point (n_pt, n_im)
+      imdates_dt : acquisition dates as ordinal number (n_im)
+      offsetdates : earthquake event dates as datetime.date
+      return_G : will also return the formed G matrix
+      trunc_last_days : if the offset is within the last trunc_last_days, it will set velocity estimate to not use such. TODO: may get to problems in short datasets
+
+    Returns:
+      result : vconst, vel, estimated offsets (n_vars, n_pt)
+      Gdesc :  description of the 'result' content (n_vars)
+
+    """
+    dt_cum = np.float32((np.array(imdates_dt) - imdates_dt[0]) / 365.25)
+    n_pt, n_im = cum.shape
+    result = np.zeros((2, n_pt), dtype=np.float32)*np.nan #[vconst, vel]
+
+    G = np.stack((np.ones_like(dt_cum), dt_cum), axis=1)
+    #vconst = np.zeros((n_pt), dtype=np.float32)*np.nan
+    #vel = np.zeros((n_pt), dtype=np.float32)*np.nan
+
+    bool_pt_full = np.all(~np.isnan(cum), axis=1)
+    n_pt_full = bool_pt_full.sum()
+
+    offsetcol_prev = np.zeros_like(imdates_dt)
+    Gdesc = ['vconst', 'vel']
+
+    for offdate in offsetdates:
+        # dt_cum_offset = dt_cum.copy()
+        # coseismic offset
+        TT = np.array(imdates_dt) >= offdate.toordinal()
+        offsetcol = (TT > 0).astype(int)
+        if np.array_equal(offsetcol, offsetcol_prev):
+            # skipping this offset
+            continue
+        if np.all(offsetcol == 1):
+            continue
+        offsetcol_prev = offsetcol
+        # all ok, adding to G matrix
+        G = np.insert(G, G.shape[-1], offsetcol, axis=1)
+        Gdesc.append('offset_' + offdate.strftime('%Y%m%d'))
+        # and allocate extended result
+        result = np.insert(result, result.shape[0], np.zeros((1, n_pt), dtype=np.float32) * np.nan, axis=0)
+
+
+    if n_pt_full!=0:
+        print('  Solving {0:6}/{1:6}th points with full cum at a time...'.format(n_pt_full, n_pt), flush=True)
+
+        ## Sovle
+        result[:, bool_pt_full] = np.linalg.lstsq(G, cum[bool_pt_full, :].transpose(), rcond=None)[0]
+
+    ### Solve other points with nan point by point.
+    cum_tmp = cum[~bool_pt_full, :].transpose()
+    mask = (~np.isnan(cum_tmp))
+    cum_tmp[np.isnan(cum_tmp)] = 0
+    print('  Next, solve {0} points including nan point-by-point...'.format(n_pt-n_pt_full), flush=True)
+
+    result[:, ~bool_pt_full] = censored_lstsq_slow(G, cum_tmp, mask) #(n_im+1, n_pt)
+
+    #vconst = result[0, :]
+    #vel = result[1, :]
+    #
+    #return vel, vconst
+    if return_G:
+        return result, Gdesc, G
+    else:
+        return result, Gdesc
+
+
+def get_model_cum(G, params_sorted):
+    """ Will get the model cum displacements, using formed G and corresponding parameters.
+
+    Inputs:
+        G (np.array) :  shape of (time, modelparams)
+        params_sorted (list of arrays):  the model parameter estimates, e.g. [vel, vconst]
+
+    Returns:
+        np.array : same shape as the cum layer
+    """
+    t, x, y = G.shape[0], params_sorted[0].shape[0], params_sorted[0].shape[1]
+    out = np.zeros((t, x, y), dtype=np.float32)
+    # this way below is little less memory demanding:
+    for i in range(len(params_sorted)):
+        ivals = G[:,i]
+        m = params_sorted[i]
+        out = m * np.repeat(ivals[:, np.newaxis], x*y, axis=1).reshape((t,x,y)) + out
+    #
+    return out

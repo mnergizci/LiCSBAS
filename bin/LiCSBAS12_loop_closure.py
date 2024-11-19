@@ -1251,6 +1251,9 @@ def loop_closure_4th(args, da):
         ref_unw13 = np.nanmean(unw13[refy1:refy2, refx1:refx2])
         ## Calculate loop phase taking into account ref phase
         loop_ph = unw12 + unw23 - unw13 - (ref_unw12 + ref_unw23 - ref_unw13)
+        # once referred to point that is considered ok (high coh == probably no phase bias), check for unw error of ref
+        peaks, k = np.histogram(loop_ph, np.arange(-3.5, 4.5, 1)) # searching for k>=-3 to k<=+3
+        loop_ph = loop_ph - round(k[np.argmax(peaks)]+0.1)*(2*np.pi)
         #
         one_array_loop = one_array.copy()
         one_array_loop[np.isnan(loop_ph)] = 0
@@ -1258,7 +1261,7 @@ def loop_closure_4th(args, da):
         ns_loop_all.loc[:, :, ifgd23] = ns_loop_all.loc[:, :, ifgd23] + one_array_loop
         ns_loop_all.loc[:, :, ifgd13] = ns_loop_all.loc[:, :, ifgd13] + one_array_loop
         ## Count number of loops with suspected unwrap error (by default >pi)
-        nonan_count = nonan_count + (1 * (~np.isnan(loop_ph))) #.astype(np.int8)
+        nonan_count = nonan_count + (1 * (~np.isnan(loop_ph)))
         loop_ph[np.isnan(loop_ph)] = 0  # to avoid warning
         ## Summing the phase closure values -> will get average (wrapped) phase
         loop_ph_wrapped_sum = loop_ph_wrapped_sum + np.angle(np.exp(1j * loop_ph))
@@ -1273,6 +1276,7 @@ def loop_closure_4th(args, da):
         ns_loop_bad.loc[:, :, ifgd13] = ns_loop_bad.loc[:, :, ifgd13] + (1 * ~is_ok).astype(np.int8)
     #ns_loop_err1 = np.array(ns_loop_err1, dtype=np.int16)
     print('storing the average loop phase closure error')
+    nonan_count[nonan_count==0] = np.nan # avoid infinity
     file = os.path.join(resultsdir, 'loop_ph_avg')
     #np.float32(loop_ph_wrapped_sum/n_loop).tofile(file)
     np.float32(loop_ph_wrapped_sum / nonan_count).tofile(file)
@@ -1284,7 +1288,13 @@ def loop_closure_4th(args, da):
     title = 'Average phase loop closure error (abs)'
     #plot_lib.make_im_png(loop_ph_wrapped_sum_abs/n_loop, file + '.png', cmap_noise_r, title)
     plot_lib.make_im_png(loop_ph_avg_abs, file + '.png', cmap_noise_r, title)
-
+    # for debugging as there are strange high values... very weird..
+    file = os.path.join(resultsdir, 'debug_nonan_count')
+    np.float32(nonan_count).tofile(file)
+    file = os.path.join(resultsdir, 'debug_loop_ph_wrapped_sum_abs')
+    np.float32(loop_ph_wrapped_sum_abs).tofile(file)
+    file = os.path.join(resultsdir, 'loop_ph_wrapped_sum') # but the sum can be actually useful (!?)
+    np.float32(loop_ph_wrapped_sum).tofile(file)
     del nonan_count
     del loop_ph_wrapped_sum_abs
     del loop_ph_wrapped_sum

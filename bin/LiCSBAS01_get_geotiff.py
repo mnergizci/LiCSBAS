@@ -32,7 +32,7 @@ Output files
 =====
 Usage
 =====
-LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] [--get_mli] [--n_para int]
+LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] [--get_mli] [--n_para int] [--maxbtemp maxbtemp] [--minbtemp minbtemp]
 
  -f  Frame ID (e.g., 021D_04972_131213). (Default: Read from directory name)
  -s  Start date (Default: 20141001)
@@ -41,10 +41,13 @@ LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] 
  --get_gacos  Download GACOS data as well if available
  --get_mli  Download MLI (multilooked intensity) data as well if available
  --n_para  Number of parallel downloading (Default: 4)
-
+ --minbtemp  Minimum Btemp in days (Default: 0 = not use)
+ --maxbtemp  Maximum Btemp in days (Default: 0 = not use)
 """
 #%% Change log
 '''
+20241107 ML, UoL
+ - added min/max btemp to download data
 v1.14.2 20230608 Milan Lazecky, UoL
  - Added (optional) download of phase (for reunw) and mli
 v1.6.3 20201207 Yu Morishita, GSI
@@ -115,14 +118,15 @@ def main(argv=None):
     get_mli = False
     get_pha = False
     n_para = 4
-
+    minbtemp = 0
+    maxbtemp = 0 # 0 means not use
     q = multi.get_context('fork')
 
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hf:s:e:", ["help", "get_gacos", "get_mli", "get_pha", "n_para="])
+            opts, args = getopt.getopt(argv[1:], "hf:s:e:", ["help", "get_gacos", "get_mli", "get_pha", "n_para=", "minbtemp=", "maxbtemp="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -143,7 +147,10 @@ def main(argv=None):
                 get_pha = True
             elif o == '--n_para':
                 n_para = int(a)
-
+            elif o == '--minbtemp':
+                minbtemp = float(a)
+            elif o == '--maxbtemp':
+                maxbtemp = float(a)
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
         print("  "+str(err.msg), file=sys.stderr)
@@ -349,7 +356,18 @@ def main(argv=None):
         simd = int(ifgd[-8:])
         if mimd >= startdate and simd <= enddate:
             ifgdates.append(ifgd)
-    
+
+    ### Limit to min/max btemp
+    # Not use ifgs below given btemp
+    if minbtemp > 0:
+        btemps = tools_lib.calc_temporal_baseline(ifgdates)
+        ifgdates = list(np.array(ifgdates)[np.array(btemps) >= minbtemp])
+
+    # Not use ifgs above given btemp
+    if maxbtemp > 0:
+        btemps = tools_lib.calc_temporal_baseline(ifgdates)
+        ifgdates = list(np.array(ifgdates)[np.array(btemps) <= maxbtemp])
+
     n_ifg = len(ifgdates)
     imdates = tools_lib.ifgdates2imdates(ifgdates)
     print('{} IFGs available from {} to {}'.format(n_ifg, imdates[0], imdates[-1]), flush=True)

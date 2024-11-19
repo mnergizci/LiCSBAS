@@ -20,17 +20,19 @@ Outputs in TS_GEOCml*/results/ :
 =====
 Usage
 =====
-LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac]
+LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac] [--skipexisting]
 
  -t  Path to the TS_GEOCml* dir.
  -i  Path to cum file (Default: cum.h5)
  --mem_size   Max memory size for each patch in MB. (Default: 4000)
  --gpu        Use GPU (Need cupy module)
  --ransac     Recalculate velocity free from outliers (use RANSAC algorithm)
-
+ --skipexisting  Skip if exists
 """
 #%% Change log
 '''
+20241115 ML, UoL
+ - Adding some additional layers (n_gap_merged)
 v1.3 20221115 Milan Lazecky, Uni of Leeds
  - Add RANSAC option
 v1.2 20210309 Yu Morishita, GSI
@@ -81,12 +83,13 @@ def main(argv=None):
     ransac = False
     cmap_noise_r = 'viridis_r'
     cumfile = False
+    skipexisting = False
     
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "ht:i:",
-                                       ["help", "mem_size=", "gpu", "ransac"])
+                                       ["help", "mem_size=", "gpu", "ransac", "skipexisting"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -103,6 +106,8 @@ def main(argv=None):
                 gpu = True
             elif o == '--ransac':
                 ransac = True
+            elif o == '--skipexisting':
+                skipexisting = True
 
 
         if not tsadir:
@@ -149,90 +154,113 @@ def main(argv=None):
     n_store_data = n_im*2.25+100 #3:cum,data,M(bool); 100:bootnum
 
     n_patch, patchrow = tools_lib.get_patchrow(width, length, n_store_data, memory_size)
-
-
+    
+    stcfile = os.path.join(resultsdir, 'stc')
+    vstdfile = os.path.join(resultsdir, 'vstd')
+    
+    dostc = True
+    dovstd = True
+    
+    if skipexisting:
+        if os.path.exists(stcfile):
+            dostc = False
+        if os.path.exists(vstdfile):
+            dovstd = False
+    
     #%% For each patch
     for i, rows in enumerate(patchrow):
         print('\nProcess {0}/{1}th line ({2}/{3}th patch)...'.format(rows[1], patchrow[-1][-1], i+1, n_patch), flush=True)
         start2 = time.time()
 
         lengththis = rows[1] - rows[0]
+        if dostc:
+            #%% Calc STC
+            print('  Calculating STC...', flush=True)
+            ### Read data with extra 1 line for overlapping
+            row_ex1 = 0 if i == 0 else 1 ## first patch
+            row_ex2 = 0 if i == len(patchrow)-1 else 1 ## last patch
 
-        #%% Calc STC
-        print('  Calculating STC...', flush=True)
-        ### Read data with extra 1 line for overlapping
-        row_ex1 = 0 if i == 0 else 1 ## first patch
-        row_ex2 = 0 if i == len(patchrow)-1 else 1 ## last patch
+            _cum = cum[:, rows[0]-row_ex1:rows[1]+row_ex2, :].reshape(n_im, lengththis+row_ex1+row_ex2, width)
 
-        _cum = cum[:, rows[0]-row_ex1:rows[1]+row_ex2, :].reshape(n_im, lengththis+row_ex1+row_ex2, width)
+            ### Calc STC
+            stc = inv_lib.calc_stc(_cum, gpu=gpu)[row_ex1:lengththis+row_ex1, :] ## original length
+            del _cum
 
-        ### Calc STC
-        stc = inv_lib.calc_stc(_cum, gpu=gpu)[row_ex1:lengththis+row_ex1, :] ## original length
-        del _cum
-
-        ### Output data and image
-        stcfile = os.path.join(resultsdir, 'stc')
-
-        openmode = 'w' if i == 0 else 'a' #w only 1st patch
-        with open(stcfile, openmode) as f:
-            stc.tofile(f)
-
-
-        #%% Calc vstd
-        ### Read data for vstd
-        n_pt_all = lengththis*width
-        cum_patch = cum[:, rows[0]:rows[1], :].reshape((n_im, n_pt_all)).transpose() #(n_pt_all, n_im)
-
-        ### Remove invalid points
-        bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
-
-        cum_patch = cum_patch[bool_unnan_pt, :] ## remain only unnan data
-        n_pt_unnan = bool_unnan_pt.sum()
-        print('  {}/{} points removed due to no data...'.format(n_pt_all-n_pt_unnan, n_pt_all), flush=True)
-
-        ### Calc vstd by bootstrap
-        vstd = np.zeros((n_pt_all), dtype=np.float32)*np.nan
-
-        print('  Calculating std of velocity by bootstrap...', flush=True)
-        vstd[bool_unnan_pt] = inv_lib.calc_velstd_withnan(cum_patch, dt_cum,
-                                                          gpu=gpu)
-
-        ### Output data and image
-        vstdfile = os.path.join(resultsdir, 'vstd')
-
-        openmode = 'w' if i == 0 else 'a' #w only 1st patch
-        with open(vstdfile, openmode) as f:
-                vstd.tofile(f)
-
-        if ransac:
-            vel2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
-            intercept2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
-            print('  Recalculating velocity using RANSAC algorithm...', flush=True)
-            '''
-            for the next release:
-            import dask
-            n_para = ...
-            get_vel_ransac_dask = dask.delayed(inv_lib.get_vel_ransac)
-            winsize=(100,dt_cum.shape[0])
-            cumda=da.from_array(cum_patch, chunks=winsize)
-            vel2int = get_vel_ransac2(dt_cum, cumda, True)
-            vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = vel2int.compute(num_workers=n_para)
-            '''
-            vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = inv_lib.get_vel_ransac(dt_cum, cum_patch, return_intercept=True)
-            
             ### Output data and image
-            vel2file = os.path.join(resultsdir, 'vel2')
-            inter2file = os.path.join(resultsdir, 'intercept2')
-            with open(vel2file, openmode) as f:
-                vel2.tofile(f)
-            with open(inter2file, openmode) as f:
-                intercept2.tofile(f)
+
+            openmode = 'w' if i == 0 else 'a' #w only 1st patch
+            with open(stcfile, openmode) as f:
+                stc.tofile(f)
+
+        if dovstd:
+            #%% Calc vstd
+            ### Read data for vstd
+            n_pt_all = lengththis*width
+            cum_patch = cum[:, rows[0]:rows[1], :].reshape((n_im, n_pt_all)).transpose() #(n_pt_all, n_im)
+
+            ### Remove invalid points
+            bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
+
+            cum_patch = cum_patch[bool_unnan_pt, :] ## remain only unnan data
+            n_pt_unnan = bool_unnan_pt.sum()
+            print('  {}/{} points removed due to no data...'.format(n_pt_all-n_pt_unnan, n_pt_all), flush=True)
+
+            ### Calc vstd by bootstrap
+            vstd = np.zeros((n_pt_all), dtype=np.float32)*np.nan
+
+            print('  Calculating std of velocity by bootstrap...', flush=True)
+            vstd[bool_unnan_pt] = inv_lib.calc_velstd_withnan(cum_patch, dt_cum,
+                                                              gpu=gpu)
+
+            ### Output data and image
+
+            openmode = 'w' if i == 0 else 'a' #w only 1st patch
+            with open(vstdfile, openmode) as f:
+                    vstd.tofile(f)
 
         #%% Finish patch
         elapsed_time2 = int(time.time()-start2)
         print('  Elapsed time for {0}th patch: {1} sec'.format(i+1, elapsed_time2))
-
-
+    
+    # calc n_gaps_merged
+    try:
+        gap = cumh5['gap']
+        ngaps_merge = np.diff(gap, axis=0)
+        ngaps_merge[ngaps_merge < 1] = 0
+        ngaps_merge = np.sum(ngaps_merge, axis=0)
+        ngap_file = os.path.join(resultsdir, 'n_gap_merged')
+        with open(ngap_file, 'w') as f:
+            np.float32(ngaps_merge).tofile(f)
+    except:
+        print('Error calculating n_gaps_merged')
+    
+    if ransac:
+        openmode = 'w'
+        vel2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
+        intercept2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
+        print('  Recalculating velocity using RANSAC algorithm... (not parallel now)', flush=True)
+        '''
+        for the next release:
+        import dask
+        n_para = ...
+        get_vel_ransac_dask = dask.delayed(inv_lib.get_vel_ransac)
+        winsize=(100,dt_cum.shape[0])
+        cumda=da.from_array(cum_patch, chunks=winsize)
+        vel2int = get_vel_ransac2(dt_cum, cumda, True)
+        vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = vel2int.compute(num_workers=n_para)
+        '''
+        cum_patch = cum.reshape((n_im, n_pt_all)).transpose()
+        bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
+        vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = inv_lib.get_vel_ransac(dt_cum, cum_patch, return_intercept=True)
+        
+        ### Output data and image
+        vel2file = os.path.join(resultsdir, 'vel2')
+        inter2file = os.path.join(resultsdir, 'intercept2')
+        with open(vel2file, openmode) as f:
+            vel2.tofile(f)
+        with open(inter2file, openmode) as f:
+            intercept2.tofile(f)
+    
     #%% Close h5 file
     cumh5.close()
 
@@ -262,7 +290,13 @@ def main(argv=None):
         cmax = np.nanpercentile(vel2, 99)
         cmap_vel = SCM.roma.reversed()
         plot_lib.make_im_png(vel2, pngfile, cmap_vel, title, cmin, cmax)
-
+    
+    ngaps_merge = io_lib.read_img(ngap_file, length, width)
+    pngfile = ngap_file+'.png'
+    title = 'Number of gaps merged'
+    cmin = np.nanpercentile(ngaps_merge, 1)
+    cmax = np.nanpercentile(ngaps_merge, 99)
+    plot_lib.make_im_png(ngaps_merge, pngfile, cmap_noise_r, title, cmin, cmax)
 
     #%% Finish
     elapsed_time = time.time()-start

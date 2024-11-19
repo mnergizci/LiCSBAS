@@ -43,7 +43,8 @@ order_op03_05="03 04 05"	# can change order e.g., 05 03 04
 do03op_GACOS="n"	# y/n
 do04op_mask="n"	# y/n
 do05op_clip="n"	# y/n
-p04_mask_coh_thre=""	# e.g. 0.2
+p04_mask_coh_thre_avg=""	# e.g. 0.2
+p04_mask_coh_thre_ifg=""	# e.g. 0.2
 p04_mask_range=""	# e.g. 10:100/20:200 (ix start from 0)
 p04_mask_range_file=""	# Name of file containing range list
 p05_clip_range=""	# e.g. 10:100/20:200 (ix start from 0)
@@ -87,6 +88,8 @@ p15_n_ifg_noloop_thre=""	# default: 500 - setting this much higher than orig sin
 p15_n_loop_err_thre=""	# default: 5
 p15_n_loop_err_ratio_thre=""	# default: 0.7 - in future we will switch to this ratio term, instead of n_loop_err
 p15_resid_rms_thre=""	# default: 50 mm, but setting much higher than orig since it depends on (automatic) ref point, must be optimised
+p15_avg_phasebias="" # default: not used. Setting 1 or 1.2 rad is good option
+p15_n_gap_use_merged="y" # default: 'y'
 p16_filtwidth_km=""	# default: 2 km
 p16_filtwidth_yr=""	# default: avg_interval*3 yr
 p16_deg_deramp=""	# 1, bl, or 2. default: no deramp
@@ -98,6 +101,7 @@ p16_range=""	# e.g. 10:100/20:200 (ix start from 0)
 p16_range_geo=""	# e.g. 130.11/131.12/34.34/34.6 (in deg)
 p16_ex_range=""	# e.g. 10:100/20:200 (ix start from 0)
 p16_ex_range_geo=""	# e.g. 130.11/131.12/34.34/34.6 (in deg)
+p16_interpolate_nans="y"  # will interpolate nans in unmasked pixels
 
 ### Less frequently used options. If blank, use default. ###
 p01_frame=""	# e.g. 021D_04972_131213 
@@ -119,6 +123,8 @@ p05_outGEOCmldir_suffix="" # default: clip
 p05_n_para=$n_para   # default: # of usable CPU
 p11_GEOCmldir=""	# default: $GEOCmldir
 p11_TSdir=""	# default: TS_$GEOCmldir
+p11_minbtemp=""  # default: 0 (not use)
+p11_maxbtemp=""  # default: 0 (not use)
 p120_ignoreconncomp="n" # y/n
 p12_GEOCmldir=""        # default: $GEOCmldir
 p12_TSdir=""    # default: TS_$GEOCmldir
@@ -265,7 +271,8 @@ if [ $step -eq 04 -a $start_step -le 04 -a $end_step -ge 04 ];then
     if [ ! -z $p04_outGEOCmldir_suffix ];then outGEOCmldir="$inGEOCmldir$p04_outGEOCmldir_suffix";
       else outGEOCmldir="${inGEOCmldir}mask"; fi
     p04_op="$p04_op -o $outGEOCmldir"
-    if [ ! -z $p04_mask_coh_thre ];then p04_op="$p04_op -c $p04_mask_coh_thre"; fi
+    if [ ! -z $p04_mask_coh_thre_avg ];then p04_op="$p04_op -c $p04_mask_coh_thre_avg"; fi
+    if [ ! -z $p04_mask_coh_thre_ifg ];then p04_op="$p04_op -s $p04_mask_coh_thre_ifg"; fi
     if [ ! -z $p04_mask_range ];then p04_op="$p04_op -r $p04_mask_range"; fi
     if [ ! -z $p04_mask_range_file ];then p04_op="$p04_op -f $p04_mask_range_file"; fi
     if [ ! -z $p04_n_para ];then p04_op="$p04_op --n_para $p04_n_para";
@@ -320,6 +327,8 @@ if [ $start_step -le 11 -a $end_step -ge 11 ];then
   if [ ! -z $p11_TSdir ];then p11_op="$p11_op -t $p11_TSdir"; fi
   if [ ! -z $p11_unw_thre ];then p11_op="$p11_op -u $p11_unw_thre"; fi
   if [ ! -z $p11_coh_thre ];then p11_op="$p11_op -c $p11_coh_thre"; fi
+  if [ ! -z $p11_minbtemp ];then p11_op="$p11_op --minbtemp $p11_minbtemp"; fi
+  if [ ! -z $p11_maxbtemp ];then p11_op="$p11_op --minbtemp $p11_maxbtemp"; fi
   if [ $p11_s_param == "y" ];then p11_op="$p11_op -s"; fi
   if [ $check_only == "y" ];then
     echo "LiCSBAS11_check_unw.py $p11_op"
@@ -347,6 +356,9 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
     fi
   fi
   p12_op=""
+  if [ $cometdev -eq 1 ]; then
+     p12_nullify="y"
+  fi
   if [ ! -z $p12_GEOCmldir ];then p12_op="$p12_op -d $p12_GEOCmldir"; 
     else p12_op="$p12_op -d $GEOCmldir"; fi
   if [ ! -z $p12_TSdir ];then p12_op="$p12_op -t $p12_TSdir"; fi
@@ -357,16 +369,29 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
   if [ ! -z $p12_rm_ifg_list ];then p12_op="$p12_op --rm_ifg_list $p12_rm_ifg_list"; fi
   if [ ! -z $p12_n_para ];then p12_op="$p12_op --n_para $p12_n_para";
   elif [ ! -z $n_para ];then p12_op="$p12_op --n_para $n_para";fi
-  if [ $cometdev -eq 1 ]; then
-     extra='--nullify'
-    else
-     extra=''
-  fi
+
   if [ $check_only == "y" ];then
-    echo "LiCSBAS12_loop_closure.py $p12_op "$extra
+    echo "LiCSBAS12_loop_closure.py $p12_op "
   else
-    LiCSBAS12_loop_closure.py $extra $p12_op 2>&1 | tee -a $log
+    LiCSBAS12_loop_closure.py $p12_op 2>&1 | tee -a $log
     if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+  fi
+  # 2024/11/13: updated nullification may cause extra all-nans-in-ref area. Workaround - update reference point.
+  # Forcing this to always use p120 ..
+  if [ $p12_nullify == "y" ];then
+  #if [ $p120_use == "y" ]; then
+    dirset="-c $GEOCmldir -d $GEOCmldir -t $TSdir "
+    extra=""
+    if [ $p120_ignoreconncomp == "y" ]; then
+        extra="--ignore_comp"
+    fi
+    if [ $check_only == "y" ];then
+      echo "LiCSBAS120_choose_reference.py $dirset "$extra
+    else
+      LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
+      if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+    fi
+  #fi
   fi
 fi
 
@@ -433,11 +458,13 @@ if [ $start_step -le 15 -a $end_step -ge 15 ];then
   if [ ! -z $p15_n_ifg_noloop_thre ];then p15_op="$p15_op -i $p15_n_ifg_noloop_thre"; fi
   if [ ! -z $p15_n_loop_err_thre ];then p15_op="$p15_op -l $p15_n_loop_err_thre"; fi
   if [ ! -z $p15_n_loop_err_ratio_thre ];then p15_op="$p15_op -L $p15_n_loop_err_ratio_thre"; fi
+  if [ ! -z $p15_avg_phasebias ];then p15_op="$p15_op --avg_phase_bias $p15_avg_phasebias"; fi
   if [ ! -z $p15_resid_rms_thre ];then p15_op="$p15_op -r $p15_resid_rms_thre"; fi
   if [ ! -z $p15_vmin ];then p15_op="$p15_op --vmin $p15_vmin"; fi
   if [ ! -z $p15_vmax ];then p15_op="$p15_op --vmax $p15_vmax"; fi
   if [ $p15_keep_isolated == "y" ];then p15_op="$p15_op --keep_isolated"; fi
   if [ $p15_noautoadjust == "y" ];then p15_op="$p15_op --noautoadjust"; fi
+  if [ $p15_n_gap_use_merged == "y" ];then p15_op="$p15_op --n_gap_use_merged"; fi
 
   if [ $check_only == "y" ];then
     echo "LiCSBAS15_mask_ts.py $p15_op"
@@ -465,6 +492,7 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z $p16_range_geo ];then p16_op="$p16_op --range_geo $p16_range_geo"; fi
   if [ ! -z $p16_ex_range ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
   if [ ! -z $p16_ex_range_geo ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
+  if [ $p16_interpolate_nans == "y"]; then p16_op="$p16_op --interpolate_nans"; fi
 
   if [ $check_only == "y" ];then
     echo "LiCSBAS16_filt_ts.py $p16_op"
