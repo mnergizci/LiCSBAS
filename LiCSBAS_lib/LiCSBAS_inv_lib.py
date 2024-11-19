@@ -231,6 +231,12 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=Fal
             print('rolling back to simplified vel estimate (note vconst=0)')
             vel = result.sum(axis=0)/dt_cum[-1]
             vconst = np.zeros_like(vel)
+        # now need to return ref area that should be zero, back to zero
+        try:
+            vel[np.all(cum==0, axis=0)] = 0
+            vconst[np.all(cum==0, axis=0)] = 0
+        except:
+            print('a bug in not-tested return of ref point to zero. should be easy fix (and it actually does not bother)')
     else:
         # NSBAS result matrix: last 2 rows are vel and vconst
         inc = result[:n_im-1, :]
@@ -448,7 +454,10 @@ def calc_vel(cum, dt_cum, return_G = False):
 
     vconst = result[0, :]
     vel = result[1, :]
-
+    # reverting the zeroes to nan, although ref area will then be nan now.
+    vel[vel==0] = np.nan
+    vconst[vconst==0] = np.nan
+    
     if return_G:
         # careful, we switch the output params to conform with G
         return vconst, vel, G
