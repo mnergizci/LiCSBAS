@@ -16,3 +16,4 @@ dependencies:
   - colorcet
   - xarray
   - scipy
+  - cmcrameri

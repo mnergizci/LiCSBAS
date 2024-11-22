@@ -21,3 +21,4 @@ dependencies:
   - colorcet
   - networkx
   - scipy
+  - cmcrameri

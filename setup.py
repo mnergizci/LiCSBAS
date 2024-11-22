@@ -24,7 +24,7 @@ VERSION = '1.14.0'
 # What packages are required for this module to be executed?
 REQUIRED = [
   'astropy', 'beautifulsoup4', 'gdal', 'h5py', 'matplotlib', 'numpy', 'xarray', 'psutil','requests', 'shapely',
-  'statsmodels', 'networkx', 'scipy'
+  'statsmodels', 'networkx', 'scipy', 'cmcrameri'
   # 'requests', 'maya', 'records',
 ]
 
