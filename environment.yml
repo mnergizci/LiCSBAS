@@ -1,6 +1,5 @@
 name: licsbas
 channels:
-  - pyviz
   - conda-forge
 dependencies:
   - python=3.8
@@ -17,13 +16,8 @@ dependencies:
   - xarray
   - rioxarray
   - lapack
-  - geoviews
-  - cartopy
-  - panel
-  - holoviews
   - netCDF4
   - bottleneck
-  - dask
   - colorcet
   - networkx
   - scipy
