@@ -112,7 +112,7 @@ from matplotlib.widgets import Slider, RadioButtons, RectangleSelector, CheckBut
 import h5py as h5
 import datetime as dt
 import statsmodels.api as sm
-import SCM
+import cmcrameri.cm as SCM
 import warnings
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib

@@ -47,7 +47,7 @@ import re
 import time
 import numpy as np
 import h5py as h5
-import SCM
+import cmcrameri.cm as SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib

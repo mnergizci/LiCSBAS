@@ -99,7 +99,7 @@ os.environ['QT_QPA_PLATFORM']='offscreen'
 import sys
 import time
 import numpy as np
-import SCM
+import cmcrameri.cm as SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_plot_lib as plot_lib
 

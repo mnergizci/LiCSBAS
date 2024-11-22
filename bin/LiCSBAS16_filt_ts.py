@@ -133,7 +133,7 @@ import datetime as dt
 import h5py as h5
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 import multiprocessing as multi
-import SCM
+import cmcrameri.cm as SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_inv_lib as inv_lib

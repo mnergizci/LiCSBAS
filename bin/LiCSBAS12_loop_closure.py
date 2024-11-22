@@ -128,7 +128,7 @@ import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_plot_lib as plot_lib
 import xarray as xr
-import SCM
+import cmcrameri.cm as SCM
 
 class Usage(Exception):
     """Usage context manager"""

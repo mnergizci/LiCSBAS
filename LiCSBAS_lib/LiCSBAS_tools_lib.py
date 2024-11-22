@@ -437,7 +437,7 @@ def get_cmap(cmap_name, cmapN=256):
         _cmap = cm_isce()
         flag = 1
     elif cmap_name.startswith('SCM'):
-        import SCM as CMAP
+        import cmcrameri.cm as CMAP
         flag = 2
     elif cmap_name.startswith('GMT'):
         import GMT as CMAP
