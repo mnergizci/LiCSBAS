@@ -1082,7 +1082,7 @@ def main(argv=None):
     #%% Output png images
     ### Incremental displacement
     if nopngs:
-        print('skipping generating additional png images of increments and residuals - as sometimes taking too long (tutorial purposes)')
+        print('skipping generating additional png images of increments and residuals') # - as sometimes taking too long (tutorial purposes)')
     else:
         _n_para = n_im-1 if n_para > n_im-1 else n_para
         print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)

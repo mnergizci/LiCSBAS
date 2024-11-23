@@ -41,7 +41,7 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
  [--hgt_linear] [--hgt_min int] [--hgt_max int] [--demerr] [--nomask] [--n_para int]
  [--range x1:x2/y1:y2 | --range_geo lon1/lon2/lat1/lat2]
  [--ex_range x1:x2/y1:y2 | --ex_range_geo lon1/lon2/lat1/lat2]
- [--from_model path/to/model.h5] [--interpolate_nans]
+ [--from_model path/to/model.h5] [--interpolate_nans] [--nopngs]
 
  -t  Path to the TS_GEOCml* dir.
  -s  Width of spatial filter in km (Default: 2 km)
@@ -66,6 +66,7 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
                  coordinates (deg).
  --from_model path/to/model.h5  Use externally calculated model to perform residual-based filtering (in dev further. see LiCSBAS_cum2vel.py to generate this)
  --interpolate_nans   This will use the filter to fill nan values (in unmasked data). If temporal filtering is disabled, it will use linear interpolation in space instead.
+ --nopngs     Avoid generating some (unnecessary) PNG previews of increment residuals etc.
 
 Note: Spatial filter consume large memory. If the processing is stacked, try
  - --n_para 1
@@ -200,6 +201,7 @@ def main(argv=None):
     q = multi.get_context('fork')
     compress = 'gzip'
     modelfile = ''
+    nopngs = False
 
     #%% Read options
     try:
@@ -207,7 +209,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu", "from_model="])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -248,6 +250,8 @@ def main(argv=None):
                 ex_range_geo_str = a
             elif o == '--gpu':
                 gpu = True
+            elif o == '--nopngs':
+                nopngs = True
             elif o == '--from_model':
                 modelfile = a
                 inputresidflag = True
@@ -485,11 +489,15 @@ def main(argv=None):
                 cum[i, :, :] = _result[i, 0]
             del _result
 
-        ### Only for output increment png files
-        print('\nCreate png for increment with {} parallel processing...'.format(n_para), flush=True)
-        p = q.Pool(n_para)
-        p.map(deramp_wrapper2, range(1, n_im))
-        p.close()
+        if nopngs:
+            print('Skipping creation of increment pngs')
+        else:
+            ### Only for output increment png files
+            print('\nCreate png for increment with {} parallel processing...'.format(n_para), flush=True)
+            p = q.Pool(n_para)
+            p.map(deramp_wrapper2, range(1, n_im))
+            p.close()
+
         del cum_org
 
         # %% if the input should be residuals from given model
