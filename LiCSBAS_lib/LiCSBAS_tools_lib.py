@@ -456,6 +456,8 @@ def get_cmap(cmap_name, cmapN=256):
             name = name[:-2]
         if flag == 2:
             file = os.path.join(cmdir, name, name+'.txt')
+            if not os.path.exists(file):
+                file = os.path.join(cmdir, 'cmaps', name + '.txt')
             cm_data = np.loadtxt(file)
         elif flag == 3:
             file = os.path.join(cmdir, name+'.csv')
