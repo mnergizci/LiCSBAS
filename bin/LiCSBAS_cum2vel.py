@@ -277,6 +277,7 @@ def main(argv=None):
         outfile = '{}_{}'.format(imd_s, imd_e)
 
     velfile = outfile + '.vel' + suffix_mask
+    vconstfile = outfile + '.vconst' + suffix_mask
 
     #%% Display info
     print('')
@@ -343,6 +344,7 @@ def main(argv=None):
             if modelflag:
                 model = inv_lib.get_model_cum(G, [vconst, vel])
             vel.tofile(velfile)
+            vconst.tofile(vconstfile)
         else: ## Linear+sin function
             print('Calc velocity and annual components...')
             amp = np.zeros((length, width), dtype=np.float32)*np.nan
