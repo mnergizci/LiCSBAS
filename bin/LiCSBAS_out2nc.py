@@ -12,7 +12,7 @@ This script outputs a standard NetCDF4 file using LiCSBAS results
 Usage
 =====
 LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
-     [--ref_geo lon1/lon2/lat1/lat2] [--clip_geo lon1/lon2/lat1/lat2] [--alignsar] [--addtif test.tif]
+     [--ref_geo lon1/lon2/lat1/lat2] [--clip_geo lon1/lon2/lat1/lat2] [--alignsar] [--zarr] [--addtif test.tif]
 
  -i  Path to input cum file (Default: cum_filt.h5)
  -o  Output netCDF4 file (Default: output.nc)
@@ -24,6 +24,7 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
  --postfilter will interpolate VEL only through empty areas and filter in space
  --apply_mask  Will apply mask to all relevant variables
  --extracol Will add extra layer from files in folder TS*/results - e.g. --extracol loop_ph_avg_abs
+ --zarr  The output will be stored in the zarr format
  --addtif   Optionally you can directly include your external tif file as new data layer (it will get resampled using nearest neigbour interpolation)
 """
 #%% Change log
@@ -589,11 +590,12 @@ def main(argv=None):
     centre_refx, centre_refy = np.nan, np.nan
     extracols = ['loop_ph_avg_abs']
     filestoadd = []
-    
+    tozarr =False
+
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "addtif=", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "zarr", "addtif=", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -636,6 +638,8 @@ def main(argv=None):
             elif (o == '-A') or (o=='--alignsar'):
                 alignsar = True
                 print('outputting as the AlignSAR InSAR TS cube')
+            elif o == '--zarr':
+                tozarr = True
 
         if not os.path.exists(cumfile):
             raise Usage('No {} exists! Use -i option.'.format(cumfile))
@@ -652,7 +656,10 @@ def main(argv=None):
         cumfile = cumfile.replace('cum.h5','cum_filt.h5') # just adjusting to ensure all signatures in the input h5 (but output will be from unfiltered version!)
         if not 'loop_ph_avg_abs' in extracols:
             extracols.append('loop_ph_avg_abs')
-    
+
+    if tozarr:
+        import zarr # just to check for its existence before the whole processing
+
     cube = loadall2cube(cumfile, extracols = extracols)
     
     if apply_mask:
@@ -727,28 +734,36 @@ def main(argv=None):
     
     cube.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
     cube.rio.write_crs("EPSG:4326", inplace=True)
-    if (compress and not alignsar):
-        if postfilter:
-            encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9},
-            'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
-            'stc': {'zlib': True, 'complevel': 9}, 'vel_filt': {'zlib': True, 'complevel': 9},
-            'time': {'dtype': 'i4'}}
+
+    if not tozarr:
+        if (compress and not alignsar):
+            if postfilter:
+                encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9},
+                'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
+                'stc': {'zlib': True, 'complevel': 9}, 'vel_filt': {'zlib': True, 'complevel': 9},
+                'time': {'dtype': 'i4'}}
+            else:
+                encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9},
+                'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
+                'stc': {'zlib': True, 'complevel': 9},
+                'time': {'dtype': 'i4'}}
         else:
-            encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9},
-            'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
-            'stc': {'zlib': True, 'complevel': 9},
-            'time': {'dtype': 'i4'}}
+            # if not compress then at least encode only time to keep standard NetCDF:
+            encode = {'time': {'dtype': 'i4'}}
+
+        cube.to_netcdf(outfile, encoding=encode)
+        if alignsar:
+            print('Trying to compress additionally')
+            cmd = 'nccopy -d 5 '+outfile+' '+outfile+'.tmp.nc'
+            os.system(cmd)
+            if os.path.exists(outfile+'.tmp.nc'):
+                os.system('mv '+outfile+'.tmp.nc '+outfile)
     else:
-        # if not compress then at least encode only time to keep standard NetCDF:
-        encode = {'time': {'dtype': 'i4'}}
-    
-    cube.to_netcdf(outfile, encoding=encode)
-    if alignsar:
-        print('Trying to compress additionally')
-        cmd = 'nccopy -d 5 '+outfile+' '+outfile+'.tmp.nc'
-        os.system(cmd)
-        if os.path.exists(outfile+'.tmp.nc'):
-            os.system('mv '+outfile+'.tmp.nc '+outfile)
+        # exporting to zarr directly, just as is (seems reasonable. pity the 'append_dim' does not work, perhaps due to the mixed data, some having 'time' and some not?
+        #try:
+        cube.to_zarr(outfile)
+        #except:
+        #    print('error storing to zarr - ')
         
     #if alignsar:
     #    # will just load it from stored since we will use the non-load approach for amps/cohs to save memory
