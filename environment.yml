@@ -22,3 +22,5 @@ dependencies:
   - networkx
   - scipy
   - cmcrameri
+  - pygmt
+  - ipympl
