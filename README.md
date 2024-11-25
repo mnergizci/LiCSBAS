@@ -1,5 +1,5 @@
-(note: a testing binder ipynb tutorial is available [**here**](https://mybinder.org/v2/gh/comet-licsar/LiCSBAS/HEAD?labpath=licsbas_tutorial.ipynb))  
-
+(note: a testing binder ipynb tutorial is available [**here**](https://mybinder.org/v2/gh/comet-licsar/LiCSBAS/HEAD?labpath=licsbas_tutorial.ipynb),  
+or for the [dev branch version](https://mybinder.org/v2/gh/comet-licsar/LiCSBAS/dev?labpath=licsbas_tutorial.ipynb))
 
 # LiCSBAS
 
