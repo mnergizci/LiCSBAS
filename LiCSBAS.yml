@@ -17,3 +17,5 @@ dependencies:
   - xarray
   - scipy
   - cmcrameri
+  - pygmt
+  - ipympl
