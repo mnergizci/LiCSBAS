@@ -19,12 +19,14 @@ URL = 'https://github.com/comet-licsar/LiCSBAS'
 EMAIL = 'espiritocz@gmail.com'
 AUTHOR = 'COMET Team'
 REQUIRES_PYTHON = '>=3.6.0'
-VERSION = '1.14.0'
+VERSION = '1.15.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
   'astropy', 'beautifulsoup4', 'gdal', 'h5py', 'matplotlib', 'numpy', 'xarray', 'psutil','requests', 'shapely',
-  'statsmodels', 'networkx', 'scipy', 'cmcrameri'
+  'statsmodels', 'networkx', 'scipy', 'cmcrameri',
+  # for notebook only:
+  'ipympl','pygmt'
   # 'requests', 'maya', 'records',
 ]
 
