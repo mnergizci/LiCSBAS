@@ -194,7 +194,7 @@ def main(argv=None):
     if strong_connected:
         strong_links, weak_links, edge_cuts, node_cuts = tools_lib.separate_strong_and_weak_links(
             ifgdates, "{}_stats.txt".format(basename), remove_edge_cuts=remove_edge_cuts, remove_node_cuts=remove_node_cuts, skip_node_cuts=skip_node_cuts)
-        pngfile = "{}{}_strongly_connected_network.png".format(basename, suffix)
+        #pngfile = "{}{}_strongly_connected_network.png".format(basename, suffix)
         plot_lib.plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_cuts, pngfile, plot_weak=True)
         # export weak links
         with open("{}{}_weak_links.txt".format(basename, suffix), 'w') as f:
@@ -221,7 +221,7 @@ def main(argv=None):
                 print('{}'.format(i))
 
     else:    #%% Plot image
-        pngfile = "{}{}_network.png".format(basename, suffix)
+        #pngfile = "{}{}_network.png".format(basename, suffix)
         plot_lib.plot_network(ifgdates, bperp, bad_ifgdates, pngfile, plot_bad_flag, label_name=label_name)
 
 

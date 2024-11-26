@@ -75,7 +75,7 @@ import shutil
 import time
 import numpy as np
 import multiprocessing as multi
-import SCM
+import cmcrameri.cm as SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib

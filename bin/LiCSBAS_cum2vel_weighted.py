@@ -31,7 +31,7 @@ import datetime as dt
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import argparse
-import SCM
+import cmcrameri.cm as SCM
 import time
 import os
 import sys

@@ -437,7 +437,7 @@ def get_cmap(cmap_name, cmapN=256):
         _cmap = cm_isce()
         flag = 1
     elif cmap_name.startswith('SCM'):
-        import SCM as CMAP
+        import cmcrameri.cm as CMAP
         flag = 2
     elif cmap_name.startswith('GMT'):
         import GMT as CMAP
@@ -456,6 +456,8 @@ def get_cmap(cmap_name, cmapN=256):
             name = name[:-2]
         if flag == 2:
             file = os.path.join(cmdir, name, name+'.txt')
+            if not os.path.exists(file):
+                file = os.path.join(cmdir, 'cmaps', name + '.txt')
             cm_data = np.loadtxt(file)
         elif flag == 3:
             file = os.path.join(cmdir, name+'.csv')

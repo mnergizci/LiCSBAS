@@ -159,7 +159,7 @@ import h5py as h5
 import numpy as np
 import datetime as dt
 import multiprocessing as multi
-import SCM
+import cmcrameri.cm as SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_tools_lib as tools_lib
@@ -1082,7 +1082,7 @@ def main(argv=None):
     #%% Output png images
     ### Incremental displacement
     if nopngs:
-        print('skipping generating additional png images of increments and residuals - as sometimes taking too long (tutorial purposes)')
+        print('skipping generating additional png images of increments and residuals') # - as sometimes taking too long (tutorial purposes)')
     else:
         _n_para = n_im-1 if n_para > n_im-1 else n_para
         print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
