@@ -8,7 +8,7 @@ dependencies:
   - gdal>=2.4
   - h5py
   - matplotlib
-  - numpy
+  - numpy<2
   - psutil
   - requests
   - shapely
