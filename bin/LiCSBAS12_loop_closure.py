@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 ML:
+20241126: improved loop phase closure calculation to disregard error in reference area
 20240808: getting ready to LiCSBAS120
 
 v1.6.4 20230901 Lin Shen, COMET
@@ -1252,7 +1253,7 @@ def loop_closure_4th(args, da):
         ## Calculate loop phase taking into account ref phase
         loop_ph = unw12 + unw23 - unw13 - (ref_unw12 + ref_unw23 - ref_unw13)
         # once referred to point that is considered ok (high coh == probably no phase bias), check for unw error of ref
-        peaks, k = np.histogram(loop_ph/2/np.pi, np.arange(-3.5, 4.5, 1)) # searching for k>=-3 to k<=+3 where k is the phase integer ambiguity
+        peaks, k = np.histogram(loop_ph/2/np.pi, np.arange(-3.5, 4.5, 1)) # searching for k>=-3 to k<=+3 where k is the integer number of phase ambiguity
         loop_ph = loop_ph - round(k[np.argmax(peaks)]+0.1)*(2*np.pi)
         #
         one_array_loop = one_array.copy()
