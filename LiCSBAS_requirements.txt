@@ -1,10 +1,10 @@
-python>=3.6
+python>=3.8
 astropy
 beautifulsoup4
 gdal>=2.4
 h5py
 matplotlib
-numpy
+numpy<5
 psutil
 requests
 shapely
