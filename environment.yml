@@ -2,13 +2,13 @@ name: licsbas
 channels:
   - conda-forge
 dependencies:
-  - python=3.8
+  - python>=3.8
   - astropy
   - beautifulsoup4
   - gdal>=2.4
   - h5py
   - matplotlib
-  - numpy
+  - numpy<2
   - psutil
   - requests
   - shapely
