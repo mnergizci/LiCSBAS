@@ -137,7 +137,7 @@ def pygmt_plot(grid, title, label='deformation rate [mm/year]', lims=[-25, 10],
         xshift = '1.5c'
         yshift = '2.5c'
         fig.shift_origin(xshift=xshift, yshift=yshift)
-    fig.basemap(region=region, projection=projection, frame=["af", '+t"{0}"'.format(title)])
+    fig.basemap(region=region, projection=projection, frame=["af", '+t{0}'.format(title)])
     if photobg:
         import contextily as ctx
         sourcetiles = ctx.providers.Esri.WorldImagery
@@ -172,7 +172,7 @@ def pygmt_plot(grid, title, label='deformation rate [mm/year]', lims=[-25, 10],
     fig.coast(shorelines=True, projection=projection)
     if type(plotvec) != type(None):
         fig.plot(plotvec, projection=projection, region=region)
-    fig.colorbar(frame='a10+l"{}"'.format(label))
+    fig.colorbar(frame='a10+l{}'.format(label))
     # fig.show()
     if interactive:
         return fig, region, projection, xshift, yshift
