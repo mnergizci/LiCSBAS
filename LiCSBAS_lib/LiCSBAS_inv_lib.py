@@ -214,6 +214,11 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=Fal
                 func = partial(singular_nsbas_onepoint, d, G, m, dt_cum)
                 _result = p.map(func, args)
             result[:, ~bool_pt_full] = np.array(_result).T
+            p.close()
+    #
+    print('')
+    print('inversion finished')
+    #
     if only_sb or singular:
         # SB/singular-NSBAS result matrix: based on G only, need to calculate vel, setting vconst=0
         inc = result
@@ -283,14 +288,16 @@ def singular_nsbas_onepoint(d,G,m,dt_cum, i):
         # if there is at least one im with no related ifg:
         mpx[~badincs] = np.linalg.lstsq(Gpx_ok[:,~badincs], dpx_ok, rcond=None)[0]
         badinc_index = np.where(badincs)[0]
+        #s = mpx[~badincs].sum()
+        #t = dt_cum[~badincs].sum()
         bi_prev = 0
         s = []
         t = []
-
+        #
         # ensure the algorithm goes towards the end of the mpx line
         for bi in np.append(badinc_index,len(mpx)):
             group_mpx = mpx[bi_prev:bi]
-            #use at least 2 ifgs for the vel estimate
+            #use at least 2 increments for the vel estimate
             if group_mpx.size > 0:
                 group_time = dt_cum[bi_prev:bi+1]
                 s.append(group_mpx.sum())
@@ -300,14 +307,15 @@ def singular_nsbas_onepoint(d,G,m,dt_cum, i):
         t = np.array(t)
         # is only one value ok? maybe increase the threshold here:
         if len(s)>0:
-            velpx = s.sum()/t.sum()    # mm/day
+            velpx = s.sum()/t.sum()    # mm/[dt_cum unit]
         else:
             velpx = np.nan # not sure what will happen. putting 0 may be safer
         #if len(s) == 1:
         #    velpx = s[0]/t[0]
         #else:
         #    velpx = curve_fit(func_vel, t, s)[0][0]
-        mpx[badincs] = (dt_cum[badinc_index+1]-dt_cum[badinc_index]) * velpx
+        #mpx[badincs] = (dt_cum[badinc_index+1]-dt_cum[badinc_index]) * velpx
+        mpx[badincs] = (dt_cum[badinc_index] - dt_cum[badinc_index-1]) * velpx
     
     return mpx
 
