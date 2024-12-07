@@ -351,7 +351,7 @@ def main(argv=None):
 
     ### temporal filter width
     if not filtwidth_yr and filtwidth_yr != 0:
-        filtwidth_yr = dt_cum[-1]/(n_im-1)*3 ## avg interval*3
+        filtwidth_yr = np.diff(dt_cum).mean() * 3  #dt_cum[-1]/(n_im-1)*3 ## avg interval*3
 
     ### hgt_linear
     if hgt_linearflag:

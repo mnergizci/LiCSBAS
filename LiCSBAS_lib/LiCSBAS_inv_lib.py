@@ -8,6 +8,8 @@ Python3 library of time series inversion functions for LiCSBAS.
 =========
 Changelog
 =========
+20241207 ML
+ - added Gaussian kernel-based gapfilling. partly blindly, need checks
 20241020 ML
  - added calc with offset dates
 20240930 ML
@@ -104,7 +106,7 @@ def make_sb_matrix2(ifgdates):
 
 
 #%%
-def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=False):
+def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=False, singular_gauss = False):
     """
     Calculate increment displacement difference by NSBAS inversion. Points with all unw data are solved by simple SB inversion firstly at a time.
 
@@ -196,7 +198,7 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=Fal
             if not singular:
                 result[:, ~bool_pt_full] = censored_lstsq_slow(Gall, unw_tmp, mask) #(n_im+1, n_pt)
             else:
-                result[:, ~bool_pt_full] = singular_nsbas(d,G,m,dt_cum)
+                result[:, ~bool_pt_full] = singular_nsbas(d,G,m,dt_cum, singular_gauss)
         else:
             print('  {} parallel processing'.format(n_core), flush=True)
             #
@@ -211,11 +213,13 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=Fal
                 _result = p.map(censored_lstsq_slow_para_wrapper, args) #list[n_pt][length]
             else:
                 from functools import partial
-                func = partial(singular_nsbas_onepoint, d, G, m, dt_cum)
+                func = partial(singular_nsbas_onepoint, d, G, m, dt_cum, singular_gauss)
                 _result = p.map(func, args)
             result[:, ~bool_pt_full] = np.array(_result).T
             p.close()
-    #
+            if singular_gauss:
+                print('Performing (experimental but optimal) nan-gapfilling using Gaussian kernel')
+                result[:, ~bool_pt_full] = gauss_fill_gaps_cube_full(result[:, ~bool_pt_full], dt_cum)
     print('')
     print('inversion finished')
     #
@@ -253,7 +257,7 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=Fal
 # orig solution by ML, just instead of full large matrix of increment rows, use only sum and minmax - much faster,
 # making the computation linear, out of matrix solution. This may be source of some delays, but gives good opportunity
 # to improve e.g. by ... some original thoughts
-def singular_nsbas(d,G,m,dt_cum):
+def singular_nsbas(d,G,m,dt_cum, singular_gauss = False):
     # per each point
     #from scipy.optimize import curve_fit
     #def func_vel(x, a):
@@ -263,13 +267,102 @@ def singular_nsbas(d,G,m,dt_cum):
         #if np.mod(px, 100) == 0:
         #    print('\r  Running {0:6}/{1:6}th point...'.format(px, m.shape[1]), end='', flush=True)
         #
-        m[:,px] = singular_nsbas_onepoint(d,G,m,dt_cum, px)
+        m[:,px] = singular_nsbas_onepoint(d,G,m,dt_cum, singular_gauss, px)
     
     return m
 
 
-def singular_nsbas_onepoint(d,G,m,dt_cum, i):
-    ''' same as singular nsbas, should be used primarily'''
+def gauss_fill_gaps_cube(cusel, dt_cum, filtwidth_yr, time_diff_sq, isinc = True):
+    ''' cusel is 2-D array (cube) of shape (n_im_selected, len_selected). Here we perform the nan filling itself.
+    originally for increments only (you can try unset isinc for custom use e.g. on cum)
+     it uses similar routine (additional Gaussian kernel-weighted mean) to additionally get LP of previous epoch to get its residual and thus align a bit better.
+     Why this? The increment will get cumsummed with previous epoch that contains noise
+     Not perfect though. ML, 12/2024'''
+    #n_im, length, width = cusel.shape
+    dtnanposition = np.where(time_diff_sq==0)[0][0] # dtnanposition is the date index from dt_cum for which we do the estimate
+    time_diff_sq_prev = (dt_cum[dtnanposition - 1] - dt_cum) ** 2
+    prevepochdata = cusel[dtnanposition - 1, :]
+    len_sel = cusel.shape[1]
+    if isinc:
+        # getting increment per day - squeezing the matrix..
+        diffdt = np.tile(np.diff(dt_cum)[:, np.newaxis], (1, len_sel))
+        cusel = cusel[1:, :] / diffdt
+        # n_im_sel -= 1
+        dtstartpos = 1
+    else:
+        dtstartpos = 0
+    # the below line uses Gaussian kernel that is not normalized (as in graphics to keep grey level average)
+    weight_factor = np.tile(np.exp(-time_diff_sq / 2 / filtwidth_yr ** 2)[dtstartpos:, np.newaxis],
+                            (1, len_sel))
+    # below weights for getting the previous epoch LP estimate. The biggest weight is at that epoch but that should be fine
+    weight_factor_prev = np.tile(np.exp(-time_diff_sq_prev / 2 / filtwidth_yr ** 2)[dtstartpos:, np.newaxis],
+                            (1, len_sel))
+    weight_factor = weight_factor * (~np.isnan(cusel))
+    weight_factor_prev = weight_factor_prev * (~np.isnan(cusel))
+    weight_factor = weight_factor / np.sum(weight_factor, axis=0) # this will ensure their sum is 1. is this normalisation after removing nans?? (without use of pi?)
+    #                                                              ok, see below -- that's actually weighted average formula. beautiful!
+    lpcube = np.nansum(cusel * weight_factor, axis=0) # that's estimated values for the given epoch
+    # same for the previous epoch data (no nans there..)
+    weight_factor_prev = weight_factor_prev / np.sum(weight_factor_prev, axis=0)
+    lpcube_prev = np.nansum(cusel * weight_factor_prev, axis=0)
+    if isinc:
+        lpcube = lpcube * diffdt[dtnanposition-1] # now return the incperday to just inc using time diff for given increment.
+        lpcube_prev = lpcube_prev * diffdt[dtnanposition-2]
+    # remove residual from the LP estimate
+    lpcube = lpcube - (prevepochdata - lpcube_prev)
+    return lpcube
+
+
+
+def gauss_fill_gaps_cube_full(inc,dt_cum):
+    ''' inc is 2-D array of (n_im, n_pt)
+     where the gauss avg will be used to fill the gaps (nans). ML, 12/2024 '''
+    filtwidth_yr = np.diff(dt_cum).mean() * 3  ## avg interval*3
+    #
+    # get only inc that has any nan in time dimension
+    #if len(inc.shape)==3:
+    #    dts_nans = np.isnan(inc).sum(axis=(1, 2))
+    #else:
+    dts_nans = np.isnan(inc).sum(axis=1)
+    dts_nan_inxs = np.where(dts_nans != 0)[0]  # indexes of dt with nans
+    n_im_nans = len(dts_nan_inxs)
+    #
+    # estimate increments in gaps epoch by epoch...
+    #n_im, length, width = inc.shape
+    print('Filling gaps using Gaussian window in time:')
+    j = 0
+    for i in dts_nan_inxs:
+        j+=1
+        if np.mod(j, 10) == 0:
+            print("  {0:3}/{1:3}th epoch with nans...".format(j, n_im_nans), flush=True)
+        time_diff_sq = (dt_cum[i] - dt_cum) ** 2
+        ## Limit reading data within filtwidth_yr**8
+        ixs = time_diff_sq < filtwidth_yr * 8
+        time_diff_sq = time_diff_sq[ixs]
+        ## and limit to only data blocks that has some nan in the given epoch
+        #incsel = inc[i,:,:] #.flatten() # 3D
+        incsel = inc[i, :]  # .flatten()
+        #naninxs = np.where(np.isnan(incsel))[0]
+        #nanxs, nanys = np.where(np.isnan(incsel)) # 3D
+        nancols = np.where(np.isnan(incsel))[0]  # 2D
+        # now process only data with that nan
+        #incsel = inc[ixs, nanxs, nanys]  # reduced cube
+        #incsel = inc[ixs, :, :][:, nanxs, nanys] # 3D
+        incsel = inc[ixs, :][:, nancols]
+        #incsel = incsel.reshape((len(ixs), len(nanxs))) # just in case of only one nan # 3D
+        incsel = incsel.reshape((len(ixs), len(nancols)))  # just in case of only one nan
+        #inc[i, nanxs, nanys] = gauss_fill_gaps_cube(incsel, dt_cum[ixs], filtwidth_yr, time_diff_sq) # 3D
+        inc[i, nancols] = gauss_fill_gaps_cube(incsel, dt_cum[ixs], filtwidth_yr, time_diff_sq)
+        #incdt = inc[i, :, :]
+        #incdt[np.isnan(incdt)] = inc_lpt[np.isnan(incdt)] * diffdt[np.isnan(incdt)]  # get back the increments
+        #inc[i, :, :] = incdt  # store back into inc. maybe not needed?
+    #
+    return inc
+
+
+def singular_nsbas_onepoint(d,G,m,dt_cum, skip_gapestimate, i):
+    ''' same as singular nsbas, should be used primarily
+    added singular_gauss (need to sort it this way due to partial func, see above'''
     px = i
     if np.mod(px, 100) == 0:
         print('\r  Running {0:6}/{1:6}th point...'.format(px, m.shape[1]), end='', flush=True)
@@ -285,37 +378,40 @@ def singular_nsbas_onepoint(d,G,m,dt_cum, i):
         # if actually all are fine, just run LS:
         mpx = np.linalg.lstsq(Gpx_ok, dpx_ok, rcond=None)[0]
     else:
-        # if there is at least one im with no related ifg:
+        # if there is at least one im with no related ifg (means, it would cause gap):
         mpx[~badincs] = np.linalg.lstsq(Gpx_ok[:,~badincs], dpx_ok, rcond=None)[0]
-        badinc_index = np.where(badincs)[0]
-        #s = mpx[~badincs].sum()
-        #t = dt_cum[~badincs].sum()
-        bi_prev = 0
-        s = []
-        t = []
-        #
-        # ensure the algorithm goes towards the end of the mpx line
-        for bi in np.append(badinc_index,len(mpx)):
-            group_mpx = mpx[bi_prev:bi]
-            #use at least 2 increments for the vel estimate
-            if group_mpx.size > 0:
-                group_time = dt_cum[bi_prev:bi+1]
-                s.append(group_mpx.sum())
-                t.append(group_time[-1] - group_time[0])
-            bi_prev = bi+1
-        s = np.array(s)
-        t = np.array(t)
-        # is only one value ok? maybe increase the threshold here:
-        if len(s)>0:
-            velpx = s.sum()/t.sum()    # mm/[dt_cum unit]
+        if skip_gapestimate:
+            mpx[badincs] = np.nan
         else:
-            velpx = np.nan # not sure what will happen. putting 0 may be safer
-        #if len(s) == 1:
-        #    velpx = s[0]/t[0]
-        #else:
-        #    velpx = curve_fit(func_vel, t, s)[0][0]
-        #mpx[badincs] = (dt_cum[badinc_index+1]-dt_cum[badinc_index]) * velpx
-        mpx[badincs] = (dt_cum[badinc_index] - dt_cum[badinc_index-1]) * velpx
+            badinc_index = np.where(badincs)[0]
+            #s = mpx[~badincs].sum()
+            #t = dt_cum[~badincs].sum()
+            bi_prev = 0
+            s = []
+            t = []
+            #
+            # ensure the algorithm goes towards the end of the mpx line
+            for bi in np.append(badinc_index,len(mpx)):
+                group_mpx = mpx[bi_prev:bi]
+                #use at least 2 increments for the vel estimate
+                if group_mpx.size > 0:
+                    group_time = dt_cum[bi_prev:bi+1]
+                    s.append(group_mpx.sum())
+                    t.append(group_time[-1] - group_time[0])
+                bi_prev = bi+1
+            s = np.array(s)
+            t = np.array(t)
+            # is only one value ok? maybe increase the threshold here:
+            if len(s)>0:
+                velpx = s.sum()/t.sum()    # mm/[dt_cum unit]
+            else:
+                velpx = np.nan # not sure what will happen. putting 0 may be safer
+            #if len(s) == 1:
+            #    velpx = s[0]/t[0]
+            #else:
+            #    velpx = curve_fit(func_vel, t, s)[0][0]
+            #mpx[badincs] = (dt_cum[badinc_index+1]-dt_cum[badinc_index]) * velpx
+            mpx[badincs] = (dt_cum[badinc_index] - dt_cum[badinc_index-1]) * velpx
     
     return mpx
 

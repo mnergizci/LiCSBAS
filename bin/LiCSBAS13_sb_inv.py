@@ -55,7 +55,8 @@ Outputs in TS_GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs]
+LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float]
+                 [--keep_incfile] [--gpu] [--singular] [--singular_gauss] [--only_sb] [--nopngs]
                  [--no_storepatches] [--load_patches] [--nullify_noloops]
 
  -d  Path to the GEOCml* dir containing stack of unw data
@@ -76,6 +77,7 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
      Not remove inc and resid files (Default: remove them)
  --gpu        Use GPU (Need cupy module)
  --singular   Use more economic computation  (unconstrained SBAS with filling gaps in second step; faster and less demanding solution but should be further improved)
+ --singular_gauss  Will turn on --singular but will estimate gaps using Gaussian kernel
  --only_sb    Perform only SB processing (skipping points with NaNs)
  --nopngs     Avoid generating some (unnecessary) PNG previews of increment residuals etc.
  --no_storepatches Don't store completed patch data [default: store patches in case of job timeout]
@@ -93,6 +95,8 @@ skipping here as will do it as post-processing:
 '''
 #%% Change log
 '''
+20241207 ML
+ - added singular_gauss
 20240423 ML
  - added parallelised version of 'singular' approach
 20231101 Milan Lazecky, Leeds Uni
@@ -197,6 +201,7 @@ def main(argv=None):
     gpu = False
     singular = False
     only_sb = False
+    singular_gauss = False
     nopngs = False
     #noloop = False  # setting this later
     input_units = 'rad'
@@ -235,7 +240,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "hd:t:",
                                        ["help",  "mem_size=", "input_units=", "gamma=",
                                         "n_unw_r_thre=", "keep_incfile", "nopngs", "nullify_noloops", "nullify_noloops_use_data_after_nullification",
-                                        "inv_alg=", "n_para=", "gpu", "singular", "only_sb", "no_storepatches", "load_patches"])
+                                        "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches"])
                                       #  "step_events="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -265,6 +270,9 @@ def main(argv=None):
                 gpu = True
             elif o == '--singular':
                 singular = True
+            elif o == '--singular_gauss':
+                singular = True
+                singular_gauss = True
             #elif o == '--step_events':
             #    step_events = True
             #    stepevents_file = a
@@ -897,7 +905,7 @@ def main(argv=None):
                         unwpatch, varpatch, G, dt_cum, gamma, n_para_inv)
                 else:
                     inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_nsbas(
-                        unwpatch, G, dt_cum, gamma, n_para_inv, gpu, singular=singular, only_sb=only_sb)
+                        unwpatch, G, dt_cum, gamma, n_para_inv, gpu, singular=singular, only_sb=only_sb, singular_gauss=singular_gauss)
 
                 ### Set to valuables
                 inc_patch = np.zeros((n_im-1, n_pt_all), dtype=np.float32)*np.nan
