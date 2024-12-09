@@ -355,7 +355,7 @@ def gauss_fill_gaps_cube_full(inc,dt_cum):
         #incsel = inc[ixs, :, :][:, nanxs, nanys] # 3D
         incsel = inc[ixs, :][:, nancols]
         #incsel = incsel.reshape((len(ixs), len(nanxs))) # just in case of only one nan # 3D
-        incsel = incsel.reshape(ixs.sum(), len(nancols)))  # just in case of only one nan
+        incsel = incsel.reshape(ixs.sum(), len(nancols))  # just in case of only one nan
         #inc[i, nanxs, nanys] = gauss_fill_gaps_cube(incsel, dt_cum[ixs], filtwidth_yr, time_diff_sq) # 3D
         inc[i, nancols] = gauss_fill_gaps_cube(incsel, dt_cum[ixs], filtwidth_yr, time_diff_sq)
         #incdt = inc[i, :, :]
