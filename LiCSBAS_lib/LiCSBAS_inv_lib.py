@@ -318,6 +318,11 @@ def gauss_fill_gaps_cube_full(inc,dt_cum):
     ''' inc is 2-D array of (n_im, n_pt)
      where the gauss avg will be used to fill the gaps (nans). ML, 12/2024 '''
     filtwidth_yr = np.diff(dt_cum).mean() * 3  ## avg interval*3
+    if inc.shape[0] == len(dt_cum)-1:
+        inc = np.append(np.zeros((1, inc.shape[1])), inc, axis=0)
+        addedzerow = True
+    else:
+        addedzerow = False
     #
     # get only inc that has any nan in time dimension
     #if len(inc.shape)==3:
@@ -357,6 +362,8 @@ def gauss_fill_gaps_cube_full(inc,dt_cum):
         #incdt[np.isnan(incdt)] = inc_lpt[np.isnan(incdt)] * diffdt[np.isnan(incdt)]  # get back the increments
         #inc[i, :, :] = incdt  # store back into inc. maybe not needed?
     #
+    if addedzerow:
+        inc = inc[1:,:]
     return inc
 
 
