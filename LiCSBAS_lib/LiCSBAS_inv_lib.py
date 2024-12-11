@@ -272,7 +272,7 @@ def singular_nsbas(d,G,m,dt_cum, singular_gauss = False):
     return m
 
 
-def gauss_fill_gaps_cube(cusel, dt_cum, filtwidth_yr, time_diff_sq, isinc = True):
+def gauss_fill_gaps_cube(cusel, dt_cumm, filtwidth_yr, time_diff_sq, isinc = True):
     ''' cusel is 2-D array (cube) of shape (n_im_selected, len_selected). Here we perform the nan filling itself.
     originally for increments only (you can try unset isinc for custom use e.g. on cum)
      it uses similar routine (additional Gaussian kernel-weighted mean) to additionally get LP of previous epoch to get its residual and thus align a bit better.
@@ -280,17 +280,25 @@ def gauss_fill_gaps_cube(cusel, dt_cum, filtwidth_yr, time_diff_sq, isinc = True
      Not perfect though. ML, 12/2024'''
     #n_im, length, width = cusel.shape
     dtnanposition = np.where(time_diff_sq==0)[0][0] # dtnanposition is the date index from dt_cum for which we do the estimate
-    time_diff_sq_prev = (dt_cum[dtnanposition - 1] - dt_cum) ** 2
-    prevepochdata = cusel[dtnanposition - 1, :]
     len_sel = cusel.shape[1]
     if isinc:
+        # in such case we center the time diffs between epochs as that's where the weights should be guided
+        dt_cum = dt_cumm - np.append(0, np.diff(dt_cumm) / 2)
+        # and we need to recalculate the weights
+        time_diff_sq = (dt_cum[dtnanposition] - dt_cum) ** 2
         # getting increment per day - squeezing the matrix..
-        diffdt = np.tile(np.diff(dt_cum)[:, np.newaxis], (1, len_sel))
+        diffdt = np.tile(np.diff(dt_cumm)[:, np.newaxis], (1, len_sel))
         cusel = cusel[1:, :] / diffdt
+        # as we squeeze cusel, need to update positioning
+        dtnanposition -= 1
         # n_im_sel -= 1
         dtstartpos = 1
     else:
+        dt_cum = dt_cumm.copy()
         dtstartpos = 0
+    # towards LP estimate of the previous epoch
+    prevepochdata = cusel[dtnanposition - 1, :]
+    time_diff_sq_prev = (dt_cum[dtnanposition - 1] - dt_cum) ** 2
     # the below line uses Gaussian kernel that is not normalized (as in graphics to keep grey level average)
     weight_factor = np.tile(np.exp(-time_diff_sq / 2 / filtwidth_yr ** 2)[dtstartpos:, np.newaxis],
                             (1, len_sel))
@@ -306,8 +314,8 @@ def gauss_fill_gaps_cube(cusel, dt_cum, filtwidth_yr, time_diff_sq, isinc = True
     weight_factor_prev = weight_factor_prev / np.sum(weight_factor_prev, axis=0)
     lpcube_prev = np.nansum(cusel * weight_factor_prev, axis=0)
     if isinc:
-        lpcube = lpcube * diffdt[dtnanposition-1] # now return the incperday to just inc using time diff for given increment.
-        lpcube_prev = lpcube_prev * diffdt[dtnanposition-2]
+        lpcube = lpcube * diffdt[dtnanposition] # now return the incperday to just inc using time diff for given increment.
+        lpcube_prev = lpcube_prev * diffdt[dtnanposition-1]
     # remove residual from the LP estimate
     lpcube = lpcube - (prevepochdata - lpcube_prev)
     return lpcube
