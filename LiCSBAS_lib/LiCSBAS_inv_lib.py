@@ -280,6 +280,7 @@ def gauss_fill_gaps_cube(cusel, dt_cumm, filtwidth_yr, time_diff_sq, isinc = Tru
      Not perfect though. ML, 12/2024'''
     #n_im, length, width = cusel.shape
     dtnanposition = np.where(time_diff_sq==0)[0][0] # dtnanposition is the date index from dt_cum for which we do the estimate
+    prevepochdata = cusel[dtnanposition - 1, :]
     len_sel = cusel.shape[1]
     if isinc:
         # in such case we center the time diffs between epochs as that's where the weights should be guided
@@ -296,8 +297,7 @@ def gauss_fill_gaps_cube(cusel, dt_cumm, filtwidth_yr, time_diff_sq, isinc = Tru
     else:
         dt_cum = dt_cumm.copy()
         dtstartpos = 0
-    # towards LP estimate of the previous epoch
-    prevepochdata = cusel[dtnanposition - 1, :]
+    # towards LP estimate of the previous epoch (the first is 0 == never nan. TODO: might be better to do the same for post-nan increment if it is not a nan. skipping now
     time_diff_sq_prev = (dt_cum[dtnanposition - 1] - dt_cum) ** 2
     # the below line uses Gaussian kernel that is not normalized (as in graphics to keep grey level average)
     weight_factor = np.tile(np.exp(-time_diff_sq / 2 / filtwidth_yr ** 2)[dtstartpos:, np.newaxis],
