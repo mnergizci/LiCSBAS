@@ -77,6 +77,7 @@ p12_rm_ifg_list=""	# List file containing ifgs to be manually removed
 p12_skippngs="" # y/n. n by default
 p13_nullify_noloops="" # y/n. n by default
 p13_singular="" # y/n. n by default
+p13_singular_gauss="" # y/n. n by default
 p13_skippngs="" # y/n. n by default
 p15_coh_thre=""	# default: 0.05
 p15_n_unw_r_thre=""	# default: 1.5
@@ -411,6 +412,7 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
   if [ $p13_keep_incfile == "y" ];then p13_op="$p13_op --keep_incfile"; fi
   if [ $p13_nullify_noloops == "y" ]; then p13_op="$p13_op --nullify_noloops"; fi
   if [ $p13_singular == "y" ]; then p13_op="$p13_op --singular"; fi
+  if [ $p13_singular_gauss == "y" ]; then p13_op="$p13_op --singular_gauss"; fi
   if [ $p13_skippngs == "y" ]; then p13_op="$p13_op --nopngs"; fi
   if [ $gpu == "y" ];then p13_op="$p13_op --gpu"; fi
 
@@ -422,7 +424,7 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
      if [ -z $p13_n_unw_r_thre ];then
        extra=$extra' --n_unw_r_thre 0.4'
      fi
-     extra=$extra' --singular' # --nopngs'
+     extra=$extra' --singular_gauss' # --nopngs'
     else
      extra=''
     fi
