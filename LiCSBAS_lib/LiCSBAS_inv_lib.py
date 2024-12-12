@@ -221,7 +221,7 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=Fal
                 print('Performing (experimental but optimal) nan-gapfilling using Gaussian kernel')
                 result[:, ~bool_pt_full] = gauss_fill_gaps_cube_full(result[:, ~bool_pt_full], dt_cum)
     print('')
-    print('inversion finished')
+    print('inversion finished - estimating linear trend (velocity)')
     #
     if only_sb or singular:
         # SB/singular-NSBAS result matrix: based on G only, need to calculate vel, setting vconst=0
@@ -576,7 +576,9 @@ def calc_vel(cum, dt_cum, return_G = False):
     # reverting the zeroes to nan, although ref area will then be nan now.
     vel[vel==0] = np.nan
     vconst[vconst==0] = np.nan
-    
+
+    print(' Velocity estimation finished')
+
     if return_G:
         # careful, we switch the output params to conform with G
         return vconst, vel, G
