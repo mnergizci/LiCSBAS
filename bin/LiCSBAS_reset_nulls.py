@@ -79,7 +79,7 @@ def set_input_output():
     global ifgdir, ifglist, noLoopList, bad_ifg_list
 
     ifgdir = os.path.abspath(os.path.join(args.frame_dir, args.geoc_dir))
-    ifglist = glob.glob(os.path.join(ifgdir, '20*'))
+    ifglist = glob.glob(os.path.join(ifgdir, '[1-2]*'))
     if '$' in args.ts_dir:
         bad_ifg11file = os.path.join(args.frame_dir, 'TS_' + args.geoc_dir, 'info', '11bad_ifg.txt')
     else:
@@ -107,7 +107,7 @@ def set_input_output():
     if args.reset_all or args.reset_NoLoop:
         noLoopDir = os.path.join(ifgdir, 'no_loop_ifg')
         if os.path.exists(noLoopDir):
-            noLoopList = glob.glob(os.path.join(noLoopDir, '20*'))
+            noLoopList = glob.glob(os.path.join(noLoopDir, '[1-2]*'))
         else:
             noLoopList = []
 
@@ -117,7 +117,7 @@ def reset_all():
         ifgd = re.split('/', ifg)[-1]
         shutil.move(ifg, os.path.join(ifgdir, ifgd))
 
-    ifglist = glob.glob(os.path.join(ifgdir, '20*'))
+    ifglist = glob.glob(os.path.join(ifgdir, '[1-2]*'))
 
     for ifg in ifglist:
         ifgd = re.split('/', ifg)[-1]
@@ -149,7 +149,7 @@ def reset_null():
     else:
         resetcode = 999 # undefined
 
-    ifglist = glob.glob(os.path.join(ifgdir, '20*'))
+    ifglist = glob.glob(os.path.join(ifgdir, '[1-2]*'))
 
     for ifg in ifglist:
         ifgd = re.split('/', ifg)[-1]        
