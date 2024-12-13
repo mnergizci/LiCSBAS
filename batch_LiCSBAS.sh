@@ -471,13 +471,15 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
      extra=''
     fi
     LiCSBAS13_sb_inv.py $extra $p13_op 2>&1 | tee -a $log
+    pstat=(${PIPESTATUS[0]});
     if [ $p12_nullify == "y" ]; then
-      if [ ${PIPESTATUS[0]} -ne 0 ]; then
+      if [ $pstat -ne 0 ]; then
         echo "fixing the unresolved-yet issue with nans in ref area by just rerunning step 13"
         LiCSBAS13_sb_inv.py $extra $p13_op 2>&1 | tee -a $log
+        pstat=(${PIPESTATUS[0]});
       fi
     fi
-    if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+    if [ $pstat -ne 0 ];then exit 1; fi
   fi
 fi
 
