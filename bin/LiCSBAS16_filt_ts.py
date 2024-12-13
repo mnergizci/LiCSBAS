@@ -178,7 +178,7 @@ def main(argv=None):
     inputresidflag = False
     interpolateflag = False
     gpu = False
-
+    sbovl = True
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -297,7 +297,10 @@ def main(argv=None):
     if wavelength > 0.2: ## L-band
         cycle = 1.5 # 2pi/cycle for comparison png
     elif wavelength <= 0.2: ## C-band
-        cycle = 3 # 3*2pi/cycle for comparison png
+        if not sbovl:
+            cycle = 3 # 3*2pi/cycle for comparison png
+        else:
+            cycle = 3
 
     filtincdir = os.path.join(tsadir, '16filt_increment')
     if os.path.exists(filtincdir): shutil.rmtree(filtincdir)
