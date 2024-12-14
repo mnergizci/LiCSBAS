@@ -475,25 +475,36 @@ def convert_wrapper(i, is_sbovl=False):
     if np.mod(i, 10) == 0:
         print("  {0:3}/{1:3}th IFG...".format(i, len(ifgdates2)), flush=True)
 
-    # Set suffix and cycle depending on if processing ifg or sbovl
+    # Initialize suffix and cycle based on type
     if is_sbovl:
         suffix = ['.geo.sbovldiff.adf.mm.tif', '.geo.sbovldiff.adf.cc.tif', '.sbovldiff.adf.mm', '.sbovldiff.adf.cc']
         cycle = 75
+
+        # Check for sbovldiff files first
+        unw_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[0])
+        cc_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[1])
+
+        if not os.path.exists(unw_tiffile) or not os.path.exists(cc_tiffile):
+            print(f'  No {ifgd + suffix[0]} or {ifgd + suffix[1]} found. Checking bovldiff files...', flush=True)
+
+            # Fall back to bovldiff if sbovldiff not found
+            unw_tiffile = os.path.join(geocdir, ifgd, ifgd + '.geo.bovldiff.adf.mm.tif')
+            cc_tiffile = os.path.join(geocdir, ifgd, ifgd + '.geo.bovldiff.adf.cc.tif')
+
+            if not os.path.exists(unw_tiffile) or not os.path.exists(cc_tiffile):
+                print(f'  No {ifgd + ".geo.bovldiff.adf.mm.tif"} or {ifgd + ".geo.bovldiff.adf.cc.tif"} found. Skip.', flush=True)
+                return 1
+
     else:
+        # Default case for non-sbovl processing
         suffix = ['.geo.unw.tif', '.geo.cc.tif', '.unw', '.cc']
         cycle = 3
+        unw_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[0])
+        cc_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[1])
 
-    # Paths for input files
-    unw_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[0])
-    cc_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[1])
-
-    # Check if inputs exist
-    if not os.path.exists(unw_tiffile):
-        print('  No {} found. Skip'.format(ifgd + suffix[0]), flush=True)
-        return 1
-    elif not os.path.exists(cc_tiffile):
-        print('  No {} found. Skip'.format(ifgd + suffix[1]), flush=True)
-        return 1
+        if not os.path.exists(unw_tiffile) or not os.path.exists(cc_tiffile):
+            print(f'  No {ifgd + suffix[0]} or {ifgd + suffix[1]} found. Skip.', flush=True)
+            return 1
 
     # Output directories and files
     ifgdir1 = os.path.join(outdir, ifgd)
@@ -507,7 +518,7 @@ def convert_wrapper(i, is_sbovl=False):
         unw = gdal.Open(unw_tiffile).ReadAsArray()
         unw[unw == 0] = np.nan
     except:
-        print('  {} cannot open. Skip'.format(ifgd + suffix[0]), flush=True)
+        print(f'  {unw_tiffile} cannot open. Skip.', flush=True)
         shutil.rmtree(ifgdir1)
         return 1
 
@@ -516,33 +527,26 @@ def convert_wrapper(i, is_sbovl=False):
         if cc.dtype == np.float32:
             cc = cc * 255  # Convert 0-1 to 0-255 for uint8
     except:
-        print('  {} cannot open. Skip'.format(ifgd + suffix[1]), flush=True)
+        print(f'  {cc_tiffile} cannot open. Skip.', flush=True)
         shutil.rmtree(ifgdir1)
         return 1
 
     # Dimension check
     if width:
         if (cc.shape != (length, width)) or (unw.shape != (length, width)):
-            print('pair {} has different dimensions. Skipping'.format(ifgd))
+            print(f'pair {ifgd} has different dimensions. Skipping.', flush=True)
             return 1
 
-    # # Multilook processing if needed
-    # if nlook != 1:
-    #     unw = tools_lib.multilook(unw, nlook, nlook, n_valid_thre)
-    #     cc = cc.astype(np.float32)
-    #     cc[cc == 0] = np.nan
-    #     cc = tools_lib.multilook(cc, nlook, nlook, n_valid_thre)
     # Multilook processing if needed
     if nlook != 1:
         cc = cc.astype(np.float32)
         cc[cc == 0] = np.nan  # Treat zero coherence as missing data (NaN)
-        
+
         # Apply weighted multilook to `unw` using coherence as weights
         unw = tools_lib.multilook_weighted(unw, cc, nlook, nlook, n_valid_thre)
-        
+
         # Apply weighted multilook to `cc`, using itself as the coherence weight
         cc = tools_lib.multilook_weighted(cc, cc, nlook, nlook, n_valid_thre)
-
 
     # Save float outputs
     unw.tofile(unwfile)
@@ -555,7 +559,7 @@ def convert_wrapper(i, is_sbovl=False):
         cc = cc.astype(np.float32)
         cc[np.where(np.isnan(unw))] = np.nan
         plot_lib.make_im_png(cc / 255, ccpngfile, cmap_cc, ifgd + suffix[3], vmin=0.03, vmax=1, cbar=True, logscale=True)
-    
+
     unwpngfile = os.path.join(ifgdir1, ifgd + suffix[2] + '.png')
     plot_lib.make_im_png(np.angle(np.exp(1j * unw / cycle) * cycle), unwpngfile, cmap_wrap, ifgd + suffix[2], vmin=-np.pi, vmax=np.pi, cbar=False)
 
