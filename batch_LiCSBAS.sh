@@ -376,109 +376,109 @@ if [ $start_step -le 11 -a $end_step -ge 11 ];then
 fi
 
 if [ $start_step -le 12 -a $end_step -ge 12 ];then
-  if [ $cometdev -eq 1 ]; then
+  if [ "$cometdev" -eq 1 ] || [ "$p120_sbovl" == "y" ]; then
     p120_use='y'
   fi
   if [ $p120_use == "y" ]; then
     dirset="-c $GEOCmldir -d $GEOCmldir -t $TSdir "
     extra=""
     if [ $p120_ignoreconncomp == "y" ]; then
-      extra="--ignore_comp"
+        extra="--ignore_comp"
     fi
-    if [ "$p120_sbovl" == "y" ]; then
+    if [ $p120_sbovl == "y" ]; then
       extra="--sbovl"
     fi
-
-    if [ "$check_only" == "y" ]; then
-      echo "LiCSBAS120_choose_reference.py $dirset $extra"
+    if [ $check_only == "y" ];then
+      echo "LiCSBAS120_choose_reference.py $dirset "$extra
     else
       LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
       if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
     fi
   fi
-  if [ "$p120_sbovl" != "y" ]; then
-    p12_op=""
-    if [ $cometdev -eq 1 ]; then
-      p12_nullify="y"
-    fi
-    if [ ! -z $p12_GEOCmldir ];then p12_op="$p12_op -d $p12_GEOCmldir"; 
-      else p12_op="$p12_op -d $GEOCmldir"; fi
-    if [ ! -z $p12_TSdir ];then p12_op="$p12_op -t $p12_TSdir"; fi
-    if [ ! -z $p12_loop_thre ];then p12_op="$p12_op -l $p12_loop_thre"; fi
-    if [ $p12_multi_prime == "y" ];then p12_op="$p12_op --multi_prime"; fi
-    if [ $p12_nullify == "y" ];then p12_op="$p12_op --nullify"; fi
-    if [ $p12_skippngs == "y" ];then p12_op="$p12_op --nopngs"; fi
-    if [ ! -z $p12_rm_ifg_list ];then p12_op="$p12_op --rm_ifg_list $p12_rm_ifg_list"; fi
-    if [ ! -z $p12_n_para ];then p12_op="$p12_op --n_para $p12_n_para";
-    elif [ ! -z $n_para ];then p12_op="$p12_op --n_para $n_para";fi
 
-    if [ $check_only == "y" ];then
-      echo "LiCSBAS12_loop_closure.py $p12_op "
-    else
-      LiCSBAS12_loop_closure.py $p12_op 2>&1 | tee -a $log
-      if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
-    fi
-    # 2024/11/13: updated nullification may cause extra all-nans-in-ref area. Workaround - update reference point.
-    # Forcing this to always use p120 ..
-    if [ $p12_nullify == "y" ];then
-    #if [ $p120_use == "y" ]; then
-      dirset="-c $GEOCmldir -d $GEOCmldir -t $TSdir "
-      extra=""
-      if [ $p120_ignoreconncomp == "y" ]; then
-          extra="--ignore_comp"
+  if [ $p120_sbovl != "y" ]; then
+      p12_op=""
+      if [ $cometdev -eq 1 ]; then
+         p12_nullify="y"
       fi
+      if [ ! -z $p12_GEOCmldir ];then p12_op="$p12_op -d $p12_GEOCmldir"; 
+        else p12_op="$p12_op -d $GEOCmldir"; fi
+      if [ ! -z $p12_TSdir ];then p12_op="$p12_op -t $p12_TSdir"; fi
+      if [ ! -z $p12_loop_thre ];then p12_op="$p12_op -l $p12_loop_thre"; fi
+      if [ $p12_multi_prime == "y" ];then p12_op="$p12_op --multi_prime"; fi
+      if [ $p12_nullify == "y" ];then p12_op="$p12_op --nullify"; fi
+      if [ $p12_skippngs == "y" ];then p12_op="$p12_op --nopngs"; fi
+      if [ ! -z $p12_rm_ifg_list ];then p12_op="$p12_op --rm_ifg_list $p12_rm_ifg_list"; fi
+      if [ ! -z $p12_n_para ];then p12_op="$p12_op --n_para $p12_n_para";
+      elif [ ! -z $n_para ];then p12_op="$p12_op --n_para $n_para";fi
+    
       if [ $check_only == "y" ];then
-        echo "LiCSBAS120_choose_reference.py $dirset "$extra
+        echo "LiCSBAS12_loop_closure.py $p12_op "
       else
-        LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
+        LiCSBAS12_loop_closure.py $p12_op 2>&1 | tee -a $log
         if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
       fi
-    #fi
+      # 2024/11/13: updated nullification may cause extra all-nans-in-ref area. Workaround - update reference point.
+      # Forcing this to always use p120 ..
+      if [ $p12_nullify == "y" ];then
+      #if [ $p120_use == "y" ]; then
+        dirset="-c $GEOCmldir -d $GEOCmldir -t $TSdir "
+        extra=""
+        if [ $p120_ignoreconncomp == "y" ]; then
+            extra="--ignore_comp"
+        fi
+        if [ $check_only == "y" ];then
+          echo "LiCSBAS120_choose_reference.py $dirset "$extra
+        else
+          LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
+          if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+        fi
+      #fi
+      fi
     fi
-  fi
 fi
 
 if [ $start_step -le 13 -a $end_step -ge 13 ];then
   p13_op=""
-  if [ ! -z $p13_GEOCmldir ];then p13_op="$p13_op -d $p13_GEOCmldir";
+  if [ ! -z "$p13_GEOCmldir" ];then p13_op="$p13_op -d $p13_GEOCmldir";
     else p13_op="$p13_op -d $GEOCmldir"; fi
-  if [ ! -z $p13_TSdir ];then p13_op="$p13_op -t $p13_TSdir"; fi
-  if [ ! -z $p13_inv_alg ];then p13_op="$p13_op --inv_alg $p13_inv_alg"; fi
-  if [ ! -z $p13_mem_size ];then p13_op="$p13_op --mem_size $p13_mem_size"; fi
-  if [ ! -z $p13_gamma ];then p13_op="$p13_op --gamma $p13_gamma"; fi
-  if [ ! -z $p13_n_para ];then p13_op="$p13_op --n_para $p13_n_para";
-  elif [ ! -z $n_para ];then p13_op="$p13_op --n_para $n_para";fi
-  if [ ! -z $p13_n_para ];then p13_op="$p13_op --n_para $p13_n_para"; fi
-  if [ ! -z $p13_n_unw_r_thre ];then p13_op="$p13_op --n_unw_r_thre $p13_n_unw_r_thre"; fi
-  if [ $p13_keep_incfile == "y" ];then p13_op="$p13_op --keep_incfile"; fi
-  if [ $p13_nullify_noloops == "y" ]; then p13_op="$p13_op --nullify_noloops"; fi
-  if [ $p13_singular == "y" ]; then p13_op="$p13_op --singular"; fi
-  if [ "$p13_sbovl" == "y" ]; then p13_op="$p13_op --sbovl"; fi
-  if [ $p13_singular_gauss == "y" ]; then p13_op="$p13_op --singular_gauss"; fi
-  if [ $p13_skippngs == "y" ]; then p13_op="$p13_op --nopngs"; fi
-  if [ $gpu == "y" ];then p13_op="$p13_op --gpu"; fi
+  if [ ! -z "$p13_TSdir" ];then p13_op="$p13_op -t $p13_TSdir"; fi
+  if [ ! -z "$p13_inv_alg" ];then p13_op="$p13_op --inv_alg $p13_inv_alg"; fi
+  if [ ! -z "$p13_mem_size" ];then p13_op="$p13_op --mem_size $p13_mem_size"; fi
+  if [ ! -z "$p13_gamma" ];then p13_op="$p13_op --gamma $p13_gamma"; fi
+  if [ ! -z "$p13_n_para" ];then p13_op="$p13_op --n_para $p13_n_para";
+    elif [ ! -z "$n_para" ];then p13_op="$p13_op --n_para $n_para"; fi
+  if [ ! -z "$p13_n_unw_r_thre" ];then p13_op="$p13_op --n_unw_r_thre $p13_n_unw_r_thre"; fi
+  if [ "$p13_keep_incfile" == "y" ];then p13_op="$p13_op --keep_incfile"; fi
+  if [ "$p13_nullify_noloops" == "y" ];then p13_op="$p13_op --nullify_noloops"; fi
+  if [ "$p13_singular" == "y" ];then p13_op="$p13_op --singular"; fi
+  if [ "$p13_sbovl" == "y" ];then p13_op="$p13_op --sbovl"; fi
+  if [ "$p13_singular_gauss" == "y" ];then p13_op="$p13_op --singular_gauss"; fi
+  if [ "$p13_skippngs" == "y" ];then p13_op="$p13_op --nopngs"; fi
+  if [ "$gpu" == "y" ];then p13_op="$p13_op --gpu"; fi
 
-  if [ $check_only == "y" ];then
+  if [ "$check_only" == "y" ];then
     echo "LiCSBAS13_sb_inv.py $p13_op"
   else
-    if [ $cometdev -eq 1 ]; then
-     extra='--nopngs'
-     if [ -z $p13_n_unw_r_thre ];then
-       extra=$extra' --n_unw_r_thre 0.4'
-      fi
-     extra=$extra' --singular_gauss' # --nopngs'
+    if [ "$cometdev" -eq 1 ];then
+      extra='--nopngs'
+      if [ -z "$p13_n_unw_r_thre" ];then extra="$extra --n_unw_r_thre 0.4"; fi
+      extra="$extra --singular_gauss"
     else
-     extra=''
+      extra=''
     fi
+
     LiCSBAS13_sb_inv.py $extra $p13_op 2>&1 | tee -a $log
-    pstat=(${PIPESTATUS[0]});
-    if [ $p12_nullify == "y" ]; then
-      if [ $pstat -ne 0 ]; then
-        echo "fixing the unresolved-yet issue with nans in ref area by just rerunning step 13"
+    pstat=(${PIPESTATUS[0]})
+
+    if [ "$p12_nullify" == "y" ];then
+      if [ $pstat -ne 0 ];then
+        echo "Fixing the unresolved-yet issue with NaNs in ref area by just rerunning step 13"
         LiCSBAS13_sb_inv.py $extra $p13_op 2>&1 | tee -a $log
-        pstat=(${PIPESTATUS[0]});
+        pstat=(${PIPESTATUS[0]})
       fi
     fi
+
     if [ $pstat -ne 0 ];then exit 1; fi
   fi
 fi
@@ -500,27 +500,27 @@ fi
 
 if [ $start_step -le 15 -a $end_step -ge 15 ];then
   p15_op=""
-  if [ ! -z $p15_TSdir ];then p15_op="$p15_op -t $p15_TSdir";
+  if [ ! -z "$p15_TSdir" ];then p15_op="$p15_op -t $p15_TSdir";
     else p15_op="$p15_op -t $TSdir"; fi
-  if [ ! -z $p15_coh_thre ];then p15_op="$p15_op -c $p15_coh_thre"; fi
-  if [ ! -z $p15_n_unw_r_thre ];then p15_op="$p15_op -u $p15_n_unw_r_thre"; fi
-  if [ ! -z $p15_vstd_thre ];then p15_op="$p15_op -v $p15_vstd_thre"; fi
-  if [ ! -z $p15_maxTlen_thre ];then p15_op="$p15_op -T $p15_maxTlen_thre"; fi
-  if [ ! -z $p15_n_gap_thre ];then p15_op="$p15_op -g $p15_n_gap_thre"; fi
-  if [ ! -z $p15_stc_thre ];then p15_op="$p15_op -s $p15_stc_thre"; fi
-  if [ ! -z $p15_n_ifg_noloop_thre ];then p15_op="$p15_op -i $p15_n_ifg_noloop_thre"; fi
-  if [ ! -z $p15_n_loop_err_thre ];then p15_op="$p15_op -l $p15_n_loop_err_thre"; fi
-  if [ ! -z $p15_n_loop_err_ratio_thre ];then p15_op="$p15_op -L $p15_n_loop_err_ratio_thre"; fi
-  if [ ! -z $p15_avg_phasebias ];then p15_op="$p15_op --avg_phase_bias $p15_avg_phasebias"; fi
-  if [ ! -z $p15_resid_rms_thre ];then p15_op="$p15_op -r $p15_resid_rms_thre"; fi
-  if [ ! -z $p15_vmin ];then p15_op="$p15_op --vmin $p15_vmin"; fi
-  if [ ! -z $p15_vmax ];then p15_op="$p15_op --vmax $p15_vmax"; fi
-  if [ $p15_keep_isolated == "y" ];then p15_op="$p15_op --keep_isolated"; fi
-  if [ $p15_noautoadjust == "y" ];then p15_op="$p15_op --noautoadjust"; fi
-  if [ $p15_sbovl == "y" ];then p15_op="$p15_op --sbovl"; fi
-  if [ $p15_n_gap_use_merged == "y" ];then p15_op="$p15_op --n_gap_use_merged"; fi
+  if [ ! -z "$p15_coh_thre" ];then p15_op="$p15_op -c $p15_coh_thre"; fi
+  if [ ! -z "$p15_n_unw_r_thre" ];then p15_op="$p15_op -u $p15_n_unw_r_thre"; fi
+  if [ ! -z "$p15_vstd_thre" ];then p15_op="$p15_op -v $p15_vstd_thre"; fi
+  if [ ! -z "$p15_maxTlen_thre" ];then p15_op="$p15_op -T $p15_maxTlen_thre"; fi
+  if [ ! -z "$p15_n_gap_thre" ];then p15_op="$p15_op -g $p15_n_gap_thre"; fi
+  if [ ! -z "$p15_stc_thre" ];then p15_op="$p15_op -s $p15_stc_thre"; fi
+  if [ ! -z "$p15_n_ifg_noloop_thre" ];then p15_op="$p15_op -i $p15_n_ifg_noloop_thre"; fi
+  if [ ! -z "$p15_n_loop_err_thre" ];then p15_op="$p15_op -l $p15_n_loop_err_thre"; fi
+  if [ ! -z "$p15_n_loop_err_ratio_thre" ];then p15_op="$p15_op -L $p15_n_loop_err_ratio_thre"; fi
+  if [ ! -z "$p15_avg_phasebias" ] && [ "$p15_sbovl" != "y" ];then p15_op="$p15_op --avg_phase_bias $p15_avg_phasebias"; fi
+  if [ ! -z "$p15_resid_rms_thre" ];then p15_op="$p15_op -r $p15_resid_rms_thre"; fi
+  if [ ! -z "$p15_vmin" ];then p15_op="$p15_op --vmin $p15_vmin"; fi
+  if [ ! -z "$p15_vmax" ];then p15_op="$p15_op --vmax $p15_vmax"; fi
+  if [ "$p15_keep_isolated" == "y" ];then p15_op="$p15_op --keep_isolated"; fi
+  if [ "$p15_noautoadjust" == "y" ];then p15_op="$p15_op --noautoadjust"; fi
+  if [ "$p15_sbovl" == "y" ];then p15_op="$p15_op --sbovl"; fi
+  if [ "$p15_n_gap_use_merged" == "y" ];then p15_op="$p15_op --n_gap_use_merged"; fi
 
-  if [ $check_only == "y" ];then
+  if [ "$check_only" == "y" ];then
     echo "LiCSBAS15_mask_ts.py $p15_op"
   else
     LiCSBAS15_mask_ts.py $p15_op 2>&1 | tee -a $log
@@ -530,26 +530,26 @@ fi
 
 if [ $start_step -le 16 -a $end_step -ge 16 ];then
   p16_op=""
-  if [ ! -z $p16_TSdir ];then p16_op="$p16_op -t $p16_TSdir";
+  if [ ! -z "$p16_TSdir" ];then p16_op="$p16_op -t $p16_TSdir";
     else p16_op="$p16_op -t $TSdir"; fi
-  if [ ! -z $p16_filtwidth_km ];then p16_op="$p16_op -s $p16_filtwidth_km"; fi
-  if [ ! -z $p16_filtwidth_yr ];then p16_op="$p16_op -y $p16_filtwidth_yr"; fi
-  if [ ! -z $p16_deg_deramp ];then p16_op="$p16_op -r $p16_deg_deramp"; fi
-  if [ $p16_demerr == "y" ];then p16_op="$p16_op --demerr"; fi
-  if [ $p16_hgt_linear == "y" ];then p16_op="$p16_op --hgt_linear"; fi
-  if [ ! -z $p16_hgt_min ];then p16_op="$p16_op --hgt_min $p16_hgt_min"; fi
-  if [ ! -z $p16_hgt_max ];then p16_op="$p16_op --hgt_max $p16_hgt_max"; fi
-  if [ $p16_nomask == "y" ];then p16_op="$p16_op --nomask"; fi
-  if [ ! -z $p16_n_para ];then p16_op="$p16_op --n_para $p16_n_para";
-  elif [ ! -z $n_para ];then p16_op="$p16_op --n_para $n_para";fi
-  if [ ! -z $p16_range ];then p16_op="$p16_op --range $p16_range"; fi
-  if [ ! -z $p16_range_geo ];then p16_op="$p16_op --range_geo $p16_range_geo"; fi
-  if [ ! -z $p16_ex_range ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
-  if [ ! -z $p16_ex_range_geo ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
-  if [ $p16_interpolate_nans == "y"]; then p16_op="$p16_op --interpolate_nans"; fi
-  if [ $p16_skippngs == "y" ];then p16_op="$p16_op --nopngs"; fi
+  if [ ! -z "$p16_filtwidth_km" ];then p16_op="$p16_op -s $p16_filtwidth_km"; fi
+  if [ ! -z "$p16_filtwidth_yr" ];then p16_op="$p16_op -y $p16_filtwidth_yr"; fi
+  if [ ! -z "$p16_deg_deramp" ];then p16_op="$p16_op -r $p16_deg_deramp"; fi
+  if [ "$p16_demerr" == "y" ];then p16_op="$p16_op --demerr"; fi
+  if [ "$p16_hgt_linear" == "y" ];then p16_op="$p16_op --hgt_linear"; fi
+  if [ ! -z "$p16_hgt_min" ];then p16_op="$p16_op --hgt_min $p16_hgt_min"; fi
+  if [ ! -z "$p16_hgt_max" ];then p16_op="$p16_op --hgt_max $p16_hgt_max"; fi
+  if [ "$p16_nomask" == "y" ];then p16_op="$p16_op --nomask"; fi
+  if [ ! -z "$p16_n_para" ];then p16_op="$p16_op --n_para $p16_n_para";
+    elif [ ! -z "$n_para" ];then p16_op="$p16_op --n_para $n_para";fi
+  if [ ! -z "$p16_range" ];then p16_op="$p16_op --range $p16_range"; fi
+  if [ ! -z "$p16_range_geo" ];then p16_op="$p16_op --range_geo $p16_range_geo"; fi
+  if [ ! -z "$p16_ex_range" ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
+  if [ ! -z "$p16_ex_range_geo" ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
+  if [ "$p16_interpolate_nans" == "y" ] && [ "$p15_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
+  if [ "$p16_skippngs" == "y" ];then p16_op="$p16_op --nopngs"; fi
 
-  if [ $check_only == "y" ];then
+  if [ "$check_only" == "y" ];then
     echo "LiCSBAS16_filt_ts.py $p16_op"
   else
     LiCSBAS16_filt_ts.py $p16_op 2>&1 | tee -a $log
