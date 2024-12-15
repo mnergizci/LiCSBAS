@@ -807,7 +807,7 @@ fi
 
 
 #preparing batch file
-#module load $LB_version   #TODO open here after pull requests?
+module load $LB_version   #TODO open here after pull requests?
 rm -f batch_LiCSBAS.sh 2>/dev/null
 copy_batch_LiCSBAS.sh >/dev/null
 
@@ -920,7 +920,7 @@ if [ $run_jasmin -eq 1 ]; then
   #just a little export fix
   #multi=1
  #fi
- # echo "module load "$LB_version >> jasmin_run.sh ##TODO open here after accepting pull requests?
+ echo "module load "$LB_version >> jasmin_run.sh ##TODO open here after accepting pull requests?
  echo "./batch_LiCSBAS.sh" >> jasmin_run.sh
  
  if [ $clip -eq 1 ]; then clstr='clip'; else clstr=''; fi
