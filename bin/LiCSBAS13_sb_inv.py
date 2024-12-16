@@ -15,6 +15,9 @@ Inputs in GEOCml*/ :
  - yyyymmdd_yyyymmdd/
    - yyyymmdd_yyyymmdd.unw
    - yyyymmdd_yyyymmdd.cc
+   
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (if --sbovl is used)
  - EQA.dem_par
  - slc.mli.par
  - baselines (may be dummy)
@@ -55,8 +58,7 @@ Outputs in TS_GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float]
-                 [--keep_incfile] [--gpu] [--singular] [--singular_gauss] [--only_sb] [--nopngs]
+LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--singular_gauss] [--only_sb] [--nopngs] [--sbovl]
                  [--no_storepatches] [--load_patches] [--nullify_noloops]
 
  -d  Path to the GEOCml* dir containing stack of unw data
@@ -68,6 +70,7 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --mem_size   Max memory size for each patch in MB. (Default: 8000)
  --gamma      Gamma value for NSBAS inversion (Default: 0.0001)
  --n_para     Number of parallel processing (Default: # of usable CPU)
+ --sbovl      Inversion of sbovl mm and cc values 
  --n_unw_r_thre
      Threshold of n_unw (number of used unwrap data)
      (Note this value is ratio to the number of images (epochs); i.e., 1.5*n_im)
@@ -97,6 +100,8 @@ skipping here as will do it as post-processing:
 '''
 20241207 ML
  - added singular_gauss
+20241102 MNergizci
+ - added sbovl flag
 20240423 ML
  - added parallelised version of 'singular' approach
 20231101 Milan Lazecky, Leeds Uni
@@ -209,7 +214,8 @@ def main(argv=None):
     #print('NOTE, keeping nullify_noloops ON by default, for testing..')
     nullify_noloops_use_data_after_nullification = False
     #print('NOTE, variable nullify_noloops_use_data_after_nullification set to False - testing')
-
+    sbovl = False
+    
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -240,7 +246,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "hd:t:",
                                        ["help",  "mem_size=", "input_units=", "gamma=",
                                         "n_unw_r_thre=", "keep_incfile", "nopngs", "nullify_noloops", "nullify_noloops_use_data_after_nullification",
-                                        "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches"])
+                                        "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches", "sbovl"])
                                       #  "step_events="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -288,6 +294,8 @@ def main(argv=None):
                 store_patches = False
             elif o == '--load_patches':
                 load_patches = True
+            elif o == '--sbovl':
+                sbovl = True
 	      
 
         if not ifgdir:
@@ -299,8 +307,11 @@ def main(argv=None):
         if gpu:
             print("\nGPU option is activated. Need cupy module.\n")
             import cupy as cp
-        if input_units not in ['rad', 'mm', 'm']:
-            raise Usage("Wrong units of the input data - available options are: rad, mm, m.")
+        if sbovl:
+            input_units= 'mm'
+        else:
+            if input_units not in ['rad', 'mm', 'm']:
+                raise Usage("Wrong units of the input data - available options are: rad, mm, m.")
         if inv_alg not in ['LS', 'WLS']:
             raise Usage("Wrong inversion algorithm - only LS or WLS are the options here")
         if (inv_alg == 'WLS') and (singular == True):
@@ -374,8 +385,9 @@ def main(argv=None):
     try:
         if not os.path.exists(bad_ifg11file):
             raise Usage('No 11bad_ifg.txt file exists in {}!'.format(infodir))
-        if not os.path.exists(bad_ifg12file):
-            raise Usage('No 12bad_ifg.txt file exists in {}!'.format(infodir))
+        if not sbovl:
+            if not os.path.exists(bad_ifg12file):
+                raise Usage('No 12bad_ifg.txt file exists in {}!'.format(infodir))
         if not os.path.exists(reffile):
             raise Usage('No 12ref.txt file exists in {}!'.format(infodir))
     except Usage as err:
@@ -438,7 +450,8 @@ def main(argv=None):
     elif wavelength <= 0.2: ## C-band
         if not n_unw_r_thre: n_unw_r_thre = 1.0
         cycle = 3 # 3*2pi/cycle for comparison png
-
+    if sbovl:
+        cycle = 75 ## for sbovl cyccle size
 
     #%% Read date and network information
     ### Get all ifgdates in ifgdir
@@ -449,11 +462,19 @@ def main(argv=None):
 
     ### Read bad_ifg11 and 12
     bad_ifg11 = io_lib.read_ifg_list(bad_ifg11file)
-    bad_ifg12 = io_lib.read_ifg_list(bad_ifg12file)
-    if os.path.exists(bad_ifg120file):
-        print('adding also ifgs listed as bad in the optional 120 step')
-        bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
-        bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
+    if not sbovl:
+        bad_ifg12 = io_lib.read_ifg_list(bad_ifg12file)
+        if os.path.exists(bad_ifg120file):
+            print('adding also ifgs listed as bad in the optional 120 step')
+            bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
+            bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
+    else:
+        bad_ifg12=[]
+        if os.path.exists(bad_ifg120file):
+            print('adding also ifgs listed as bad in the optional 120 step')
+            bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
+            bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
+    
     bad_ifg_all = list(set(bad_ifg11+bad_ifg12))
     bad_ifg_all.sort()
 
@@ -468,6 +489,59 @@ def main(argv=None):
     n_im = len(imdates)
     n_unw_thre = int(n_unw_r_thre*n_im)
 
+    ##this necesarry to apply step 15, we ignore step12 therefore coh_avg and n_unw not created.
+    if sbovl:
+        ### Calc coh avg and n_unw
+        coh_avg = np.zeros((length, width), dtype=np.float32)
+        n_coh = np.zeros((length, width), dtype=np.int16)
+        n_unw = np.zeros((length, width), dtype=np.int16)
+    
+        btemps = tools_lib.calc_temporal_baseline(ifgdates)
+        thisbtemp = max(set(btemps), key=btemps.count)
+        coh_avg_freq = np.zeros((length, width), dtype=np.float32)
+        n_coh_freq = np.zeros((length, width), dtype=np.int16)
+        ii = 0
+        for ifgd in ifgdates:
+            ccfile = os.path.join(ifgdir, ifgd, ifgd + '.sbovldiff.adf.cc')
+            if os.path.getsize(ccfile) == length * width:
+                coh = io_lib.read_img(ccfile, length, width, np.uint8)
+                coh = coh.astype(np.float32) / 255
+            else:
+                coh = io_lib.read_img(ccfile, length, width)
+                coh[np.isnan(coh)] = 0  # Fill nan with 0
+    
+            coh_avg += coh
+            n_coh += (coh != 0)
+            if btemps[ii] == thisbtemp:
+                coh_avg_freq += coh
+                n_coh_freq += (coh != 0)
+            ii = ii + 1
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm') # after nullification
+            #unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw.ori')
+            #if os.path.exists(unwfile_ori):
+            #    unwfile = unwfile_ori
+            unw = io_lib.read_img(unwfile, length, width)
+            unw[unw == 0] = np.nan # Fill 0 with nan
+            n_unw += ~np.isnan(unw) # Summing number of unnan unw
+    
+        coh_avg[n_coh == 0] = np.nan
+        n_coh[n_coh == 0] = 1  # to avoid zero division
+        coh_avg = coh_avg / n_coh
+        coh_avg[coh_avg == 0] = np.nan
+    
+        coh_avg_freq[n_coh_freq == 0] = np.nan
+        n_coh_freq[n_coh_freq == 0] = 1  # to avoid zero division
+        coh_avg_freq = coh_avg_freq / n_coh_freq
+        coh_avg_freq[coh_avg_freq == 0] = np.nan
+    
+        ### Save files
+        n_unwfile = os.path.join(resultsdir, 'n_unw')
+        np.float32(n_unw).tofile(n_unwfile)
+    
+        coh_avgfile = os.path.join(resultsdir, 'coh_avg')
+        coh_avg.tofile(coh_avgfile)
+
+    
     ### Make 13used_image.txt
     imfile = os.path.join(infodir, '13used_image.txt')
     with open(imfile, 'w') as f:
@@ -574,7 +648,10 @@ def main(argv=None):
     ref_unw = []
     nanserror = []
     for i, ifgd in enumerate(ifgdates):
-        unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+        if sbovl:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+        else:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
         f = open(unwfile, 'rb')
         f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd path, 4 means byte
 
@@ -701,7 +778,10 @@ def main(argv=None):
             countf = width*rows[0]
             countl = width*lengththis
             for i, ifgd in enumerate(ifgdates):
-                unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+                if sbovl:
+                    unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+                else:
+                    unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
                 f = open(unwfile, 'rb')
                 f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd patch, 4 means byte
 
@@ -714,7 +794,10 @@ def main(argv=None):
 
                 ### Read coh file at patch area for WLS
                 if inv_alg == 'WLS':
-                    cohfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
+                    if sbovl:
+                        cohfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.cc')
+                    else:
+                        cohfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
                     f = open(cohfile, 'rb')
 
                     if os.path.getsize(cohfile) == length*width: ## uint8 format
@@ -734,7 +817,10 @@ def main(argv=None):
                 if not nullify_noloops_use_data_after_nullification:  # should be the default way
                     nullify_nl_use_oris = False
                     for i, ifgd in enumerate(ifgdates):
-                        unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw.ori')
+                        if sbovl:
+                            unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.sbovldiff.adf.mm.ori') ##this will be never happened bcz sbovl not running step 12
+                        else:
+                            unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw.ori')
                         if os.path.exists(unwfile_ori):
                             nullify_nl_use_oris = True
                             print('(from data before the loop phase closure error nullification in step 12)')
@@ -750,10 +836,16 @@ def main(argv=None):
                         print('  identifying noloop_ifg data')
                         # step 2 for nullify_noloops: load the unw files
                         for i, ifgd in enumerate(ifgdates):
-                            unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw.ori')
+                            if sbovl:
+                                unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.sbovldiff.adf.mm.ori')
+                            else:
+                                unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw.ori')
                             if not os.path.exists(unwfile_ori):
                                 # only fixed unw data would keep the originals (ori).
-                                unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw')
+                                if sbovl:
+                                    unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.sbovldiff.adf.mm')
+                                else:
+                                    unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw')
                             f = open(unwfile_ori, 'rb')
                             f.seek(countf * 4, os.SEEK_SET)  # Seek for >=2nd patch, 4 means byte
                             unw_ori = np.fromfile(f, dtype=np.float32, count=countl).reshape((lengththis, width))  #* coef_r2m
@@ -1090,14 +1182,21 @@ def main(argv=None):
     #%% Output png images
     ### Incremental displacement
     if nopngs:
-        print('skipping generating additional png images of increments and residuals') # - as sometimes taking too long (tutorial purposes)')
+        print('skipping generating additional png images of increments and residuals - as sometimes taking too long (tutorial purposes)')
     else:
         _n_para = n_im-1 if n_para > n_im-1 else n_para
         print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
-        p = q.Pool(_n_para)
-        p.map(inc_png_wrapper, range(n_im-1))
-        p.close()
+        # p = q.Pool(_n_para)
+        # p.map(inc_png_wrapper, range(n_im-1))
+        # p.close()
+        # Create a list of (imx, sbovl) pairs for each index
+        args_list = [(imx, sbovl) for imx in range(n_im - 1)]
+    
+        with q.Pool(_n_para) as p:
+            p.starmap(inc_png_wrapper, args_list)
 
+
+        
         ### Residual for each ifg. png and txt.
         with open(restxtfile, "w") as f:
             print('# RMS of residual (mm)', file=f)
@@ -1231,7 +1330,7 @@ def nullify_noloops_from_ori(i):
     #return unwpatch  #already written to unwpatch?
 
 #%%
-def inc_png_wrapper(imx):
+def inc_png_wrapper(imx, sbovl=False):
     imd = imdates[imx]
     if imd == imdates[-1]:
         return #skip last for increment
@@ -1239,7 +1338,10 @@ def inc_png_wrapper(imx):
     ## Comparison of increment and daisy chain pair
     ifgd = '{}_{}'.format(imd, imdates[imx+1])
     incfile = os.path.join(incdir, '{}.inc'.format(ifgd))
-    unwfile = os.path.join(ifgdir, ifgd, '{}.unw'.format(ifgd))
+    if sbovl:
+        unwfile = os.path.join(ifgdir, ifgd, '{}.sbovldiff.adf.mm'.format(ifgd))
+    else:
+        unwfile = os.path.join(ifgdir, ifgd, '{}.unw'.format(ifgd))
     pngfile = os.path.join(incdir, '{}.inc_comp.png'.format(ifgd))
 
     inc = io_lib.read_img(incfile, length, width)

@@ -11,6 +11,8 @@ Inputs:
    - yyyymmdd_yyyymmdd/
      - yyyymmdd_yyyymmdd.geo.unw.tif
      - yyyymmdd_yyyymmdd.geo.cc.tif
+     - yyyymmdd_yyyymmdd.geo.sbovldiff.adf.mm.tif (if --sbovl is used)
+     - yyyymmdd_yyyymmdd.geo.sbovldiff.adf.cc.tif (if --sbovl is used)
   [- *.geo.mli.tif]
   [- *.geo.hgt.tif]
   [- *.geo.[E|N|U].tif]
@@ -21,6 +23,8 @@ Outputs in GEOCml*/ (downsampled if indicated):
  - yyyymmdd_yyyymmdd/
    - yyyymmdd_yyyymmdd.unw[.png] (float32)
    - yyyymmdd_yyyymmdd.cc (uint8)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (float32) (if --sbovl is used)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (uint8) (if --sbovl is used)
  - baselines (may be dummy)
  - EQA.dem_par
  - slc.mli.par
@@ -32,7 +36,7 @@ Outputs in GEOCml*/ (downsampled if indicated):
 =====
 Usage
 =====
-LiCSBAS02_ml_prep.py -i GEOCdir [-o GEOCmldir] [-n nlook] [--freq float] [--n_para int] [--plot_cc]
+LiCSBAS02_ml_prep.py -i GEOCdir [-o GEOCmldir] [-n nlook] [--freq float] [--n_para int] [--plot_cc] [--sbovl]
 
  -i  Path to the input GEOC dir containing stack of geotiff data
  -o  Path to the output GEOCml dir (Default: GEOCml[nlook])
@@ -41,10 +45,13 @@ LiCSBAS02_ml_prep.py -i GEOCdir [-o GEOCmldir] [-n nlook] [--freq float] [--n_pa
            (e.g., 1.27e9 for ALOS, 1.2575e9 for ALOS-2/U, 1.2365e9 for ALOS-2/{F,W})
  --n_para  Number of parallel processing (Default: # of usable CPU)
  --plot_cc Plot coherence png image
+ --sbovl multilook sbovl or bovl
  
 """
 #%% Change log
 '''
+v1.14.2a 20231030 M Nergizci, UoL
+ - sbovl flag addding
 v1.14.2a 20230921 ML
  - Dimensions check
 v1.7.5  20230803 Jack McGrath, Uni Leeds
@@ -127,6 +134,7 @@ def main(argv=None):
     outdir = []
     nlook = 1
     plot_cc = False
+    sbovl = False
     radar_freq = 5.405e9
     try:
         n_para = len(os.sched_getaffinity(0))
@@ -135,7 +143,7 @@ def main(argv=None):
 
     cmap_wrap = SCM.romaO
     cmap_cc = SCM.batlow
-    cycle = 3
+    cycle = 3 #default of ifg, (75 for sbovl)
     n_valid_thre = 0.5
     q = multi.get_context('fork')
 
@@ -143,7 +151,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:n:", ["help", "plot_cc", "freq=", "n_para="])
+            opts, args = getopt.getopt(argv[1:], "hi:o:n:", ["help", "plot_cc", "freq=", "n_para=", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -162,6 +170,8 @@ def main(argv=None):
                 n_para = int(a)
             elif o == '--plot_cc':
                 plot_cc = True
+            elif o == '--sbovl':
+                sbovl = True
 
         if not geocdir:
             raise Usage('No GEOC directory given, -d is not optional!')
@@ -277,25 +287,42 @@ def main(argv=None):
 
     ### First check if float already exist
     ifgdates2 = []
+    if sbovl:
+        sbovldates = []
     for i, ifgd in enumerate(ifgdates):
         ifgdir1 = os.path.join(outdir, ifgd)
         unwfile = os.path.join(ifgdir1, ifgd+'.unw')
         ccfile = os.path.join(ifgdir1, ifgd+'.cc')
         if not (os.path.exists(unwfile) and os.path.exists(ccfile)):
             ifgdates2.append(ifgd)
+        if sbovl:
+            sbovlmmfile = os.path.join(ifgdir1, ifgd+'.sbovldiff.adf.mm')
+            sbovlccfile = os.path.join(ifgdir1, ifgd+'.sbovldiff.adf.cc')
+            if not (os.path.exists(sbovlmmfile) and os.path.exists(sbovlccfile)):
+                sbovldates.append(ifgd)
 
     n_ifg2 = len(ifgdates2)
-    if n_ifg-n_ifg2 > 0:
-        print("  {0:3}/{1:3} unw and cc already exist. Skip".format(n_ifg-n_ifg2, n_ifg), flush=True)
+    if sbovl:
+        n_sbovl = len(sbovldates)
+    
+    # Print existing status for unw and cc files
+    if n_ifg - n_ifg2 > 0:
+        print("  {0:3}/{1:3} unw and cc already exist. Skip".format(n_ifg - n_ifg2, n_ifg), flush=True)
 
+    if sbovl:
+        # Print existing status for sbovldiff.adf.mm and sbovldiff.adf.cc files
+        if n_ifg - n_sbovl > 0:
+            print("  {0:3}/{1:3} sbovldiff.adf.mm and sbovldiff.adf.cc already exist. Skip".format(n_ifg - n_sbovl, n_ifg), flush=True)
+
+    
     width = None
     if n_ifg2 > 0:
         if n_para > n_ifg2:
             n_para = n_ifg2
 
-        # to perform size check:
+        # Perform size check
         try:
-            tif = glob.glob(os.path.join(geocdir,'*.tif'))[0]
+            tif = glob.glob(os.path.join(geocdir, '*.tif'))[0]
             geotiff = gdal.Open(tif)
             width = geotiff.RasterXSize
             length = geotiff.RasterYSize
@@ -304,25 +331,45 @@ def main(argv=None):
             print('no other-than-ifg tif is found')
             width = None
 
-        ### Create float with parallel processing
-        print('  {} parallel processing...'.format(n_para), flush=True)
+        # Parallel processing for `ifg` data
+        print('  {} parallel processing for ifg...'.format(n_para), flush=True)
         p = q.Pool(n_para)
-        rc = p.map(convert_wrapper, range(n_ifg2))
+        rc_ifg = p.starmap(convert_wrapper, [(i, False) for i in range(n_ifg2)])  # is_sbovl=False for ifg
         p.close()
 
+        # Parallel processing for `sbovl` data if flag is set
+        if sbovl:
+            print('  {} parallel processing for sbovl...'.format(n_para), flush=True)
+            p = q.Pool(n_para)
+            rc_sbovl = p.starmap(convert_wrapper, [(i, True) for i in range(n_ifg2)])  # is_sbovl=True for sbovl
+            p.close()
+
+        # Process result codes for ifg processing
         ifgd_ok = []
-        for i, _rc in enumerate(rc):
+        for i, _rc in enumerate(rc_ifg):
             if _rc == 1:
                 with open(no_unw_list, 'a') as f:
                     print('{}'.format(ifgdates2[i]), file=f)
             elif _rc == 0:
-                ifgd_ok = ifgdates2[i] ## readable tiff
+                ifgd_ok.append(ifgdates2[i])
+
+        # Process results for sbovl, if applicable
+        if sbovl:
+            sbovl_ok = []
+            for i, _rc in enumerate(rc_sbovl):
+                if _rc == 1:
+                    with open(no_unw_list, 'a') as f:
+                        print('{}'.format(ifgdates2[i]), file=f)
+                elif _rc == 0:
+                    sbovl_ok.append(ifgdates2[i])
+
 
         ### Read info
         ## If all float already exist, this will not be done, but no problem because
         ## par files should alerady exist!
         if ifgd_ok:
-            unw_tiffile = os.path.join(geocdir, ifgd_ok, ifgd_ok+'.geo.unw.tif')
+            example_date = ifgd_ok[0]
+            unw_tiffile = os.path.join(geocdir, example_date, example_date+'.geo.unw.tif')
             geotiff = gdal.Open(unw_tiffile)
             width = geotiff.RasterXSize
             length = geotiff.RasterYSize
@@ -422,76 +469,102 @@ def main(argv=None):
 
 
 #%%
-def convert_wrapper(i):
+# Wrapper function with `is_sbovl` parameter
+def convert_wrapper(i, is_sbovl=False):
     ifgd = ifgdates2[i]
-    if np.mod(i,10) == 0:
+    if np.mod(i, 10) == 0:
         print("  {0:3}/{1:3}th IFG...".format(i, len(ifgdates2)), flush=True)
 
-    unw_tiffile = os.path.join(geocdir, ifgd, ifgd+'.geo.unw.tif')
-    cc_tiffile = os.path.join(geocdir, ifgd, ifgd+'.geo.cc.tif')
+    # Initialize suffix and cycle based on type
+    if is_sbovl:
+        suffix = ['.geo.sbovldiff.adf.mm.tif', '.geo.sbovldiff.adf.cc.tif', '.sbovldiff.adf.mm', '.sbovldiff.adf.cc']
+        cycle = 75
 
-    ### Check if inputs exist
-    if not os.path.exists(unw_tiffile):
-        print ('  No {} found. Skip'.format(ifgd+'.geo.unw.tif'), flush=True)
-        return 1
-    elif not os.path.exists(cc_tiffile):
-        print ('  No {} found. Skip'.format(ifgd+'.geo.cc.tif'), flush=True)
-        return 1
+        # Check for sbovldiff files first
+        unw_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[0])
+        cc_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[1])
 
-    ### Output dir and files
+        if not os.path.exists(unw_tiffile) or not os.path.exists(cc_tiffile):
+            print(f'  No {ifgd + suffix[0]} or {ifgd + suffix[1]} found. Checking bovldiff files...', flush=True)
+
+            # Fall back to bovldiff if sbovldiff not found
+            unw_tiffile = os.path.join(geocdir, ifgd, ifgd + '.geo.bovldiff.adf.mm.tif')
+            cc_tiffile = os.path.join(geocdir, ifgd, ifgd + '.geo.bovldiff.adf.cc.tif')
+
+            if not os.path.exists(unw_tiffile) or not os.path.exists(cc_tiffile):
+                print(f'  No {ifgd + ".geo.bovldiff.adf.mm.tif"} or {ifgd + ".geo.bovldiff.adf.cc.tif"} found. Skip.', flush=True)
+                return 1
+
+    else:
+        # Default case for non-sbovl processing
+        suffix = ['.geo.unw.tif', '.geo.cc.tif', '.unw', '.cc']
+        cycle = 3
+        unw_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[0])
+        cc_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[1])
+
+        if not os.path.exists(unw_tiffile) or not os.path.exists(cc_tiffile):
+            print(f'  No {ifgd + suffix[0]} or {ifgd + suffix[1]} found. Skip.', flush=True)
+            return 1
+
+    # Output directories and files
     ifgdir1 = os.path.join(outdir, ifgd)
-    if not os.path.exists(ifgdir1): os.mkdir(ifgdir1)
-    unwfile = os.path.join(ifgdir1, ifgd+'.unw')
-    ccfile = os.path.join(ifgdir1, ifgd+'.cc')
+    if not os.path.exists(ifgdir1):
+        os.mkdir(ifgdir1)
+    unwfile = os.path.join(ifgdir1, ifgd + suffix[2])
+    ccfile = os.path.join(ifgdir1, ifgd + suffix[3])
 
-    ### Read data from geotiff
+    # Read data from GeoTIFF
     try:
         unw = gdal.Open(unw_tiffile).ReadAsArray()
-        unw[unw==0] = np.nan
-    except: ## if broken
-        print ('  {} cannot open. Skip'.format(ifgd+'.geo.unw.tif'), flush=True)
+        unw[unw == 0] = np.nan
+    except:
+        print(f'  {unw_tiffile} cannot open. Skip.', flush=True)
         shutil.rmtree(ifgdir1)
         return 1
 
     try:
         cc = gdal.Open(cc_tiffile).ReadAsArray()
         if cc.dtype == np.float32:
-            cc = cc*255 ## 0-1 -> 0-255 to output in uint8
-    except: ## if broken
-        print ('  {} cannot open. Skip'.format(ifgd+'.geo.cc.tif'), flush=True)
+            cc = cc * 255  # Convert 0-1 to 0-255 for uint8
+    except:
+        print(f'  {cc_tiffile} cannot open. Skip.', flush=True)
         shutil.rmtree(ifgdir1)
         return 1
-    
-    # check dimensions (here, width should be before multilooking):
+
+    # Dimension check
     if width:
         if (cc.shape != (length, width)) or (unw.shape != (length, width)):
-            print('pair '+ifgd+' has different dimensions. Skipping')
+            print(f'pair {ifgd} has different dimensions. Skipping.', flush=True)
             return 1
-    
-    ### Multilook
-    if nlook != 1:
-        unw = tools_lib.multilook(unw, nlook, nlook, n_valid_thre)
-        cc = cc.astype(np.float32)
-        cc[cc==0] = np.nan
-        cc = tools_lib.multilook(cc, nlook, nlook, n_valid_thre)
 
-    ### Output float
+    # Multilook processing if needed
+    if nlook != 1:
+        cc = cc.astype(np.float32)
+        cc[cc == 0] = np.nan  # Treat zero coherence as missing data (NaN)
+
+        # Apply weighted multilook to `unw` using coherence as weights
+        unw = tools_lib.multilook_weighted(unw, cc, nlook, nlook, n_valid_thre)
+
+        # Apply weighted multilook to `cc`, using itself as the coherence weight
+        cc = tools_lib.multilook_weighted(cc, cc, nlook, nlook, n_valid_thre)
+
+    # Save float outputs
     unw.tofile(unwfile)
-    cc = cc.astype(np.uint8) ##nan->0, max255, auto-floored
+    cc = cc.astype(np.uint8)  # Convert NaNs to 0, auto-floor to max 255
     cc.tofile(ccfile)
 
-    ### Make png
+    # Generate png images
     if plot_cc:
-        ccpngfile = os.path.join(ifgdir1, ifgd+'.cc.png')
+        ccpngfile = os.path.join(ifgdir1, ifgd + suffix[3] + '.png')
         cc = cc.astype(np.float32)
         cc[np.where(np.isnan(unw))] = np.nan
-        plot_lib.make_im_png(cc / 255, ccpngfile, cmap_cc, ifgd+'.cc', vmin=0.03, vmax=1, cbar=True, logscale=True)
-    unwpngfile = os.path.join(ifgdir1, ifgd+'.unw.png')
-    plot_lib.make_im_png(np.angle(np.exp(1j*unw/cycle)*cycle), unwpngfile, cmap_wrap, ifgd+'.unw', vmin=-np.pi, vmax=np.pi, cbar=False)
+        plot_lib.make_im_png(cc / 255, ccpngfile, cmap_cc, ifgd + suffix[3], vmin=0.03, vmax=1, cbar=True, logscale=True)
+
+    unwpngfile = os.path.join(ifgdir1, ifgd + suffix[2] + '.png')
+    plot_lib.make_im_png(np.angle(np.exp(1j * unw / cycle) * cycle), unwpngfile, cmap_wrap, ifgd + suffix[2], vmin=-np.pi, vmax=np.pi, cbar=False)
 
     return 0
 
-
-#%% main
+# Run main
 if __name__ == "__main__":
     sys.exit(main())
