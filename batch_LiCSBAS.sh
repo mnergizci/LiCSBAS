@@ -59,6 +59,7 @@ p02to05_filter="" # gold, gauss or adf. Default: 'gold'
 p02to05_thres="" # default: 0.35. Spatial consistence of the interferogram. Recommended to keep this value. If too much is masked, may try getting close to 0 (although, this would introduce some unw errors)
 p02to05_cliparea_geo=$p05_clip_range_geo # setting the clip range, e.g. 130.11/131.12/34.34/34.6 (in deg)
 p02to05_n_para=$n_para
+p02to05_op_GEOCdir="" # by default, if none, it will use GEOC directory
 
 ### Frequently used options. If blank, use default. ###
 p01_start_date=""	# default: 20141001
