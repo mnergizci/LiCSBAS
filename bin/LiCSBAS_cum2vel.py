@@ -23,7 +23,7 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
      Note: x1/y1 range 0 to width-1, while x2/y2 range 1 to width
      0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  --ref_geo  Reference area in geographical coordinates.
- --vstd  Calculate vstd (Default: No)
+ --vstd  Calculate vstd (+ stc and RMSE) (Default: No)
  --sin   Add sin (annual) funcsion to linear model (Default: No)
          *.amp and *.dt (time difference wrt Jan 1) are output
  --mask  Path to mask file for ref phase calculation (Default: No mask)
@@ -35,6 +35,8 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
 """
 #%% Change log
 '''
+2024-12 ML, ULeeds:
+ - added calc of RMSE
 2024-11 ML, ULeeds:
  - added also offsets 
 2024-10-22 Milan Lazecky, ULeeds
@@ -368,6 +370,18 @@ def main(argv=None):
         modh5.create_dataset('cum_model', data=model, compression=compress)
         modh5.close()
 
+    if modelflag:
+        try:
+            # let's also calculate RMSE using the model values:
+            resid = cum_tmp - model
+            rmse = np.zeros((length, width), dtype=np.float32) * np.nan
+            rmse = np.sqrt(np.nanmean(resid**2, axis=0))
+            rmsefile = outfile+'.rmse'+suffix_mask
+            rmse.tofile(rmsefile)
+            del resid
+        except:
+            print('Some error creating RMSE')
+
     ### vstd
     if vstdflag:
         vstdfile = outfile+'.vstd'+suffix_mask
@@ -421,6 +435,11 @@ def main(argv=None):
             cmax = np.nanpercentile(stc, 99)
             plot_lib.make_im_png(stc, stcfile + '.png', cmap_stc, title, cmin, cmax)
 
+        if modelflag:
+            title = 'RMSE of applied model (mm/year)'
+            cmin = np.nanpercentile(rmse, 1)
+            cmax = np.nanpercentile(rmse, 99)
+            plot_lib.make_im_png(rmse, rmsefile + '.png', cmap_vstd, title, cmin, cmax)
 
     #%% Finish
     elapsed_time = time.time()-start
