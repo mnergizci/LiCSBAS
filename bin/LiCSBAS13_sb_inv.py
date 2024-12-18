@@ -889,6 +889,7 @@ def main(argv=None):
             ### Calc variance from coherence for WLS
             if inv_alg == 'WLS':
                 cohpatch = cohpatch.reshape((n_ifg, n_pt_all)).transpose() #(n_pt_all, n_ifg)
+                cohpatch[np.isnan(cohpatch)] = 0.0 # there still might be nans that would otherwise propagate - e.g. missing bursts...
                 cohpatch[cohpatch<0.01] = 0.01 ## because negative value possible due to geocode
                 cohpatch[cohpatch>0.99] = 0.99 ## because >1 possible due to geocode
                 varpatch = (1-cohpatch**2)/(2*cohpatch**2)
