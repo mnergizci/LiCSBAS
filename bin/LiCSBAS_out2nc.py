@@ -546,7 +546,7 @@ def import_tifs2cube_simple(tifspath, cube, searchstring='/*geo.mli.tif', varnam
         try:
             data = rioxarray.open_rasterio(tif)
             data = data.squeeze('band')
-            data = data.drop('band')
+            data = data.drop_vars('band')
             data = data.rename({'x':'lon', 'y':'lat'})
         except:
             print('ERROR loading tif for epoch '+epoch)
