@@ -30,7 +30,7 @@ Output files
 [- GACOS/] (if --get_gacos is used and GACOS data available on COMET-LiCS web)
   [- yyyymmdd.sltd.geo.tif]
 [- GEOC.MLI/] (if --get_mli is used)
-  [- yyyymmdd.mli.geo.tif]
+  [- yyyymmdd.geo.mli.tif]
 =====
 Usage
 =====
@@ -476,8 +476,8 @@ def main(argv=None):
             print('Download MLI ({} parallel)...'.format(n_para), flush=True)
             ### Download
             args = [(i, imd, n_im_dl,
-                     os.path.join(url, imd, '{}.mli.geo.tif'.format(imd)),
-                     os.path.join(mlidir, '{}.mli.geo.tif'.format(imd))
+                     os.path.join(url, imd, '{}.geo.mli.tif'.format(imd)),
+                     os.path.join(mlidir, '{}.geo.mli.tif'.format(imd))
                      ) for i, imd in enumerate(imdates_dl)]
 
             p = q.Pool(n_para)
