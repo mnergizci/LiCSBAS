@@ -13,7 +13,7 @@ import argparse
 import time
 import sys
 from matplotlib import cm
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import glob
 from osgeo import gdal
 import h5py as h5

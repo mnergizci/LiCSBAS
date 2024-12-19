@@ -101,7 +101,7 @@ os.environ['QT_QPA_PLATFORM']='offscreen'
 import sys
 import time
 import numpy as np
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_plot_lib as plot_lib
 
@@ -165,7 +165,7 @@ def main(argv=None):
     auto_adjust = True
     n_gap_use_merged = False
     sbovl = False
-    cmap_vel = SCM.roma.reversed()
+    cmap_vel = cmc.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
     

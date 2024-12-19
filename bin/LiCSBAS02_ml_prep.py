@@ -103,7 +103,7 @@ import glob
 import numpy as np
 import subprocess as subp
 import multiprocessing as multi
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc #SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
@@ -141,8 +141,8 @@ def main(argv=None):
     except:
         n_para = multi.cpu_count()
 
-    cmap_wrap = SCM.romaO
-    cmap_cc = SCM.batlow
+    cmap_wrap = cmc.romaO #SCM.romaO
+    cmap_cc = cmc.batlow #SCM.batlow
     cycle = 3 #default of ifg, (75 for sbovl)
     n_valid_thre = 0.5
     q = multi.get_context('fork')

@@ -112,7 +112,7 @@ from matplotlib.widgets import Slider, RadioButtons, RectangleSelector, CheckBut
 import h5py as h5
 import datetime as dt
 import statsmodels.api as sm
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import warnings
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     ts_pngfile = []
     vmin = None
     vmax = None
-    cmap_name = "SCM.roma_r"
+    cmap_name = "cmc.roma_r"
     auto_crange = 99.0
 
     #%% Read options
@@ -661,7 +661,7 @@ if __name__ == "__main__":
             cmap2 = 'viridis_r'
             if val_ind in ['coh_avg', 'n_unw', 'mask', 'maxTlen']:
                 cmap2 = 'viridis'
-            elif val_ind=='mli': cmap2 = SCM.grayC.reversed()
+            elif val_ind=='mli': cmap2 = cmc.grayC.reversed()
             elif val_ind=='hgt': cmap2 = 'terrain'
             cax.set_cmap(cmap2)
             cax.set_clim(cmin_ind, cmax_ind)

@@ -67,7 +67,7 @@ import time
 import numpy as np
 import datetime as dt
 import h5py as h5
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_tools_lib as tools_lib
@@ -110,11 +110,11 @@ def main(argv=None):
     exportmodelfile = []
     modelflag = False
     minmag = 6.5
-    cmap = SCM.roma.reversed()
+    cmap = cmc.roma.reversed()
     cmap_vstd = 'viridis_r'
     cmap_stc = 'viridis_r'
     cmap_amp = 'viridis_r'
-    cmap_dt = SCM.romaO.reversed()
+    cmap_dt = cmc.romaO.reversed()
     compress = 'gzip'
 
     #%% Read options
