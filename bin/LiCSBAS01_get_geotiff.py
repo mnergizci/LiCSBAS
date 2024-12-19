@@ -443,8 +443,8 @@ def main(argv=None):
         print('  Searching available epochs ({} parallel)...'.format(n_para), flush=True)
 
         args = [(i, len(_imdates),
-                 os.path.join(url, imd, '{}.mli.geo.tif'.format(imd)),
-                 os.path.join(mlidir, imd + '.mli.geo.tif')
+                 os.path.join(url, imd, '{}.geo.mli.tif'.format(imd)),
+                 os.path.join(mlidir, imd + '.geo.mli.tif')
                  ) for i, imd in enumerate(_imdates)]
 
         # will use the same for gacos
