@@ -337,6 +337,7 @@ def main(argv=None):
                 plot_lib.make_im_png(dvar, pngfile, cmap, dvarname)
         if modelflag:
             model = inv_lib.get_model_cum(G, params_sorted)
+            degfree=len(params_sorted)
         #
         del G
     else:
@@ -345,6 +346,7 @@ def main(argv=None):
             vconst[~bool_allnan], vel[~bool_allnan], G = inv_lib.calc_vel(cum_tmp_resh, dt_cum, return_G = True)
             if modelflag:
                 model = inv_lib.get_model_cum(G, [vconst, vel])
+                degfree = 2
             vel.tofile(velfile)
             vconst.tofile(vconstfile)
         else: ## Linear+sin function
@@ -359,6 +361,7 @@ def main(argv=None):
                 vconst[~bool_allnan], vel[~bool_allnan], coef_s[~bool_allnan], coef_c[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan], G = inv_lib.calc_velsin(
                     cum_tmp_resh, dt_cum, imdates[0], return_G = True)
                 model = inv_lib.get_model_cum(G, [vconst, vel, coef_s, coef_c])
+                degfree = 4
             else:
                 vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp_resh, dt_cum, imdates[0])
             vel.tofile(velfile)
@@ -375,7 +378,10 @@ def main(argv=None):
             # let's also calculate RMSE using the model values:
             resid = cum_tmp - model
             rmse = np.zeros((length, width), dtype=np.float32) * np.nan
-            rmse = np.sqrt(np.nanmean(resid**2, axis=0))
+            #rmse = np.sqrt(np.nanmean(resid**2, axis=0))  # simple without degs of freedom
+            count = np.sum(~np.isnan(resid), axis=0, dtype=np.float32)
+            count[count == 0] = np.nan
+            rmse = np.sqrt(np.nansum(resid ** 2, axis=0) / (count - degfree))
             rmsefile = outfile+'.rmse'+suffix_mask
             rmse.tofile(rmsefile)
             del resid
@@ -436,10 +442,13 @@ def main(argv=None):
             plot_lib.make_im_png(stc, stcfile + '.png', cmap_stc, title, cmin, cmax)
 
         if modelflag:
-            title = 'RMSE of applied model (mm/year)'
+            title = 'RMSE of applied model (mm)'
             cmin = np.nanpercentile(rmse, 1)
             cmax = np.nanpercentile(rmse, 99)
-            plot_lib.make_im_png(rmse, rmsefile + '.png', cmap_vstd, title, cmin, cmax)
+            try:
+                plot_lib.make_im_png(rmse, rmsefile + '.png', cmap_stc, title, cmin, cmax)
+            except:
+                print('error generating rmse preview')
 
     #%% Finish
     elapsed_time = time.time()-start
