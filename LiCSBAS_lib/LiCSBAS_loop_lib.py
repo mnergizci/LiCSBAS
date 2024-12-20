@@ -124,8 +124,10 @@ def identify_bad_ifg(bad_ifg_cand, good_ifg):
 
 #%%
 def make_loop_png(unw12, unw23, unw13, loop_ph, png, titles4, cycle):
-    cmap_wrap = tools_lib.get_cmap('SCM.romaO')
-    cmap_loop = tools_lib.get_cmap('SCM.vik')
+    #cmap_wrap = tools_lib.get_cmap('SCM.romaO')
+    #cmap_loop = tools_lib.get_cmap('SCM.vik')
+    cmap_wrap = tools_lib.get_cmap('cmc.romaO')
+    cmap_loop = tools_lib.get_cmap('cmc.vik')
 
     ### Settings
     plt.rcParams['axes.titlesize'] = 10

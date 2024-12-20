@@ -129,7 +129,7 @@ import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_plot_lib as plot_lib
 import xarray as xr
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 
 class Usage(Exception):
     """Usage context manager"""
@@ -1358,7 +1358,7 @@ def nullify_unw(ifgd, mask):
         unwpngfile = unwfile + '.png'
         if not os.path.exists(unwpngfile):
             # use LiCSBAS preview generator
-            cmap_wrap = SCM.romaO
+            cmap_wrap = cmc.romaO
             cycle = 3
             plot_lib.make_im_png(np.angle(np.exp(1j * unw / cycle) * cycle), unwpngfile, cmap_wrap,
                                  unwfile, vmin=-np.pi, vmax=np.pi, cbar=False)

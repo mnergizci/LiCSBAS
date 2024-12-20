@@ -88,7 +88,7 @@ import glob
 import numpy as np
 from osgeo import gdal
 import multiprocessing as multi
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc #SCM
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
@@ -185,7 +185,7 @@ def main(argv=None):
         n_para = multi.cpu_count()
 
     q = multi.get_context('fork')
-    cmap_wrap = SCM.romaO
+    cmap_wrap = cmc.romaO #SCM.romaO
 
     #%% Read options
     try:

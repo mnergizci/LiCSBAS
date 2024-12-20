@@ -134,7 +134,7 @@ import datetime as dt
 import h5py as h5
 from astropy.convolution import Gaussian2DKernel, convolve_fft
 import multiprocessing as multi
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_inv_lib as inv_lib
@@ -178,7 +178,7 @@ def main(argv=None):
     inputresidflag = False
     interpolateflag = False
     gpu = False
-
+    sbovl = True
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -195,9 +195,9 @@ def main(argv=None):
 
     cumname = 'cum.h5'
 
-    cmap_vel = SCM.roma.reversed()
+    cmap_vel = cmc.roma.reversed()
     cmap_noise_r = 'viridis_r'
-    cmap_wrap = SCM.romaO
+    cmap_wrap = cmc.romaO
     q = multi.get_context('fork')
     compress = 'gzip'
     modelfile = ''
@@ -297,7 +297,10 @@ def main(argv=None):
     if wavelength > 0.2: ## L-band
         cycle = 1.5 # 2pi/cycle for comparison png
     elif wavelength <= 0.2: ## C-band
-        cycle = 3 # 3*2pi/cycle for comparison png
+        if not sbovl:
+            cycle = 3 # 3*2pi/cycle for comparison png
+        else:
+            cycle = 3
 
     filtincdir = os.path.join(tsadir, '16filt_increment')
     if os.path.exists(filtincdir): shutil.rmtree(filtincdir)

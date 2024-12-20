@@ -18,6 +18,8 @@ Output files
      - yyyymmdd_yyyymmdd.geo.cc.tif
     [- yyyymmdd_yyyymmdd.geo.diff_pha.tif] (if --get_pha is used)
     [- yyyymmdd_yyyymmdd.geo.diff_unfiltered_pha.tif] (if --get_pha is used)
+    [- yyyymmdd_yyyymmdd.geo.s(bovldiff).adf.mm.tif] (if --sbovl is used)
+    [- yyyymmdd_yyyymmdd.geo.s(bovldiff).adf.cc.tif] (if --sbovl is used)
   [- *.geo.mli.tif (using just one first epoch)]
    - *.geo.E.tif
    - *.geo.N.tif
@@ -28,7 +30,7 @@ Output files
 [- GACOS/] (if --get_gacos is used and GACOS data available on COMET-LiCS web)
   [- yyyymmdd.sltd.geo.tif]
 [- GEOC.MLI/] (if --get_mli is used)
-  [- yyyymmdd.mli.geo.tif]
+  [- yyyymmdd.geo.mli.tif]
 =====
 Usage
 =====
@@ -41,6 +43,7 @@ LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] 
  --get_gacos  Download GACOS data as well if available
  --get_mli  Download MLI (multilooked intensity) data as well if available
  --n_para  Number of parallel downloading (Default: 4)
+ --sbovl Download sbovl or bovl from portal to process!
  --minbtemp  Minimum Btemp in days (Default: 0 = not use)
  --maxbtemp  Maximum Btemp in days (Default: 0 = not use)
 """
@@ -117,6 +120,7 @@ def main(argv=None):
     get_gacos = False
     get_mli = False
     get_pha = False
+    sbovl = False
     n_para = 4
     minbtemp = 0
     maxbtemp = 0 # 0 means not use
@@ -126,7 +130,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hf:s:e:", ["help", "get_gacos", "get_mli", "get_pha", "n_para=", "minbtemp=", "maxbtemp="])
+            opts, args = getopt.getopt(argv[1:], "hf:s:e:", ["help", "get_gacos", "get_mli", "get_pha", "n_para=", "minbtemp=", "maxbtemp=", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -147,6 +151,8 @@ def main(argv=None):
                 get_pha = True
             elif o == '--n_para':
                 n_para = int(a)
+            elif o == '--sbovl':
+                sbovl= True
             elif o == '--minbtemp':
                 minbtemp = float(a)
             elif o == '--maxbtemp':
@@ -377,6 +383,8 @@ def main(argv=None):
     exts = ['unw', 'cc']
     if get_pha:
         exts = exts + ['diff_pha', 'diff_unfiltered_pha'] # some ifgs do not have unfiltered version, so getting both
+    if sbovl:
+        exts = exts + ['bovldiff.adf.mm', 'bovldiff.adf.cc','sbovldiff.adf.mm', 'sbovldiff.adf.cc']
     for ext in exts:
         print(ext + ' data:')
         args = [(i, n_ifg,
@@ -435,8 +443,8 @@ def main(argv=None):
         print('  Searching available epochs ({} parallel)...'.format(n_para), flush=True)
 
         args = [(i, len(_imdates),
-                 os.path.join(url, imd, '{}.mli.geo.tif'.format(imd)),
-                 os.path.join(mlidir, imd + '.mli.geo.tif')
+                 os.path.join(url, imd, '{}.geo.mli.tif'.format(imd)),
+                 os.path.join(mlidir, imd + '.geo.mli.tif')
                  ) for i, imd in enumerate(_imdates)]
 
         # will use the same for gacos
@@ -468,8 +476,8 @@ def main(argv=None):
             print('Download MLI ({} parallel)...'.format(n_para), flush=True)
             ### Download
             args = [(i, imd, n_im_dl,
-                     os.path.join(url, imd, '{}.mli.geo.tif'.format(imd)),
-                     os.path.join(mlidir, '{}.mli.geo.tif'.format(imd))
+                     os.path.join(url, imd, '{}.geo.mli.tif'.format(imd)),
+                     os.path.join(mlidir, '{}.geo.mli.tif'.format(imd))
                      ) for i, imd in enumerate(imdates_dl)]
 
             p = q.Pool(n_para)

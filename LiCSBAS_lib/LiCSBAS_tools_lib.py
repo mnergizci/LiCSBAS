@@ -8,6 +8,8 @@ Python3 library of time series analysis tools for LiCSBAS.
 =========
 Changelog
 =========
+2024-12-13 Muhammet Nergizci, ULeeds
+ - Add weights to multilooking
 2024-10-22 Milan Lazecky, ULeeds
  - Add function to get offsets regarding earthquakes (used by optional LiCSBAS_cum2vel)
 v1.8 20210309 Yu Morishita, GSI
@@ -422,7 +424,7 @@ def get_cmap(cmap_name, cmapN=256):
     Return cmap (LinearSegmentedColormap).
     cmap_name can be:
         - Matplotlib predefined name (e.g. viridis)
-        - Scientific colour maps (e.g. SCM.roma)
+        - Scientific colour maps aka cmcrameri (e.g. SCM.roma or cmc.roma)
         - Generic Mapping Tools (e.g. GMT.polar)
         - cmocean (e.g. cmocean.phase)
         - colorcet (e.g. colorcet.CET_C1)
@@ -437,7 +439,10 @@ def get_cmap(cmap_name, cmapN=256):
         _cmap = cm_isce()
         flag = 1
     elif cmap_name.startswith('SCM'):
-        import cmcrameri.cm as CMAP
+        import cmcrameri.cm as CMAP  # or try the original 'import SCM as CMAP'
+        flag = 2
+    elif cmap_name.startswith('cmc'):
+        import cmcrameri.cm as CMAP  # or try the original 'import SCM as CMAP'
         flag = 2
     elif cmap_name.startswith('GMT'):
         import GMT as CMAP
@@ -723,6 +728,47 @@ def multilook(array, nlook_r, nlook_c, n_valid_thre=0.5):
 
     return array_ml
 
+def multilook_weighted(array, coherence, nlook_r, nlook_c, n_valid_thre=0.5, coh_thre=0.75):
+    """
+    Apply multilooking to the array, with weights based on coherence.
+    Low-coherence pixels are ignored if they fall below the coherence threshold (coh_thre).
+    
+    Parameters:
+    - array (ndarray): Input data array with `nan` for nodata.
+    - coherence (ndarray): Coherence array with the same shape as `array`.
+    - nlook_r (int): Number of rows to average in multilooking.
+    - nlook_c (int): Number of columns to average in multilooking.
+    - n_valid_thre (float): Minimum valid data fraction to keep pixel (default: 0.5).
+    - coh_thre (float): Minimum coherence threshold to include pixel in multilooking.
+
+    Returns:
+    - array_ml (ndarray): Multilooked array.
+    """
+    length, width = array.shape
+    length_ml = int(np.floor(length / nlook_r))
+    width_ml = int(np.floor(width / nlook_c))
+
+    # Reshape for block processing
+    array_reshape = array[:length_ml * nlook_r, :width_ml * nlook_c].reshape(length_ml, nlook_r, width_ml, nlook_c)
+    coherence_reshape = coherence[:length_ml * nlook_r, :width_ml * nlook_c].reshape(length_ml, nlook_r, width_ml, nlook_c)
+
+    # Mask low-coherence pixels
+    valid_mask = coherence_reshape >= coh_thre
+    array_reshape[~valid_mask] = np.nan
+
+    # Calculate weighted mean based on coherence
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        weighted_array = array_reshape * coherence_reshape
+        sum_weights = np.nansum(coherence_reshape, axis=(1, 3))
+        array_ml = np.nansum(weighted_array, axis=(1, 3)) / sum_weights
+
+    # Apply validity threshold
+    n_valid = np.sum(~np.isnan(array_reshape), axis=(1, 3))
+    bool_invalid = n_valid < n_valid_thre * nlook_r * nlook_c
+    array_ml[bool_invalid] = np.nan
+
+    return array_ml
 
 #%%
 def read_point(point_str, width, length):

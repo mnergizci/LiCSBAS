@@ -23,6 +23,9 @@ Inputs in GEOCml*/:
    - yyyymmdd_yyyymmdd.cc
    - yyyymmdd_yyyymmdd.conncomp
    - yyyymmdd_yyyymmdd.unw
+   
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (if --sbovl is used)
 
 Outputs in TS_GEOCml*/ :
  - info/
@@ -41,6 +44,8 @@ LiCSBAS120_choose_reference.py [-h] [-f FRAME_DIR] [-g UNW_DIR] [-t TS_DIR] [-w 
 
 #%% Change log
 '''
+20241030 M Nergizci
+- add sbovl flag
 20240928 ML
  - check for existence of conn. components, avoiding if not 
 '''
@@ -56,7 +61,7 @@ import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
 from matplotlib import cm
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 
 
 def block_sum(array, k):
@@ -94,6 +99,7 @@ def init_args():
     parser.add_argument('--keep_node_cuts', default=False, action='store_true', help="do not remove node cuts from largest network component")
     parser.add_argument('--skip_node_cuts', default=False, action='store_true', help="skip node cut searching, used when the program gets stuck")
     parser.add_argument('--ignore_comp', default=False, action='store_true', help="do not use connected components for choosing reference")
+    parser.add_argument('--sbovl', default=False, action='store_true', help="run the code for only sbovl referencing point")
     args = parser.parse_args()
 
 
@@ -101,7 +107,7 @@ def start():
     global start_time
     # intialise and print info on screen
     start_time = time.time()
-    ver="1.0"; date=20221020; author="Qi Ou"
+    ver="1.0"; date=20221020; author="Dr. Qi Ou"
     print("\n{} ver{} {} {}".format(os.path.basename(sys.argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(sys.argv[0]), ' '.join(sys.argv[1:])), flush=True)
 
@@ -129,7 +135,8 @@ def set_input_output():
 
     ### Define output dir
     no_ref_dir = os.path.join(tsadir, '120no_ref')
-    if not os.path.exists(no_ref_dir): os.mkdir(no_ref_dir)
+    if not os.path.exists(no_ref_dir): 
+        os.mkdir(no_ref_dir)
     netdir = os.path.join(tsadir, 'network')
     noref_ifgfile = os.path.join(infodir, '120bad_ifg.txt')
     reference_png = os.path.join(infodir, "120_reference.png")
@@ -155,6 +162,7 @@ def decide_reference_window_size():
     ### Get resolution
     dempar = os.path.join(ccdir, 'EQA.dem_par')
     lattitude_resolution = float(io_lib.get_param_par(dempar, 'post_lat'))
+    print(f'lat_res={lattitude_resolution}')
     window_size = int(abs(args.win / 110 / lattitude_resolution) + 0.5)   # 110 km per degree latitude
     print("\nWindow size : ", window_size)
 
@@ -187,13 +195,19 @@ def calc_block_sum_of_unw_coh_component_size():
     ### Accumulate through network (1)unw pixel counts, (2) coherence and (3) size of connected components
     for ifgd in ifgdates:
         # turn ifg into ones and zeros for non-nan and nan values
-        unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+        if args.sbovl:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+        else:    
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
         unw = io_lib.read_img(unwfile, length, width)
         unw[unw == 0] = np.nan # Fill 0 with nan
         n_unw += ~np.isnan(unw) # Summing number of unnan unw
 
         # coherence values from 0 to 1
-        ccfile = os.path.join(ccdir, ifgd, ifgd + '.cc')
+        if args.sbovl:
+            ccfile = os.path.join(ccdir, ifgd, ifgd + '.sbovldiff.adf.cc')
+        else:
+            ccfile = os.path.join(ccdir, ifgd, ifgd + '.cc')
         coh = io_lib.read_img(ccfile, length, width, np.uint8)
         coh = coh.astype(np.float32) / 255  # keep 0 as 0 which represent nan values
         n_coh += coh
@@ -227,10 +241,10 @@ def calc_height_std():
     hgt = io_lib.read_img(hgtfile, length, width)
     block_mean_hgt = block_sum(hgt, window_size)/(window_size**2)
     repeat_block_mean_hgt = np.repeat(block_mean_hgt, window_size, axis=1)
-    broadcast_mean_hgt = np.repeat(repeat_block_mean_hgt, window_size, axis=0)
-    hgt_demean = hgt - broadcast_mean_hgt[:hgt.shape[0], :hgt.shape[1]]
+    broadcast_mean_hgt = np.repeat(repeat_block_mean_hgt, window_size, axis=0) #size getting lengt, width)
+    hgt_demean = hgt - broadcast_mean_hgt[:hgt.shape[0], :hgt.shape[1]] ##here is for to be sure broadcast is same size with original hgt..
     hgt_demean_square = hgt_demean ** 2
-    block_rms_hgt = np.sqrt( block_sum(hgt_demean_square, window_size) / (window_size ** 2) )
+    block_rms_hgt = np.sqrt( block_sum(hgt_demean_square, window_size) / (window_size ** 2) ) #size getting again lengt/ws, width/ws)
 
 
 def clip_normalise_combine_indices():
@@ -241,14 +255,15 @@ def clip_normalise_combine_indices():
     if not args.ignore_comp:
         block_con[block_con == 0] = np.nan
     block_rms_hgt[block_rms_hgt == 0] = np.nan
-
+    # print(np.nanmin(block_coh), np.nanmin(block_unw),np.nanmin(block_rms_hgt))
     ### clipping values at zigzagy edges which are the lowest for block sums and highest for std
     block_unw[block_unw < np.nanpercentile(block_unw, 5)] = np.nanpercentile(block_unw, 5)
     block_coh[block_coh < np.nanpercentile(block_coh, 5)] = np.nanpercentile(block_coh, 5)
     if not args.ignore_comp:
         block_con[block_con < np.nanpercentile(block_con, 5)] = np.nanpercentile(block_con, 5)
     block_rms_hgt[block_rms_hgt > np.nanpercentile(block_rms_hgt, 90)] = np.nanpercentile(block_rms_hgt, 90)
-
+    # print(np.nanmin(block_coh), np.nanmin(block_unw),np.nanmin(block_rms_hgt))
+    
     ### normalise with nan minmax
     block_unw = (block_unw - np.nanmin(block_unw)) / (np.nanmax(block_unw) - np.nanmin(block_unw))
     block_coh = (block_coh - np.nanmin(block_coh)) / (np.nanmax(block_coh) - np.nanmin(block_coh))
@@ -282,11 +297,16 @@ def closest_to_ref_center():
 
 def plot_ref_proxies():
     ### load example unw for plotting in block resolution
-    unwfile = os.path.join(ifgdir, ifgd, ifgd + '.unw')
+    if args.sbovl:
+        unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0] + '.sbovldiff.adf.mm')
+    else:
+        unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0] + '.unw')
+    
     unw = io_lib.read_img(unwfile, length, width)
+    unw[unw == 0] = np.nan
     unw_example = block_sum(unw, window_size)
     unw_example[unw_example == 0] = np.nan
-
+    
     # plot figure
     fig, ax = plt.subplots(2, 3, sharey='all', sharex='all')
     im_unw = ax[0, 0].imshow(block_unw, vmin=0, vmax=1)
@@ -294,7 +314,7 @@ def plot_ref_proxies():
     if not args.ignore_comp:
         im_con = ax[1, 0].imshow(block_con, vmin=0, vmax=1)
     im_hgt = ax[1, 1].imshow(block_rms_hgt, vmin=0, vmax=1)
-    im_proxy = ax[0, 2].imshow(block_proxy)
+    im_proxy = ax[0, 2].imshow(block_proxy, vmin=0, vmax=1)
     im_example = ax[1, 2].imshow(unw_example, cmap=cm.RdBu)
     plt.colorbar(im_unw, ax=ax, orientation='horizontal')
 
@@ -325,7 +345,10 @@ def save_reference_to_file():
     print('Selected ref in full resolution: {}:{}/{}:{}'.format(refx1, refx2, refy1, refy2), flush=True)
 
     ### Save ref
-    refsfile = os.path.join(infodir, '120ref.txt')
+    if not args.sbovl:
+        refsfile = os.path.join(infodir, '120ref.txt')
+    else:
+        refsfile = os.path.join(infodir, '12ref.txt')
     with open(refsfile, 'w') as f:
         print('{}:{}/{}:{}'.format(refx1, refx2, refy1, refy2), file=f)
 
@@ -338,9 +361,14 @@ def discard_ifg_with_all_nans_at_ref():
     noref_ifg = []
     for ifgd in ifgdates:
         # add about ori:
-        unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw.ori')
-        if not os.path.exists(unwfile):
-            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+        if args.sbovl:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm.ori')
+            if not os.path.exists(unwfile):
+                unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+        else:
+            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw.ori')
+            if not os.path.exists(unwfile):
+                unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
         unw_data = io_lib.read_img(unwfile, length, width)
         unw_ref = unw_data[refy1:refy2, refx1:refx2]
 
@@ -350,7 +378,7 @@ def discard_ifg_with_all_nans_at_ref():
 
             # plot no_ref_ifg with reference window to no_ref folder
             pngfile = os.path.join(no_ref_dir, ifgd + '.png')
-            plot_lib.make_im_png(unw_data, pngfile, SCM.roma.reversed(), ifgd,
+            plot_lib.make_im_png(unw_data, pngfile, cmc.roma.reversed(), ifgd,
                                  vmin=np.nanpercentile(unw_data, 1), vmax=np.nanpercentile(unw_data, 99),
                                  ref_window=[refx1, refx2, refy1, refy2])
 
@@ -361,7 +389,7 @@ def discard_ifg_with_all_nans_at_ref():
     # save list of no_ref_ifg to a text file in info directory
 
     print("{} ifgs are discarded due to all nan values in the reference window...".format(len(noref_ifg)))
-    with open(noref_ifgfile, 'w') as f:
+    with open(noref_ifgfile, 'a') as f:
         for i in noref_ifg:
             print('{}'.format(i), file=f)
             print('{}'.format(i))
