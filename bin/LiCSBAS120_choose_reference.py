@@ -61,7 +61,7 @@ import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
 from matplotlib import cm
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 
 
 def block_sum(array, k):
@@ -378,7 +378,7 @@ def discard_ifg_with_all_nans_at_ref():
 
             # plot no_ref_ifg with reference window to no_ref folder
             pngfile = os.path.join(no_ref_dir, ifgd + '.png')
-            plot_lib.make_im_png(unw_data, pngfile, SCM.roma.reversed(), ifgd,
+            plot_lib.make_im_png(unw_data, pngfile, cmc.roma.reversed(), ifgd,
                                  vmin=np.nanpercentile(unw_data, 1), vmax=np.nanpercentile(unw_data, 99),
                                  ref_window=[refx1, refx2, refy1, refy2])
 

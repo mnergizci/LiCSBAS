@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     #%% Set default
     infile = []
-    cmap_name = "SCM.roma_r"
+    cmap_name = "cmc.roma_r"
     outfile = []
     nodata = np.nan
     cmin = None

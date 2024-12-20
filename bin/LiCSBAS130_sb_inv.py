@@ -120,7 +120,7 @@ import h5py as h5
 import numpy as np
 import datetime as dt
 import multiprocessing as multi
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_tools_lib as tools_lib
@@ -190,10 +190,10 @@ def main():
     # Because np.linalg.lstsq use full CPU but not much faster than 1CPU.
     # Instead parallelize by multiprocessing
 
-    cmap_vel = SCM.roma.reversed()
+    cmap_vel = cmc.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
-    cmap_wrap = SCM.romaO
+    cmap_wrap = cmc.romaO
     q = multi.get_context('fork')
     compress = 'gzip'
 

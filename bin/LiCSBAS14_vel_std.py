@@ -52,7 +52,7 @@ import time
 import h5py as h5
 import numpy as np
 import datetime as dt
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_tools_lib as tools_lib
@@ -288,7 +288,7 @@ def main(argv=None):
         title = 'Outlier-free velocity (mm/yr)'
         cmin = np.nanpercentile(vel2, 1)
         cmax = np.nanpercentile(vel2, 99)
-        cmap_vel = SCM.roma.reversed()
+        cmap_vel = cmc.roma.reversed()
         plot_lib.make_im_png(vel2, pngfile, cmap_vel, title, cmin, cmax)
     
     ngaps_merge = io_lib.read_img(ngap_file, length, width)

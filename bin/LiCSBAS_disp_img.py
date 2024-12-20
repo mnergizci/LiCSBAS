@@ -133,7 +133,7 @@ if __name__ == "__main__":
     #%% Set default
     infile = []
     parfile = []
-    cmap_name = "SCM.roma_r"
+    cmap_name = "cmc.roma_r"
     cmin = None
     cmax = None
     auto_crange = 99.0
@@ -262,6 +262,7 @@ if __name__ == "__main__":
 
     if cmap_name == 'cm_insar' or \
             cmap_name == 'cm_isce' or \
+            (cmap_name.startswith('cmc') and 'O' in cmap_name) or \
             (cmap_name.startswith('SCM') and 'O' in cmap_name) or \
             'GMT.cyclic' in cmap_name or \
             'cmocean.phase' in cmap_name or \
