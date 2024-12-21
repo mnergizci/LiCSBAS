@@ -379,7 +379,6 @@ def mask_wrapper(ifgix):
     pngfile = os.path.join(out_dir1, ifgd + '.unw.png')
     title = '{} ({}pi/cycle)'.format(ifgd, cycle * 2)
     plot_lib.make_im_png(np.angle(np.exp(1j * unw / cycle) * cycle), pngfile, cmap_wrap, title, -np.pi, np.pi, cbar=False)
-
 #%% main
 if __name__ == "__main__":
     sys.exit(main())
