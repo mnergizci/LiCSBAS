@@ -168,7 +168,7 @@ import h5py as h5
 import numpy as np
 import datetime as dt
 import multiprocessing as multi
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_tools_lib as tools_lib
@@ -230,10 +230,10 @@ def main(argv=None):
     n_unw_r_thre = []
     keep_incfile = False
 
-    cmap_vel = SCM.roma.reversed()
+    cmap_vel = cmc.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
-    cmap_wrap = SCM.romaO
+    cmap_wrap = cmc.romaO
     q = multi.get_context('fork')
     compress = 'gzip'
     store_patches = True
@@ -889,6 +889,7 @@ def main(argv=None):
             ### Calc variance from coherence for WLS
             if inv_alg == 'WLS':
                 cohpatch = cohpatch.reshape((n_ifg, n_pt_all)).transpose() #(n_pt_all, n_ifg)
+                cohpatch[np.isnan(cohpatch)] = 0.0 # there still might be nans that would otherwise propagate - e.g. missing bursts...
                 cohpatch[cohpatch<0.01] = 0.01 ## because negative value possible due to geocode
                 cohpatch[cohpatch>0.99] = 0.99 ## because >1 possible due to geocode
                 varpatch = (1-cohpatch**2)/(2*cohpatch**2)

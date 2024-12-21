@@ -424,7 +424,7 @@ def get_cmap(cmap_name, cmapN=256):
     Return cmap (LinearSegmentedColormap).
     cmap_name can be:
         - Matplotlib predefined name (e.g. viridis)
-        - Scientific colour maps (e.g. SCM.roma)
+        - Scientific colour maps aka cmcrameri (e.g. SCM.roma or cmc.roma)
         - Generic Mapping Tools (e.g. GMT.polar)
         - cmocean (e.g. cmocean.phase)
         - colorcet (e.g. colorcet.CET_C1)
@@ -439,7 +439,10 @@ def get_cmap(cmap_name, cmapN=256):
         _cmap = cm_isce()
         flag = 1
     elif cmap_name.startswith('SCM'):
-        import cmcrameri.cm as CMAP
+        import cmcrameri.cm as CMAP  # or try the original 'import SCM as CMAP'
+        flag = 2
+    elif cmap_name.startswith('cmc'):
+        import cmcrameri.cm as CMAP  # or try the original 'import SCM as CMAP'
         flag = 2
     elif cmap_name.startswith('GMT'):
         import GMT as CMAP

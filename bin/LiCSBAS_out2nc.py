@@ -289,7 +289,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
         cube = cube.assign({'amplitude': new_var})
         print('Importing amplitudes')
-        cube = import_tifs2cube_simple(mlidir, cube, searchstring='/*/*geo.mli.tif', varname='amplitude', thirddim='time',
+        cube = import_tifs2cube_simple(mlidir, cube, searchstring='/*geo.mli.tif', varname='amplitude', thirddim='time',
                                 apply_func=np.sqrt)
         cube['amplitude']=cube['amplitude'].where(cube['amplitude']!=0)
         print('calculating mean amp and amp stab index')
@@ -528,7 +528,7 @@ def alignsar_rename(cube):
     return cube
 
 
-def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varname = 'amplitude', thirddim = 'time', apply_func = None):
+def import_tifs2cube_simple(tifspath, cube, searchstring='/*geo.mli.tif', varname = 'amplitude', thirddim = 'time', apply_func = None):
     '''e.g. for amplitude from mlis, use apply_func = np.sqrt
     Note this function is simplified and loads everything to memory! see licsar_extra/lics_tstools for improved way
     finally, the varname must exist!'''
@@ -546,7 +546,7 @@ def import_tifs2cube_simple(tifspath, cube, searchstring='/*/*geo.mli.tif', varn
         try:
             data = rioxarray.open_rasterio(tif)
             data = data.squeeze('band')
-            data = data.drop('band')
+            data = data.drop_vars('band')
             data = data.rename({'x':'lon', 'y':'lat'})
         except:
             print('ERROR loading tif for epoch '+epoch)

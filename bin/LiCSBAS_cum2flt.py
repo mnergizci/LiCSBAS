@@ -47,7 +47,7 @@ import re
 import time
 import numpy as np
 import h5py as h5
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
@@ -80,7 +80,7 @@ def main(argv=None):
     refarea_geo = []
     maskfile = []
     pngflag = False
-    cmap = SCM.roma.reversed()
+    cmap = cmc.roma.reversed()
 
 
     #%% Read options

@@ -23,7 +23,7 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
      Note: x1/y1 range 0 to width-1, while x2/y2 range 1 to width
      0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  --ref_geo  Reference area in geographical coordinates.
- --vstd  Calculate vstd (Default: No)
+ --vstd  Calculate vstd (+ stc and RMSE) (Default: No)
  --sin   Add sin (annual) funcsion to linear model (Default: No)
          *.amp and *.dt (time difference wrt Jan 1) are output
  --mask  Path to mask file for ref phase calculation (Default: No mask)
@@ -35,6 +35,8 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
 """
 #%% Change log
 '''
+2024-12 ML, ULeeds:
+ - added calc of RMSE
 2024-11 ML, ULeeds:
  - added also offsets 
 2024-10-22 Milan Lazecky, ULeeds
@@ -65,7 +67,7 @@ import time
 import numpy as np
 import datetime as dt
 import h5py as h5
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_tools_lib as tools_lib
@@ -108,11 +110,11 @@ def main(argv=None):
     exportmodelfile = []
     modelflag = False
     minmag = 6.5
-    cmap = SCM.roma.reversed()
+    cmap = cmc.roma.reversed()
     cmap_vstd = 'viridis_r'
     cmap_stc = 'viridis_r'
     cmap_amp = 'viridis_r'
-    cmap_dt = SCM.romaO.reversed()
+    cmap_dt = cmc.romaO.reversed()
     compress = 'gzip'
 
     #%% Read options
@@ -335,6 +337,7 @@ def main(argv=None):
                 plot_lib.make_im_png(dvar, pngfile, cmap, dvarname)
         if modelflag:
             model = inv_lib.get_model_cum(G, params_sorted)
+            degfree=len(params_sorted)
         #
         del G
     else:
@@ -343,6 +346,7 @@ def main(argv=None):
             vconst[~bool_allnan], vel[~bool_allnan], G = inv_lib.calc_vel(cum_tmp_resh, dt_cum, return_G = True)
             if modelflag:
                 model = inv_lib.get_model_cum(G, [vconst, vel])
+                degfree = 2
             vel.tofile(velfile)
             vconst.tofile(vconstfile)
         else: ## Linear+sin function
@@ -357,6 +361,7 @@ def main(argv=None):
                 vconst[~bool_allnan], vel[~bool_allnan], coef_s[~bool_allnan], coef_c[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan], G = inv_lib.calc_velsin(
                     cum_tmp_resh, dt_cum, imdates[0], return_G = True)
                 model = inv_lib.get_model_cum(G, [vconst, vel, coef_s, coef_c])
+                degfree = 4
             else:
                 vel[~bool_allnan], vconst[~bool_allnan], amp[~bool_allnan], delta_t[~bool_allnan] = inv_lib.calc_velsin(cum_tmp_resh, dt_cum, imdates[0])
             vel.tofile(velfile)
@@ -367,6 +372,21 @@ def main(argv=None):
         print('Exporting model time series to '+modh5file)
         modh5.create_dataset('cum_model', data=model, compression=compress)
         modh5.close()
+
+    if modelflag:
+        try:
+            # let's also calculate RMSE using the model values:
+            resid = cum_tmp - model
+            rmse = np.zeros((length, width), dtype=np.float32) * np.nan
+            #rmse = np.sqrt(np.nanmean(resid**2, axis=0))  # simple without degs of freedom
+            count = np.sum(~np.isnan(resid), axis=0, dtype=np.float32)
+            count[count == 0] = np.nan
+            rmse = np.sqrt(np.nansum(resid ** 2, axis=0) / (count - degfree))
+            rmsefile = outfile+'.rmse'+suffix_mask
+            rmse.tofile(rmsefile)
+            del resid
+        except:
+            print('Some error creating RMSE')
 
     ### vstd
     if vstdflag:
@@ -421,6 +441,14 @@ def main(argv=None):
             cmax = np.nanpercentile(stc, 99)
             plot_lib.make_im_png(stc, stcfile + '.png', cmap_stc, title, cmin, cmax)
 
+        if modelflag:
+            title = 'RMSE of applied model (mm)'
+            cmin = np.nanpercentile(rmse, 1)
+            cmax = np.nanpercentile(rmse, 99)
+            try:
+                plot_lib.make_im_png(rmse, rmsefile + '.png', cmap_stc, title, cmin, cmax)
+            except:
+                print('error generating rmse preview')
 
     #%% Finish
     elapsed_time = time.time()-start

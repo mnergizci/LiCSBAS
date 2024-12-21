@@ -31,7 +31,7 @@ import datetime as dt
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import argparse
-import cmcrameri.cm as SCM
+import cmcrameri.cm as cmc
 import time
 import os
 import sys
@@ -117,7 +117,7 @@ def plot_cum_grid(cum, imdates, suptitle, png):
         row = i // n_col
         col = i % n_col
         # print(i, row, col)
-        im = ax[row, col].imshow(cum[i, :, :], vmin=vmin, vmax=vmax, cmap=SCM.roma.reversed())
+        im = ax[row, col].imshow(cum[i, :, :], vmin=vmin, vmax=vmax, cmap=cmc.roma.reversed())
         ax[row, col].set_title(imdates[i])
     plt.suptitle(suptitle, fontsize='xx-large')
     plt.tight_layout()
@@ -420,7 +420,7 @@ if __name__ == "__main__":
         vstd.tofile('{}_vstd'.format(args.cumfile))
         if args.plot_vel:
             import LiCSBAS_plot_lib as plot_lib
-            plot_lib.make_im_png(vel, '{}_vel.png'.format(args.cumfile), SCM.roma.reversed(), 'vel {}'.format(args.cumfile))
+            plot_lib.make_im_png(vel, '{}_vel.png'.format(args.cumfile), cmc.roma.reversed(), 'vel {}'.format(args.cumfile))
             plot_lib.make_im_png(vstd, '{}_vstd.png'.format(args.cumfile), 'viridis', 'vstd {}'.format(args.cumfile))
 
         if args.season:
@@ -442,7 +442,7 @@ if __name__ == "__main__":
 
             if args.plot_vel:
                 plot_lib.make_im_png(amp, '{}_amp.png'.format(args.cumfile), 'viridis', 'amp {}'.format(args.cumfile), vmin=0, vmax=amp_max)
-                plot_lib.make_im_png(delta_t, '{}_delta_t.png'.format(args.cumfile), SCM.romaO.reversed(), 'delta_t {}'.format(args.cumfile))
+                plot_lib.make_im_png(delta_t, '{}_delta_t.png'.format(args.cumfile), cmc.romaO.reversed(), 'delta_t {}'.format(args.cumfile))
 
             if args.de_season:
                 # add linear and residual component as an easier way to remove the seasonal component
