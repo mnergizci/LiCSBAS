@@ -35,7 +35,7 @@ Inputs in GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxbtemp maxbtemp] [--minbtemp minbtemp] [-s] [--sbovl]
+LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxbtemp maxbtemp] [--minbtemp minbtemp] [-s] [--sbovl] [--skip_dates eqoffsets.txt]
 
  -d  Path to the GEOCml* dir containing stack of unw data.
  -t  Path to the output TS_GEOCml* dir. (Default: TS_GEOCml*)
@@ -44,11 +44,14 @@ LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxb
  --minbtemp  Minimal Btemp in days (Default: 0 = not use)
  --maxbtemp  Maximal Btemp in days (Default: 0 = not use)
  -s  Check for coregistration error in the form of a significant azimuthal ramp
- --sbovl only applying step 11 for sbovl 
+ --sbovl only applying step 11 for sbovl
+ --skip_dates dates.txt  Will skip interferograms covering given dates (in the form of either yyyymmdd or yyyy-mm-dd inside the txt file)
 
 """
 #%% Change log
 '''
+20250109 ML
+ - add option to ignore ifgs covering given epoch
 20241030 M Nergizci
 - add sbovl flag
 20241028 ML
@@ -119,10 +122,12 @@ def main(argv=None):
     minbtemp = 0
     maxbtemp = 0 # 0 means not use
     sbovl = False
+    skipdatesfile = []
+
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "maxbtemp=","sbovl"])
+            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "skip_dates=", "maxbtemp=","sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -145,6 +150,8 @@ def main(argv=None):
                 check_coreg_slope = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--skip_dates':
+                skipdatesfile = a
 
         
         if not ifgdir:
@@ -153,6 +160,9 @@ def main(argv=None):
             raise Usage('No {} dir exists!'.format(ifgdir))
         elif not os.path.exists(os.path.join(ifgdir, 'slc.mli.par')):
                 raise Usage('No slc.mli.par file exists in {}!'.format(ifgdir))
+        if skipdatesfile:
+            if not os.path.exists(skipdatesfile):
+                raise Usage('skipdatesfile does not exist')
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -192,6 +202,20 @@ def main(argv=None):
     resultsdir = os.path.join(tsadir, 'results')
     if not os.path.exists(resultsdir): os.mkdir(resultsdir)
 
+    # txt file might be corrupted, so loading it here:
+    skipdates = []
+    if skipdatesfile:
+        with open(skipdatesfile, 'r') as f:
+            for l in f:
+                try:
+                    ep = l.split()[0]
+                    ep = ep.replace('-','')
+                    skipdates.append(int(ep))
+                except:
+                    print('a line from skipdatesfile file not loaded, continuing')
+        skipdates = list(set(skipdates))
+        print('Loaded ' + str(len(skipdates)) + ' epochs to skip:')
+        print(skipdates)
 
     ### Get size
     mlipar = os.path.join(ifgdir, 'slc.mli.par')
@@ -392,6 +416,13 @@ def main(argv=None):
         #return 2
 
     for i, ifgd in enumerate(ifgdates):
+        if skipdates:
+            ep1 = int(ifgd[:8])
+            ep2 = int(ifgd[-8:])
+            for skep in skipdates:
+                if ep1 < skep and ep2 > skep:
+                    bad_ifgdates.append(ifgd)
+                    continue
         if suffix:
             if sbovl:
                 rasname = ifgdates[i]+'.sbovldiff.adf.mm'+suffix
