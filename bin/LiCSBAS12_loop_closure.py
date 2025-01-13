@@ -651,15 +651,17 @@ def main(argv=None):
 
     # %% 4th loop to be used to calc n_loop_err and n_ifg_noloop
     print('\n4th loop to compute statistics (and remove pixels with loop errors if nullify was set)', flush=True)
-    print('with {} parallel processing...'.format(_n_para2), flush=True)
-
+    #print('with {} parallel processing...'.format(_n_para2), flush=True)
+    print('WARNING, we now use only one processor - the 4th step is extended and not ready for parallelisation yet ')
     # create 3D cube - False means presumed error in the loop
-    a = np.full((length, width, len(ifgdates)), False)  # , dtype=bool)
+    # a = np.full((length, width, len(ifgdates)), False)  # , dtype=bool)
     da = xr.DataArray(
-        data=a,
+        data=np.full((length, width, len(ifgdates)), False),
         dims=["y", "x", "ifgd"],
         coords=dict(y=np.arange(length), x=np.arange(width), ifgd=ifgdates))
-
+    import sys
+    dasize = sys.getsizeof(da) / 1024 / 1024 # MB
+    print(' DEBUG: creating additional datacube of '+str(round(dasize))+' MB for checking the loop errors')
     ### Parallel processing
     # p = q.Pool(_n_para2)
     # p = q.Pool(1)  # 2021-11-02: updated nullifying unw pixels with loop phase - to avoid multiple write, no parallelism
@@ -1179,7 +1181,8 @@ def loop_closure_3rd_wrapper(i):
 def loop_closure_4th_wrapper(args):
     '''
     ML:
-    same as 3rd wrapper, but calculate n_loop_err as number of loop errors > pi, per pixel
+    same as 3rd wrapper, but calculate n_loop_err as number of loop errors > pi, per
+    2024/1X: not used as we improve the nullification routine in the non-parallelised version
     '''
     i0, i1 = args
     n_loop = Aloop.shape[0]
