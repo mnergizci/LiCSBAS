@@ -659,7 +659,6 @@ def main(argv=None):
         data=np.full((length, width, len(ifgdates)), False),
         dims=["y", "x", "ifgd"],
         coords=dict(y=np.arange(length), x=np.arange(width), ifgd=ifgdates))
-    import sys
     dasize = sys.getsizeof(da) / 1024 / 1024 # MB
     print(' DEBUG: creating additional datacube of '+str(round(dasize))+' MB for checking the loop errors')
     ### Parallel processing
