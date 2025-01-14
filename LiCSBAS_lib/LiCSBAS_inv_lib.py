@@ -104,9 +104,134 @@ def make_sb_matrix2(ifgdates):
     return A
 
 
+def invert_unws(unw, G, dt_cum, gamma, n_core, gpu,
+                wvars = None, method = 'nsbas', inv_alg = 'LS'):
+    ''' Passing to the requested inversion method.
+
+    Inputs:
+      unw : Unwrapped data block for each point (n_pt, n_ifg)
+            Still include nan to keep dimention
+      G    : Design matrix (1 between primary and secondary) (n_ifg, n_im-1)
+      dt_cum : Cumulative years(or days) for each image (n_im)
+      gamma  : Gamma value for NSBAS inversion, should be small enough (e.g., 0.0001)
+      n_core : Number of cores for parallel processing
+      gpu  : GPU flag
+      wvars (None or np.array): variances used to form weights for the (optional) WLS
+      method (str): one of following methods: 'nsbas', 'singular', 'singular_gauss', 'only_sb'
+      inv_alg (str): either 'LS' or 'WLS'
+
+    Returns:
+      inc     : Incremental displacement (n_im-1, n_pt)
+      vel     : Velocity (n_pt)
+      vconst  : Constant part of linear velocity (c of vt+c) (n_pt)
+    '''
+    if (gpu and (method[:5] != 'nsbas')):
+        print('WARNING, non-NSBAS methods were not tested on GPUs')
+
+    if method == 'nsbas':
+        if inv_alg == 'LS':
+            return invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu)
+        elif inv_alg == 'WLS':
+            return invert_nsbas_wls(unw, wvars, G, dt_cum, gamma, n_core)
+    elif method == 'only_sb':
+        return invert_singular(unw, G, dt_cum, n_core, wvars = wvars, only_sb=True)
+    elif method == 'singular_gauss':
+        return invert_singular(unw, G, dt_cum, n_core, wvars=wvars, singular_gauss = True)
+    elif method == 'singular':
+        return invert_singular(unw, G, dt_cum, n_core, wvars=wvars, singular_gauss = False)
+    else:
+        print('ERROR, no implemented method is selected - cancelling (consider this as a BUG)')
+        return
+
+
+def invert_singular(unw, G, dt_cum, n_core, wvars = None,
+                    singular_gauss = False, only_sb = False):
+    ''' Calculate increment displacement difference by two-stage inversion of SBAS and nan-filling.
+
+    Inputs:
+      unw : Unwrapped data block for each point (n_pt, n_ifg)
+            Still include nan to keep dimention
+      G    : Design matrix (1 between primary and secondary) (n_ifg, n_im-1)
+      dt_cum : Cumulative years(or days) for each image (n_im)
+      wvars (None or np.array): variances used to form weights for the (optional) WLS
+      n_core : Number of cores for parallel processing
+      singular_gauss (bool): if True, will use Gauss kernel to estimate missing increments
+      only_sb (bool): if True, no nan-filling is performed, only pixels with full networks are inverted
+    '''
+    #if n_core != 1:
+    #    global Gall, unw_tmp, mask ## for para_wrapper
+    #global Gall, unw_tmp, var_tmp, mask
+
+    ### Settings
+    n_pt, n_ifg = unw.shape
+    n_im = G.shape[1]+1
+
+    if type(wvars) != type(None):
+        print('\n WARNING: WLS with singular was not really well tested now, 2025-01-14. Inform earmla if bugs happen \n')
+
+    result = np.zeros((G.shape[1], n_pt), dtype=np.float32) * np.nan
+
+    ### Solve points with full unw data at a time. Very fast.
+    bool_pt_full = np.all(~np.isnan(unw), axis=1)
+    n_pt_full = bool_pt_full.sum()
+    if n_pt_full!=0:
+        print('  Solving {0:6}/{1:6}th points with full unw at a time...'.format(n_pt_full, n_pt), flush=True)
+        result[:, bool_pt_full] = np.linalg.lstsq(G, unw[bool_pt_full, :].transpose(), rcond=None)[0]
+
+    if only_sb:
+        print('skipping nan points, only SB inversion is performed')
+    else:
+        print('  Next, solve {0} points including nan point-by-point...'.format(n_pt - n_pt_full), flush=True)
+        # print('using the singular approach (faster and more suitable for non-linear gap filling)')
+        d = unw[~bool_pt_full, :].transpose()
+        m = result[:, ~bool_pt_full]
+
+        if n_core == 1:
+            result[:, ~bool_pt_full] = singular_nsbas(d,G,m,dt_cum, wvars, singular_gauss)
+        else:
+            print('  {} parallel processing'.format(n_core), flush=True)
+            #
+            args = [i for i in range(n_pt-n_pt_full)]
+            q = multi.get_context('fork')
+            p = q.Pool(n_core)
+            from functools import partial
+            func = partial(singular_nsbas_onepoint, d, G, m, dt_cum, wvars, singular_gauss)
+            _result = p.map(func, args)
+            result[:, ~bool_pt_full] = np.array(_result).T
+            p.close()
+            if singular_gauss:
+                print('Performing (experimental but optimal) nan-gapfilling using Gaussian kernel')
+                result[:, ~bool_pt_full] = gauss_fill_gaps_cube_full(result[:, ~bool_pt_full], dt_cum)
+
+    print('\n  Inversion finished - estimating linear trend (velocity) \n', flush=True)
+
+    inc = result
+    try:
+        ### Cumulative displacememt
+        cum = np.zeros((n_im, n_pt), dtype=np.float32)*np.nan
+        cum[1:, :] = np.cumsum(inc, axis=0)
+        #
+        ## Fill 1st image with 0 at unnan points from 2nd images
+        bool_unnan_pt = ~np.isnan(cum[1, :])
+        cum[0, bool_unnan_pt] = 0
+        vel, vconst = calc_vel(cum.T, dt_cum)
+    except:
+        print('WARNING, some error getting cum/vel/vconst after non-NSBAS inversion')
+        print('rolling back to simplified vel estimate (note vconst=0)')
+        vel = result.sum(axis=0)/dt_cum[-1]
+        vconst = np.zeros_like(vel)
+
+    # now need to return ref area that should be zero, back to zero
+    try:
+        vel[np.all(cum==0, axis=0)] = 0
+        vconst[np.all(cum==0, axis=0)] = 0
+    except:
+        print('a bug in not-tested return of ref point to zero. should be easy fix (and it actually does not bother)')
+
+    return inc, vel, vconst
 
 #%%
-def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=False, singular_gauss = False):
+def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu):
     """
     Calculate increment displacement difference by NSBAS inversion. Points with all unw data are solved by simple SB inversion firstly at a time.
 
@@ -126,138 +251,75 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, singular=False, only_sb=Fal
     """
     if n_core != 1:
         global Gall, unw_tmp, mask ## for para_wrapper
-        # is multicore, let's not use any simplifications
-        #only_sb = False
-        #singular = False
-    
-    if gpu:
-        only_sb = False
-        singular = False
 
     ### Settings
     n_pt, n_ifg = unw.shape
     n_im = G.shape[1]+1
 
-    # For computational needs, do either only SB or a singular-nsbas approach (ML, 11/2021)
-    # (note the singular-nsbas approach may be improved later)
-    # (note 2: using G or Gall for full unw data leads to EXACTLY SAME result. but perhaps G is a tiny bit faster..)
-    if only_sb or singular:
-        result = np.zeros((G.shape[1], n_pt), dtype=np.float32)*np.nan
-    
-    else:
-        # do the original NSBAS inversion
-        result = np.zeros((n_im+1, n_pt), dtype=np.float32)*np.nan #[inc, vel, const]
-        
-        ### Set matrix of NSBAS part (bottom)
-        Gbl = np.tril(np.ones((n_im, n_im-1), dtype=np.float32), k=-1) #lower tri matrix without diag
-        Gbr = -np.ones((n_im, 2), dtype=np.float32)
-        Gbr[:, 0] = -dt_cum
-        Gb = np.concatenate((Gbl, Gbr), axis=1)*gamma
-        Gt = np.concatenate((G, np.zeros((n_ifg, 2), dtype=np.float32)), axis=1)
-        Gall = np.float32(np.concatenate((Gt, Gb)))
+    # do the original NSBAS inversion
+    result = np.zeros((n_im+1, n_pt), dtype=np.float32)*np.nan #[inc, vel, const]
+
+    ### Set matrix of NSBAS part (bottom)
+    Gbl = np.tril(np.ones((n_im, n_im-1), dtype=np.float32), k=-1) #lower tri matrix without diag
+    Gbr = -np.ones((n_im, 2), dtype=np.float32)
+    Gbr[:, 0] = -dt_cum
+    Gb = np.concatenate((Gbl, Gbr), axis=1)*gamma
+    Gt = np.concatenate((G, np.zeros((n_ifg, 2), dtype=np.float32)), axis=1)
+    Gall = np.float32(np.concatenate((Gt, Gb)))
 
     ### Solve points with full unw data at a time. Very fast.
     bool_pt_full = np.all(~np.isnan(unw), axis=1)
     n_pt_full = bool_pt_full.sum()
 
-
     if n_pt_full!=0:
         print('  Solving {0:6}/{1:6}th points with full unw at a time...'.format(n_pt_full, n_pt), flush=True)
-        if only_sb or singular:
-            result[:, bool_pt_full] = np.linalg.lstsq(G, unw[bool_pt_full, :].transpose(), rcond=None)[0]
+        ## Solve
+        unw_tmp = np.concatenate((unw[bool_pt_full, :], np.zeros((n_pt_full, n_im), dtype=np.float32)), axis=1).transpose()
+        if gpu:
+            print('  Using GPU')
+            import cupy as cp
+            unw_tmp_cp = cp.asarray(unw_tmp)
+            Gall_cp = cp.asarray(Gall)
+            _sol = cp.linalg.lstsq(Gall_cp, unw_tmp_cp, rcond=None)[0]
+            result[:, bool_pt_full] = cp.asnumpy(_sol)
+            del unw_tmp_cp, Gall_cp, _sol
         else:
-            ## Solve
-            unw_tmp = np.concatenate((unw[bool_pt_full, :], np.zeros((n_pt_full, n_im), dtype=np.float32)), axis=1).transpose()
-            if gpu:
-                print('  Using GPU')
-                import cupy as cp
-                unw_tmp_cp = cp.asarray(unw_tmp)
-                Gall_cp = cp.asarray(Gall)
-                _sol = cp.linalg.lstsq(Gall_cp, unw_tmp_cp, rcond=None)[0]
-                result[:, bool_pt_full] = cp.asnumpy(_sol)
-                del unw_tmp_cp, Gall_cp, _sol
-            else:
-                result[:, bool_pt_full] = np.linalg.lstsq(Gall, unw_tmp, rcond=None)[0]
+            result[:, bool_pt_full] = np.linalg.lstsq(Gall, unw_tmp, rcond=None)[0]
 
-
-    if only_sb:
-        print('skipping nan points, only SB inversion is performed')
+    print('  Next, solve {0} points including nan point-by-point...'.format(n_pt-n_pt_full), flush=True)
+    ### Solve other points with nan point by point.
+    ## Not use GPU because lstsq with small matrix is slower than CPU
+    unw_tmp = np.concatenate((unw[~bool_pt_full, :], np.zeros((n_pt-n_pt_full, n_im), dtype=np.float32)), axis=1).transpose()
+    mask = (~np.isnan(unw_tmp))
+    unw_tmp[np.isnan(unw_tmp)] = 0
+    if n_core == 1:
+        result[:, ~bool_pt_full] = censored_lstsq_slow(Gall, unw_tmp, mask) #(n_im+1, n_pt)
     else:
-        print('  Next, solve {0} points including nan point-by-point...'.format(n_pt-n_pt_full), flush=True)
-        if not singular:
-            ### Solve other points with nan point by point.
-            ## Not use GPU because lstsq with small matrix is slower than CPU
-            unw_tmp = np.concatenate((unw[~bool_pt_full, :], np.zeros((n_pt-n_pt_full, n_im), dtype=np.float32)), axis=1).transpose()
-            mask = (~np.isnan(unw_tmp))
-            unw_tmp[np.isnan(unw_tmp)] = 0
-        else:
-            #print('using the singular approach (faster and more suitable for non-linear gap filling)')
-            d = unw[~bool_pt_full, :].transpose()
-            m = result[:, ~bool_pt_full]
-        if n_core == 1:
-            if not singular:
-                result[:, ~bool_pt_full] = censored_lstsq_slow(Gall, unw_tmp, mask) #(n_im+1, n_pt)
-            else:
-                result[:, ~bool_pt_full] = singular_nsbas(d,G,m,dt_cum, singular_gauss)
-        else:
-            print('  {} parallel processing'.format(n_core), flush=True)
-            #
-            args = [i for i in range(n_pt-n_pt_full)]
-            q = multi.get_context('fork')
-            p = q.Pool(n_core)
-            if not singular:
-                #if debugmode:
-                #A = Gall
-                #else:
-                #    A = csc_array(Gall)  # or csr?
-                _result = p.map(censored_lstsq_slow_para_wrapper, args) #list[n_pt][length]
-            else:
-                from functools import partial
-                func = partial(singular_nsbas_onepoint, d, G, m, dt_cum, singular_gauss)
-                _result = p.map(func, args)
-            result[:, ~bool_pt_full] = np.array(_result).T
-            p.close()
-            if singular_gauss:
-                print('Performing (experimental but optimal) nan-gapfilling using Gaussian kernel')
-                result[:, ~bool_pt_full] = gauss_fill_gaps_cube_full(result[:, ~bool_pt_full], dt_cum)
-    print('')
-    print('inversion finished - estimating linear trend (velocity)')
+        print('  {} parallel processing'.format(n_core), flush=True)
+        #
+        args = [i for i in range(n_pt-n_pt_full)]
+        q = multi.get_context('fork')
+        p = q.Pool(n_core)
+        #if debugmode:
+        #A = Gall
+        #else:
+        #    A = csc_array(Gall)  # or csr?
+        _result = p.map(censored_lstsq_slow_para_wrapper, args) #list[n_pt][length]
+        result[:, ~bool_pt_full] = np.array(_result).T
+        p.close()
+
     #
-    if only_sb or singular:
-        # SB/singular-NSBAS result matrix: based on G only, need to calculate vel, setting vconst=0
-        inc = result
-        try:
-            ### Cumulative displacememt
-            cum = np.zeros((n_im, n_pt), dtype=np.float32)*np.nan
-            cum[1:, :] = np.cumsum(inc, axis=0)
-            #
-            ## Fill 1st image with 0 at unnan points from 2nd images
-            bool_unnan_pt = ~np.isnan(cum[1, :])
-            cum[0, bool_unnan_pt] = 0
-            vel, vconst = calc_vel(cum.T, dt_cum)
-        except:
-            print('WARNING, some error getting cum/vel/vconst after non-NSBAS inversion')
-            print('rolling back to simplified vel estimate (note vconst=0)')
-            vel = result.sum(axis=0)/dt_cum[-1]
-            vconst = np.zeros_like(vel)
-        # now need to return ref area that should be zero, back to zero
-        try:
-            vel[np.all(cum==0, axis=0)] = 0
-            vconst[np.all(cum==0, axis=0)] = 0
-        except:
-            print('a bug in not-tested return of ref point to zero. should be easy fix (and it actually does not bother)')
-    else:
-        # NSBAS result matrix: last 2 rows are vel and vconst
-        inc = result[:n_im-1, :]
-        vel = result[n_im-1, :]
-        vconst = result[n_im, :]
+    # NSBAS result matrix: last 2 rows are vel and vconst
+    inc = result[:n_im-1, :]
+    vel = result[n_im-1, :]
+    vconst = result[n_im, :]
     return inc, vel, vconst
 
 
 # orig solution by ML, just instead of full large matrix of increment rows, use only sum and minmax - much faster,
 # making the computation linear, out of matrix solution. This may be source of some delays, but gives good opportunity
 # to improve e.g. by ... some original thoughts
-def singular_nsbas(d,G,m,dt_cum, singular_gauss = False):
+def singular_nsbas(d,G,m,dt_cum, wvars = None, singular_gauss = False):
     # per each point
     #from scipy.optimize import curve_fit
     #def func_vel(x, a):
@@ -267,7 +329,7 @@ def singular_nsbas(d,G,m,dt_cum, singular_gauss = False):
         #if np.mod(px, 100) == 0:
         #    print('\r  Running {0:6}/{1:6}th point...'.format(px, m.shape[1]), end='', flush=True)
         #
-        m[:,px] = singular_nsbas_onepoint(d,G,m,dt_cum, singular_gauss, px)
+        m[:,px] = singular_nsbas_onepoint(d,G,m,dt_cum, wvars, singular_gauss, px)
     
     return m
 
@@ -375,9 +437,9 @@ def gauss_fill_gaps_cube_full(inc,dt_cum):
     return inc
 
 
-def singular_nsbas_onepoint(d,G,m,dt_cum, skip_gapestimate, i):
-    ''' same as singular nsbas, should be used primarily
-    added singular_gauss (need to sort it this way due to partial func, see above'''
+def singular_nsbas_onepoint(d,G,m,dt_cum, wvars, skip_gapestimate, i):
+    ''' simplified estimation of gaps - but this is improved with singular_gauss
+    wvars can be None to skip weighting...'''
     px = i
     if np.mod(px, 100) == 0:
         print('\r  Running {0:6}/{1:6}th point...'.format(px, m.shape[1]), end='', flush=True)
@@ -387,6 +449,11 @@ def singular_nsbas_onepoint(d,G,m,dt_cum, skip_gapestimate, i):
     okpx = ~np.isnan(dpx)
     Gpx_ok = G[okpx,:]
     dpx_ok = dpx[okpx]
+    # for WLS:
+    if type(wvars) != type(None):
+        Gpx_ok = Gpx_ok / np.sqrt(np.float64(wvars[:, i][:, np.newaxis])) # TODO: NEED TESTING
+        dpx_ok = dpx_ok[:, i] / np.sqrt(np.float64(wvars[:, i]))
+
     badincs = np.sum(Gpx_ok,axis=0)==0
     
     if not max(badincs):
@@ -516,7 +583,7 @@ def invert_nsbas_wls(unw, var, G, dt_cum, gamma, n_core):
 
 
 def wls_nsbas(i):
-    ### Use global value of Gall, unw_tmp, mask
+    ### Use global value of Gall, unw_tmp, var_tmp, mask
     if np.mod(i, 1000) == 0:
         print('  Running {0:6}/{1:6}th point...'.format(i, unw_tmp.shape[1]), flush=True)
 

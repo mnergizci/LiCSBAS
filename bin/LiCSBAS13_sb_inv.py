@@ -314,8 +314,8 @@ def main(argv=None):
                 raise Usage("Wrong units of the input data - available options are: rad, mm, m.")
         if inv_alg not in ['LS', 'WLS']:
             raise Usage("Wrong inversion algorithm - only LS or WLS are the options here")
-        if (inv_alg == 'WLS') and (singular == True):
-            raise Usage('Sorry, --singular works only with LS but you requested WLS as inversion algorithm.')
+        #if (inv_alg == 'WLS') and (singular == True):
+        #    raise Usage('Sorry, --singular works only with LS but you requested WLS as inversion algorithm.')
         #if singular or only_sb:
         #    if n_para>1:
         #        print('WARNING: selected non-NSBAS regime. Current parallelism is under testing (give feedback please)')
@@ -993,12 +993,30 @@ def main(argv=None):
 
                 #%% Time series inversion
                 print('\n  Small Baseline inversion by {}...\n'.format(inv_alg), flush=True)
+
                 if inv_alg == 'WLS':
-                    inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_nsbas_wls(
-                        unwpatch, varpatch, G, dt_cum, gamma, n_para_inv)
+                    wvars = varpatch
                 else:
-                    inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_nsbas(
-                        unwpatch, G, dt_cum, gamma, n_para_inv, gpu, singular=singular, only_sb=only_sb, singular_gauss=singular_gauss)
+                    wvars = None
+
+                if only_sb:
+                    method = 'only_sb'
+                elif singular_gauss:
+                    method = 'singular_gauss'
+                elif singular:
+                    method = 'singular'
+                else:
+                    method = 'nsbas'
+                print('...using method:   '+method+'\n', flush = True)
+
+                inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_unws(unwpatch, G, dt_cum, gamma, n_para_inv, gpu,
+                                                                   wvars = wvars, method = method, inv_alg = inv_alg)
+                #if inv_alg == 'WLS':
+                #    inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_nsbas_wls(
+                #        unwpatch, varpatch, G, dt_cum, gamma, n_para_inv)
+                #else:
+                #    inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_nsbas(
+                #        unwpatch, G, dt_cum, gamma, n_para_inv, gpu, singular=singular, only_sb=only_sb, singular_gauss=singular_gauss)
 
                 ### Set to valuables
                 inc_patch = np.zeros((n_im-1, n_pt_all), dtype=np.float32)*np.nan
