@@ -422,6 +422,7 @@ def main(argv=None):
             for skep in skipdates:
                 if ep1 < skep and ep2 > skep:
                     bad_ifgdates.append(ifgd)
+                    ixs_bad_ifgdates.append(i)
                     continue
         if suffix:
             if sbovl:
@@ -434,6 +435,7 @@ def main(argv=None):
                 print('WARNING: No browse image {} available!\n'.format(rasorg))
                 print('assuming there is an error and skipping this ifg')
                 bad_ifgdates.append(ifgdates[i])
+                ixs_bad_ifgdates.append(i)
                 continue
 
         ### Identify bad ifgs and link ras
