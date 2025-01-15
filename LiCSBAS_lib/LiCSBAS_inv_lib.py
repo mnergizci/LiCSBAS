@@ -8,6 +8,8 @@ Python3 library of time series inversion functions for LiCSBAS.
 =========
 Changelog
 =========
+20250114 ML
+ - rearrange singular* to allow WLS
 20241207 ML
  - added Gaussian kernel-based gapfilling. partly blindly, need checks
 20241020 ML
@@ -168,7 +170,10 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
 
     if type(wvars) != type(None):
         print('\n WARNING: WLS with singular was not really well tested now, 2025-01-14. Inform earmla if bugs happen \n')
-
+        wls=True
+    else:
+        wls=False
+    
     result = np.zeros((G.shape[1], n_pt), dtype=np.float32) * np.nan
 
     ### Solve points with full unw data at a time. Very fast.
@@ -176,7 +181,10 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
     n_pt_full = bool_pt_full.sum()
     if n_pt_full!=0:
         print('  Solving {0:6}/{1:6}th points with full unw at a time...'.format(n_pt_full, n_pt), flush=True)
-        result[:, bool_pt_full] = np.linalg.lstsq(G, unw[bool_pt_full, :].transpose(), rcond=None)[0]
+        if wls:
+            result[:, bool_pt_full] = invert_nsbas_wls(unw[bool_pt_full, :], wvars[bool_pt_full, :], G, dt_cum, 0.0001, n_core)[0]
+        else:
+            result[:, bool_pt_full] = np.linalg.lstsq(G, unw[bool_pt_full, :].transpose(), rcond=None)[0]
 
     if only_sb:
         print('skipping nan points, only SB inversion is performed')
@@ -185,9 +193,13 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
         # print('using the singular approach (faster and more suitable for non-linear gap filling)')
         d = unw[~bool_pt_full, :].transpose()
         m = result[:, ~bool_pt_full]
-
+        if wls:
+            w = wvars[~bool_pt_full,:]
+        else:
+            w = None
+        
         if n_core == 1:
-            result[:, ~bool_pt_full] = singular_nsbas(d,G,m,dt_cum, wvars, singular_gauss)
+            result[:, ~bool_pt_full] = singular_nsbas(d,G,m,dt_cum, w, singular_gauss)
         else:
             print('  {} parallel processing'.format(n_core), flush=True)
             #
@@ -195,7 +207,7 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
             q = multi.get_context('fork')
             p = q.Pool(n_core)
             from functools import partial
-            func = partial(singular_nsbas_onepoint, d, G, m, dt_cum, wvars, singular_gauss)
+            func = partial(singular_nsbas_onepoint, d, G, m, dt_cum, w, singular_gauss)
             _result = p.map(func, args)
             result[:, ~bool_pt_full] = np.array(_result).T
             p.close()
@@ -451,8 +463,9 @@ def singular_nsbas_onepoint(d,G,m,dt_cum, wvars, skip_gapestimate, i):
     dpx_ok = dpx[okpx]
     # for WLS:
     if type(wvars) != type(None):
-        Gpx_ok = Gpx_ok / np.sqrt(np.float64(wvars[:, i][:, np.newaxis])) # TODO: NEED TESTING
-        dpx_ok = dpx_ok[:, i] / np.sqrt(np.float64(wvars[:, i]))
+        wpx_ok = wvars[okpx,px]
+        Gpx_ok = Gpx_ok.copy() / np.sqrt(np.float64(wpx_ok[:, np.newaxis])) # TODO: NEED TESTING
+        dpx_ok = dpx_ok.copy() / np.sqrt(np.float64(wpx_ok))
 
     badincs = np.sum(Gpx_ok,axis=0)==0
     
