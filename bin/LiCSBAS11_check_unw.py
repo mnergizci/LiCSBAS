@@ -417,13 +417,17 @@ def main(argv=None):
 
     for i, ifgd in enumerate(ifgdates):
         if skipdates:
+            toskip = False
             ep1 = int(ifgd[:8])
             ep2 = int(ifgd[-8:])
             for skep in skipdates:
-                if ep1 < skep and ep2 > skep:
+                if (ep1 < skep) and (ep2 > skep):
+                    print('skipping coseismic ifg '+ifgd)
                     bad_ifgdates.append(ifgd)
-                    ixs_bad_ifgdates.append(i)
+                    toskip = True
                     continue
+            if toskip:
+                continue
         if suffix:
             if sbovl:
                 rasname = ifgdates[i]+'.sbovldiff.adf.mm'+suffix
@@ -434,15 +438,13 @@ def main(argv=None):
             if not os.path.exists(rasorg):
                 print('WARNING: No browse image {} available!\n'.format(rasorg))
                 print('assuming there is an error and skipping this ifg')
-                bad_ifgdates.append(ifgdates[i])
-                ixs_bad_ifgdates.append(i)
+                bad_ifgdates.append(ifgd)
                 continue
 
         ### Identify bad ifgs and link ras
         if rate_cov[i] < unw_cov_thre or coh_avg_ifg[i] < coh_thre or \
            np.isnan(rate_cov[i]) or np.isnan(coh_avg_ifg[i]) or ifg_containing_coreg_error_epochs[i] > 0:
-            bad_ifgdates.append(ifgdates[i])
-            ixs_bad_ifgdates.append(i)
+            bad_ifgdates.append(ifgd)
             rm_flag = '*'
             if suffix:
                 os.symlink(os.path.relpath(rasorg, bad_ifg_rasdir), os.path.join(bad_ifg_rasdir, rasname))
@@ -475,8 +477,6 @@ def main(argv=None):
         remsel = list(np.array(ifgdates)[np.array(btemps) <= minbtemp])
         bad_ifgdates += remsel
         print('Disabling ' + str(len(remsel)) + ' interferograms below min Btemp = ' + str(minbtemp) + ' days.')
-        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
-        bad_ifgdates = list(set(bad_ifgdates))
 
     # Not use ifgs above given btemp
     if maxbtemp > 0:
@@ -484,10 +484,9 @@ def main(argv=None):
         remsel = list(np.array(ifgdates)[np.array(btemps) >= maxbtemp])
         bad_ifgdates += remsel
         print('Disabling ' + str(len(remsel)) + ' interferograms above max Btemp = ' + str(maxbtemp) + ' days.')
-        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
-        bad_ifgdates = list(set(bad_ifgdates))
 
     # regenerating full ixs:
+    bad_ifgdates = list(set(bad_ifgdates))
     ixs_ifgdates = np.array(range(len(ifgdates)))
     ixs_bad_ifgdates = ixs_ifgdates[np.isin(ifgdates, bad_ifgdates)]
 
