@@ -110,7 +110,7 @@ def main(argv=None):
     exportmodelfile = []
     modelflag = False
     minmag = 6.5
-    cmap = cmc.roma.reversed()
+    cmap = cmc.romaO.reversed()
     cmap_vstd = 'viridis_r'
     cmap_stc = 'viridis_r'
     cmap_amp = 'viridis_r'
@@ -334,7 +334,9 @@ def main(argv=None):
             if pngflag:
                 pngfile = outvarfile + '.png'
                 # title = 'n_im: {}, Ref X/Y {}:{}/{}:{}'.format(n_im, refx1, refx2, refy1, refy2)
-                plot_lib.make_im_png(dvar, pngfile, cmap, dvarname)
+                cmin = np.nanpercentile(dvar, 1)
+                cmax = np.nanpercentile(dvar, 99)
+                plot_lib.make_im_png(dvar, pngfile, cmap, dvarname, cmin, cmax)
         if modelflag:
             model = inv_lib.get_model_cum(G, params_sorted)
             degfree=len(params_sorted)
@@ -421,8 +423,10 @@ def main(argv=None):
     #%% Make png if specified
     if pngflag:
         pngfile = velfile+'.png'
-        title = 'n_im: {}, Ref X/Y {}:{}/{}:{}'.format(n_im, refx1, refx2, refy1, refy2)
-        plot_lib.make_im_png(vel, pngfile, cmap, title)
+        title = 'Velocity (n_im: {}, Ref X/Y {}:{}/{}:{})'.format(n_im, refx1, refx2, refy1, refy2)
+        cmin = np.nanpercentile(vel, 1)
+        cmax = np.nanpercentile(vel, 99)
+        plot_lib.make_im_png(vel, pngfile, cmap, title, cmin, cmax)
 
         if sinflag:
             amp_max = np.nanpercentile(amp, 99)
