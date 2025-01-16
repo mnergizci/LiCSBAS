@@ -112,7 +112,7 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu,
 
     Inputs:
       unw : Unwrapped data block for each point (n_pt, n_ifg)
-            Still include nan to keep dimention
+            Still include nan to keep dimension
       G    : Design matrix (1 between primary and secondary) (n_ifg, n_im-1)
       dt_cum : Cumulative years(or days) for each image (n_im)
       gamma  : Gamma value for NSBAS inversion, should be small enough (e.g., 0.0001)
@@ -152,10 +152,10 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
 
     Inputs:
       unw : Unwrapped data block for each point (n_pt, n_ifg)
-            Still include nan to keep dimention
+            Still include nan to keep dimension
       G    : Design matrix (1 between primary and secondary) (n_ifg, n_im-1)
       dt_cum : Cumulative years(or days) for each image (n_im)
-      wvars (None or np.array): variances used to form weights for the (optional) WLS
+      wvars (None or np.array): variances used to form weights for the (optional) WLS (n_pt, n_ifg)
       n_core : Number of cores for parallel processing
       singular_gauss (bool): if True, will use Gauss kernel to estimate missing increments
       only_sb (bool): if True, no nan-filling is performed, only pixels with full networks are inverted
@@ -194,7 +194,7 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
         d = unw[~bool_pt_full, :].transpose()
         m = result[:, ~bool_pt_full]
         if wls:
-            w = wvars[~bool_pt_full,:]
+            w = wvars[~bool_pt_full,:].transpose()
         else:
             w = None
         
@@ -450,8 +450,20 @@ def gauss_fill_gaps_cube_full(inc,dt_cum):
 
 
 def singular_nsbas_onepoint(d,G,m,dt_cum, wvars, skip_gapestimate, i):
-    ''' simplified estimation of gaps - but this is improved with singular_gauss
-    wvars can be None to skip weighting...'''
+    ''' Inverts with simplified estimation of gaps - this is improved with singular_gauss (for which skip_gapestimate should be done)
+    Inputs:
+      d : Unwrapped data block for each point (n_ifg, n_pt)
+      wvars : (optional, can be None) Variance estimated from coherence (n_ifg, n_pt)
+      G    : Design matrix (1 between primary and secondary) (n_ifg, n_im-1)
+      m   :  Empty incremental displacement matrix (n_im-1, n_pt)
+      dt_cum : Cumulative years(or days) for each image (n_im)
+      skip_gapestimate : (bool) if True, it will not perform nan filling (gaps)
+      i : pixel to run the inversion for (up to n_pt)
+
+    Returns:
+      mpx     : Filled incremental displacement matrix (n_im-1, n_pt)
+
+    '''
     px = i
     if np.mod(px, 100) == 0:
         print('\r  Running {0:6}/{1:6}th point...'.format(px, m.shape[1]), end='', flush=True)
@@ -464,7 +476,7 @@ def singular_nsbas_onepoint(d,G,m,dt_cum, wvars, skip_gapestimate, i):
     # for WLS:
     if type(wvars) != type(None):
         wpx_ok = wvars[okpx,px]
-        Gpx_ok = Gpx_ok.copy() / np.sqrt(np.float64(wpx_ok[:, np.newaxis])) # TODO: NEED TESTING
+        Gpx_ok = Gpx_ok.copy() / np.sqrt(np.float64(wpx_ok[:, np.newaxis]))
         dpx_ok = dpx_ok.copy() / np.sqrt(np.float64(wpx_ok))
 
     badincs = np.sum(Gpx_ok,axis=0)==0
