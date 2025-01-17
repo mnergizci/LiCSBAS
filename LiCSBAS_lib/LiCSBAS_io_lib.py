@@ -227,7 +227,8 @@ def read_ifg_list(ifg_listfile):
     return ifgdates
 
 
-def read_epochlist(txtfile):
+def read_epochlist(txtfile, outasdt = False):
+    ''' Reads txt file containing epochs, either yyyy-mm-dd or yyyymmdd '''
     f = open(txtfile)
     line = f.readline()
     out = []
@@ -238,6 +239,16 @@ def read_epochlist(txtfile):
         else:
             line = f.readline()
             continue
+    out.sort()
+    if outasdt:
+        outdt = []
+        for epoch in out:
+            try:
+                outdt.append(dt.datetime.strptime(epoch, '%Y-%m-%d').date())
+            except:
+                outdt.append(dt.datetime.strptime(epoch, '%Y%m%d').date())
+        out = outdt
+    out = list(set(out))
     return out
 
 

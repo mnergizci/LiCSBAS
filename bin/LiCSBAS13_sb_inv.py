@@ -241,7 +241,7 @@ def main(argv=None):
     load_patches = False
     #step_events = False
     offsetsflag = False
-
+    offsets_dt = []
     #%% Read options
     try:
         try:
@@ -321,6 +321,10 @@ def main(argv=None):
         if offsetsflag:
             if not os.path.exists(offsetsfile):
                 raise Usage('Offsets file not provided')
+            try:
+                offsets_dt = io_lib.read_epochlist(offsetsfile, outasdt = True)
+            except:
+                raise Usage('Offsets could not be loaded from '+offsetsfile)
         if inv_alg not in ['LS', 'WLS']:
             raise Usage("Wrong inversion algorithm - only LS or WLS are the options here")
         #if (inv_alg == 'WLS') and (singular == True):
@@ -1023,9 +1027,19 @@ def main(argv=None):
                 # only_sb can invert in the next step with offsets as there is no problem
                 # (low priority): singular - as nsbas, need to invert with offsets, and use it as diff when getting velocity estimate (TODO: update it to use LS for vel?)
                 # singular_gauss - must set weights for dt_cum to 0 for offset dates, then can invert with offsets in the next step
-                dt_offsets = None # TODO: load offsets (prepare LiCSBAS_eqoffsets.py -M 6 --buffer(? - no need if using extents) -o eqoffsets.txt)
-                # TODO: dt_offsets should be True where the given dt_cum is an offset - note dt_cum has first dtime as 0..
-                inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_unws(unwpatch, G, dt_cum, gamma, n_para_inv, gpu, dt_offsets = dt_offsets,
+                # first load offsets (prepare LiCSBAS_eqoffsets.py -M 6 --buffer(? - no need if using extents) -o eqoffsets.txt)
+                # dt_offsets should be True where the given dt_cum is an offset (means... the increment between that date and the previous contains the quake)
+                #
+                if offsetsflag and offsets_dt:
+                    imdt_arr = np.array(imdates_dt)
+                    offixs = []
+                    for offset in offsets_dt:
+                        offixs.append(np.argmax(imdt_arr >= offset.toordinal()))
+                    dt_cum_offsets = np.zeros(len(dt_cum))
+                    dt_cum_offsets[offixs] = 1
+                    dt_cum_offsets = dt_cum_offsets==1
+
+                inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_unws(unwpatch, G, dt_cum, gamma, n_para_inv, gpu, dt_offsets = dt_cum_offsets,
                                                                    wvars = wvars, method = method, inv_alg = inv_alg)
                 #if inv_alg == 'WLS':
                 #    inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_nsbas_wls(

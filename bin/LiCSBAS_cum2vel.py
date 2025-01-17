@@ -191,14 +191,7 @@ def main(argv=None):
 
     if offsetsflag:
         if not eqoffsetsflag:
-            offsets = []
-        with open(offsetsfile, 'r') as f:
-            for l in f:
-                try:
-                    offsets.append(dt.datetime.strptime(l.split()[0], '%Y-%m-%d').date())
-                except:
-                    print('a line from offsets file not loaded, continuing')
-        offsets = list(set(offsets))
+            offsets = io_lib.read_epochlist(offsetsfile, outasdt=True)
         print('Loaded '+str(len(offsets))+' offsets:')
         print(offsets)
         print('')
