@@ -325,6 +325,9 @@ def main(argv=None):
             dvar[~bool_allnan] = result[i,:]
             outvarfile = outfile+'.'+dvarname+suffix_mask
             dvar.tofile(outvarfile)
+            # also use vel (and vconst?) as usual:
+            if dvarname == 'vel':
+                vel = dvar
             if exportmodelfile:
                 # also export to the h5 (why not)
                 modh5.create_dataset(dvarname, data=dvar, compression=compress)
@@ -427,7 +430,7 @@ def main(argv=None):
         cmin = np.nanpercentile(vel, 1)
         cmax = np.nanpercentile(vel, 99)
         plot_lib.make_im_png(vel, pngfile, cmap, title, cmin, cmax)
-
+        # plot_lib.make_im_png(dvar, pngfile, cmap, dvarname, cmin, cmax)
         if sinflag:
             amp_max = np.nanpercentile(amp, 99)
             plot_lib.make_im_png(amp, ampfile+'.png', cmap_amp, title, vmax=amp_max)
