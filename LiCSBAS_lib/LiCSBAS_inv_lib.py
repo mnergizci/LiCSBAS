@@ -106,7 +106,7 @@ def make_sb_matrix2(ifgdates):
     return A
 
 
-def invert_unws(unw, G, dt_cum, gamma, n_core, gpu,
+def invert_unws(unw, G, dt_cum, gamma, n_core, gpu, dt_offsets = None,
                 wvars = None, method = 'nsbas', inv_alg = 'LS'):
     ''' Passing to the requested inversion method.
 
@@ -118,6 +118,7 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu,
       gamma  : Gamma value for NSBAS inversion, should be small enough (e.g., 0.0001)
       n_core : Number of cores for parallel processing
       gpu  : GPU flag
+      dt_offsets (None or np.array): Boolean structure. True for im where an offset should be estimated/accounted for
       wvars (None or np.array): variances used to form weights for the (optional) WLS
       method (str): one of following methods: 'nsbas', 'singular', 'singular_gauss', 'only_sb'
       inv_alg (str): either 'LS' or 'WLS'
@@ -138,7 +139,7 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu,
     elif method == 'only_sb':
         return invert_singular(unw, G, dt_cum, n_core, wvars = wvars, only_sb=True)
     elif method == 'singular_gauss':
-        return invert_singular(unw, G, dt_cum, n_core, wvars=wvars, singular_gauss = True)
+        return invert_singular(unw, G, dt_cum, n_core, dt_offsets = dt_offsets, wvars=wvars, singular_gauss = True)
     elif method == 'singular':
         return invert_singular(unw, G, dt_cum, n_core, wvars=wvars, singular_gauss = False)
     else:
@@ -146,7 +147,7 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu,
         return
 
 
-def invert_singular(unw, G, dt_cum, n_core, wvars = None,
+def invert_singular(unw, G, dt_cum, n_core, wvars = None, dt_offsets = None,
                     singular_gauss = False, only_sb = False):
     ''' Calculate increment displacement difference by two-stage inversion of SBAS and nan-filling.
 
@@ -157,6 +158,7 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
       dt_cum : Cumulative years(or days) for each image (n_im)
       wvars (None or np.array): variances used to form weights for the (optional) WLS (n_pt, n_ifg)
       n_core : Number of cores for parallel processing
+      dt_offsets (None or np.array): Boolean structure. True for im where an offset should be estimated/accounted for
       singular_gauss (bool): if True, will use Gauss kernel to estimate missing increments
       only_sb (bool): if True, no nan-filling is performed, only pixels with full networks are inverted
     '''
@@ -173,7 +175,12 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
         wls=True
     else:
         wls=False
-    
+
+    #if type(dt_offsets) != type(None):
+    #    #print('\n WARNING: WLS with singular was not really well tested now, 2025-01-14. Inform earmla if bugs happen \n')
+    #    wls=True
+    #else:
+    #    wls=False
     result = np.zeros((G.shape[1], n_pt), dtype=np.float32) * np.nan
 
     ### Solve points with full unw data at a time. Very fast.
@@ -211,9 +218,13 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None,
             _result = p.map(func, args)
             result[:, ~bool_pt_full] = np.array(_result).T
             p.close()
-            if singular_gauss:
-                print('Performing (experimental but optimal) nan-gapfilling using Gaussian kernel')
-                result[:, ~bool_pt_full] = gauss_fill_gaps_cube_full(result[:, ~bool_pt_full], dt_cum)
+
+        if singular_gauss:
+            print('\n Performing experimental nan-gapfilling using Gaussian kernel in temporal domain \n')
+            dtcum_offsets_mask = None
+            if type(dt_offsets) != type(None):
+                dtcum_offsets_mask = ~dt_offsets
+            result[:, ~bool_pt_full] = gauss_fill_gaps_cube_full(result[:, ~bool_pt_full], dt_cum, dtcum_offsets_mask)
 
     print('\n  Inversion finished - estimating linear trend (velocity) \n', flush=True)
 
@@ -396,8 +407,9 @@ def gauss_fill_gaps_cube(cusel, dt_cumm, filtwidth_yr, time_diff_sq, isinc = Tru
 
 
 
-def gauss_fill_gaps_cube_full(inc,dt_cum):
+def gauss_fill_gaps_cube_full(inc,dt_cum, dtcum_offsets_mask = None):
     ''' inc is 2-D array of (n_im, n_pt)
+    dtcum_offsets_mask is True for epochs that should be used (that are not offsets)
      where the gauss avg will be used to fill the gaps (nans). ML, 12/2024 '''
     filtwidth_yr = np.diff(dt_cum).mean() * 3  ## avg interval*3
     if inc.shape[0] == len(dt_cum)-1:
@@ -425,6 +437,10 @@ def gauss_fill_gaps_cube_full(inc,dt_cum):
         time_diff_sq = (dt_cum[i] - dt_cum) ** 2
         ## Limit reading data within filtwidth_yr**8
         ixs = time_diff_sq < filtwidth_yr * 8
+        ## Further limit - data that contain (eq) offset (to be ignored by the algorithm), unless it is index of i
+        if type(dtcum_offsets_mask) != type(None):
+            ixs = ixs * dtcum_offsets_mask # will use only indices that are not offsets
+            ixs[i] = True
         time_diff_sq = time_diff_sq[ixs]
         ## and limit to only data blocks that has some nan in the given epoch
         #incsel = inc[i,:,:] #.flatten() # 3D

@@ -59,7 +59,7 @@ Outputs in TS_GEOCml*/ :
 Usage
 =====
 LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--singular_gauss] [--only_sb] [--nopngs] [--sbovl]
-                 [--no_storepatches] [--load_patches] [--nullify_noloops]
+                 [--no_storepatches] [--load_patches] [--nullify_noloops] [--offsets eqoffsets.txt]
 
  -d  Path to the GEOCml* dir containing stack of unw data
  -t  Path to the output TS_GEOCml* dir.
@@ -86,6 +86,7 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --no_storepatches Don't store completed patch data [default: store patches in case of job timeout]
  --load_patches Load previously completed patches first [default: No, restart inversion]
  --input_units Units of the input data. Possible values: ['rad', 'mm', 'm']. Default: rad
+ --offsets eqoffsets.txt  Estimate offsets read from external txt file - must have lines in the form of either yyyymmdd or yyyy-mm-dd
  --nullify_noloops   Nullifies data from ifgs not included in any loop BEFORE NULLIFICATION (if happened)
  --nullify_noloops_use_data_after_nullification  Just to test, will probably remove this
 """
@@ -239,6 +240,7 @@ def main(argv=None):
     store_patches = True
     load_patches = False
     #step_events = False
+    offsetsflag = False
 
     #%% Read options
     try:
@@ -246,7 +248,8 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "hd:t:",
                                        ["help",  "mem_size=", "input_units=", "gamma=",
                                         "n_unw_r_thre=", "keep_incfile", "nopngs", "nullify_noloops", "nullify_noloops_use_data_after_nullification",
-                                        "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches", "sbovl"])
+                                        "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches",
+                                        "offsets=", "sbovl"])
                                       #  "step_events="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -296,6 +299,9 @@ def main(argv=None):
                 load_patches = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--offsets':
+                offsetsfile = a
+                offsetsflag = True
 	      
 
         if not ifgdir:
@@ -312,6 +318,9 @@ def main(argv=None):
         else:
             if input_units not in ['rad', 'mm', 'm']:
                 raise Usage("Wrong units of the input data - available options are: rad, mm, m.")
+        if offsetsflag:
+            if not os.path.exists(offsetsfile):
+                raise Usage('Offsets file not provided')
         if inv_alg not in ['LS', 'WLS']:
             raise Usage("Wrong inversion algorithm - only LS or WLS are the options here")
         #if (inv_alg == 'WLS') and (singular == True):
@@ -1009,7 +1018,14 @@ def main(argv=None):
                     method = 'nsbas'
                 print('...using method:   '+method+'\n', flush = True)
 
-                inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_unws(unwpatch, G, dt_cum, gamma, n_para_inv, gpu,
+                # with offsets:
+                # nsbas should invert with offsets, as in cum2vel - otherwise the gaps are wrongly estimated due to wrong velocity
+                # only_sb can invert in the next step with offsets as there is no problem
+                # (low priority): singular - as nsbas, need to invert with offsets, and use it as diff when getting velocity estimate (TODO: update it to use LS for vel?)
+                # singular_gauss - must set weights for dt_cum to 0 for offset dates, then can invert with offsets in the next step
+                dt_offsets = None # TODO: load offsets (prepare LiCSBAS_eqoffsets.py -M 6 --buffer(? - no need if using extents) -o eqoffsets.txt)
+                # TODO: dt_offsets should be True where the given dt_cum is an offset - note dt_cum has first dtime as 0..
+                inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_unws(unwpatch, G, dt_cum, gamma, n_para_inv, gpu, dt_offsets = dt_offsets,
                                                                    wvars = wvars, method = method, inv_alg = inv_alg)
                 #if inv_alg == 'WLS':
                 #    inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_nsbas_wls(
