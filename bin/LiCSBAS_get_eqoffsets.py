@@ -35,6 +35,7 @@ import re
 import time
 import datetime as dt
 import LiCSBAS_tools_lib as tools_lib
+import LiCSBAS_io_lib as io_lib
 from LiCSBAS_meta import *
 try:
     from libcomcat.search import search
@@ -124,29 +125,35 @@ def main(argv=None):
     else:
         center_time_dt = dt.datetime.strptime(acq_time, '%H:%M:%S.%f').time()
 
+    # assuming WGS-84 as input data coordinates
+    buffer = buffer/111.111
+
     # extract the region and min/max time of the dataset - from the TSDIR:
     print('getting earthquakes over the region')
-    '''
-    lon1 = cumh5['corner_lon'][()]
-    lon2 = lon1 + cumh5['post_lon'][()] * sizex
-    lat1 = cumh5['corner_lat'][()]
-    lat2 = lat1 + cumh5['post_lat'][()] * sizey
 
-    # real datetime this time
-    imdates_dt = ([dt.datetime.strptime(imd, '%Y%m%d') for imd in imdates])
+    # lonlat from TS_GEOCml3GACOSmask/info/EQA.dem_par
+    # imdates from TS_GEOCml3GACOSmask/info/11ifg_stats.txt
+    dempar =  os.path.join(tsdir, 'info', 'EQA.dem_par')
+    ifgstats = os.path.join(tsdir, 'info', '11ifg_stats.txt')
+    if not os.path.exists(ifgstats):
+        raise Usage('The '+ifgstats+' file does not exist - did you run step 11?')
 
-    
+    ifgdates = io_lib.read_ifg_list(ifgstats)
+    imdates = tools_lib.ifgdates2imdates(ifgdates)
+    datein = dt.datetime.strptime(imdates[0], '%Y%m%d')
+    dateout = dt.datetime.strptime(imdates[-1], '%Y%m%d')
 
-    frame = os.path.realpath(cumfile).split('/')[-3]
-    print('based on directory, assuming LiCSAR frame '+frame)
-    print('(used only to get center_time)')
-    center_time_dt = _get_frametime(frame)
-    if not center_time_dt:
-        print('Error getting center_time for this frame - events with the same day as acquisitions might be wrongly mapped as pre/post event.')
+    print('assuming geographical coordinates in WGS-84 (other systems not implemented)')
+    width_geo = int(io_lib.get_param_par(dempar, 'width'))
+    length_geo = int(io_lib.get_param_par(dempar, 'nlines'))
+    dlat = float(io_lib.get_param_par(dempar, 'post_lat'))  # negative
+    dlon = float(io_lib.get_param_par(dempar, 'post_lon'))  # positive
+    lat1 = float(io_lib.get_param_par(dempar, 'corner_lat'))
+    lon1 = float(io_lib.get_param_par(dempar, 'corner_lon'))
+    lon2 = lon1 + dlon * width_geo
+    lat2 = lat1 + dlat * length_geo
 
-    datein = imdates_dt[0]
-    dateout = imdates_dt[-1]
-    '''
+    print('searching for events')
     events = search(starttime=datein + dt.timedelta(days=1),
                     endtime=dateout - dt.timedelta(days=1),
                     minmagnitude=minmag, limit=2000, maxdepth=maxdepth,

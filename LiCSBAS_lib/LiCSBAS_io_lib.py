@@ -216,7 +216,7 @@ def read_ifg_list(ifg_listfile):
     line = f.readline()
 
     while line:
-        if line[0] == "2":
+        if (line[0] == "2") or (line[0] == "1"):
             ifgd = line.split()[0]
             ifgdates.append(str(ifgd))
             line = f.readline()
