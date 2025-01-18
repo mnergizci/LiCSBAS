@@ -234,7 +234,7 @@ def read_epochlist(txtfile, outasdt = False):
     out = []
     while line:
         if (line[0] == "2") or (line[0] == "1"):
-            out.append(str(line))
+            out.append(str(line.split()[0]))
             line = f.readline()
         else:
             line = f.readline()
