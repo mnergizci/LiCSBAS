@@ -10,14 +10,14 @@ This script gets dates of earthquakes in the area (can be used further in LiCSBA
 Usage
 =====
 LiCSBAS_get_eqoffsets.py -M minmag -t TSDIR -o eqoffsets.txt
-    [--buffer 0.1] [--maxdepth 60] [--acq_time 12:00:00] [--frame 123D_01234_121212]
+    [--buffer 0.1] [--maxdepth 60] [--acq_time 12:00] [--frame 123D_01234_121212]
 
  -M  minmag        Get earthquakes above minmag (float) in the region (default: 6.5)
  -t TSDIR          Uses basic info in the TS Directory (after step 11)
  -o eqoffsets.txt  Store offset dates to the txt file
  --buffer 10       Use buffer around the area extents in the search for epicentre [km] (default: 0 km)
  --maxdepth 60     Change limit of max depth of the earthquake [km] (default: 60 km)
- --acq_time 12:00:00  Set (coarse) acquisition time [HH:MM:SS] - default: 12:00:00 - recommended to use. Alternatively set LiCSAR frame:
+ --acq_time 12:00:00  Set (coarse) acquisition time [HH:MM] - default: 12:00 - recommended to use. Alternatively set LiCSAR frame:
  --frame 123D_01234_121212  If known, set LiCSAR frame ID to extract acq_time (default: not used)
 
 """
@@ -31,7 +31,7 @@ LiCSBAS_get_eqoffsets.py -M minmag -t TSDIR -o eqoffsets.txt
 import getopt
 import os
 import sys
-import re
+import numpy as np
 import time
 import datetime as dt
 import LiCSBAS_tools_lib as tools_lib
@@ -66,7 +66,7 @@ def main(argv=None):
     minmag = 6.5
     maxdepth = 60
     buffer = 0 # km
-    acq_time = '12:00:00'
+    acq_time = '12:00'
     frame = []
 
     #%% Read options
@@ -123,7 +123,7 @@ def main(argv=None):
     if frame:
         center_time_dt = _get_frametime(frame)
     else:
-        center_time_dt = dt.datetime.strptime(acq_time, '%H:%M:%S.%f').time()
+        center_time_dt = dt.datetime.strptime(acq_time, '%H:%M').time()
 
     # extract the region and min/max time of the dataset - from the TSDIR:
     # lonlat from TS_GEOCml3GACOSmask/info/EQA.dem_par
@@ -177,7 +177,7 @@ def main(argv=None):
     print('')
 
     with open(outfile, 'w') as f:
-        for i in offsets:
+        for i in offsetdates:
             print('{}'.format(i), file=f)
 
     #%% Finish
