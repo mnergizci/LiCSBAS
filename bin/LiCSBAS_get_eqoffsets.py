@@ -125,12 +125,7 @@ def main(argv=None):
     else:
         center_time_dt = dt.datetime.strptime(acq_time, '%H:%M:%S.%f').time()
 
-    # assuming WGS-84 as input data coordinates
-    buffer = buffer/111.111
-
     # extract the region and min/max time of the dataset - from the TSDIR:
-    print('getting earthquakes over the region')
-
     # lonlat from TS_GEOCml3GACOSmask/info/EQA.dem_par
     # imdates from TS_GEOCml3GACOSmask/info/11ifg_stats.txt
     dempar =  os.path.join(tsdir, 'info', 'EQA.dem_par')
@@ -153,14 +148,17 @@ def main(argv=None):
     lon2 = lon1 + dlon * width_geo
     lat2 = lat1 + dlat * length_geo
 
+    # assuming WGS-84 as input data coordinates
+    buffer = buffer / 111.111
+
     print('searching for events')
     events = search(starttime=datein + dt.timedelta(days=1),
                     endtime=dateout - dt.timedelta(days=1),
                     minmagnitude=minmag, limit=2000, maxdepth=maxdepth,
-                    maxlongitude=max(lon1, lon2),
-                    maxlatitude=max(lat1, lat2),
-                    minlatitude=min(lat1, lat2),
-                    minlongitude=min(lon1, lon2))
+                    maxlongitude=max(lon1, lon2)+buffer,
+                    maxlatitude=max(lat1, lat2)+buffer,
+                    minlatitude=min(lat1, lat2)-buffer,
+                    minlongitude=min(lon1, lon2)-buffer)
 
     offsetdates = []
     # print('Setting offset dates')  # TODO - better to set the offsets at the centre time between the epochs
