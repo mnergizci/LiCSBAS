@@ -1038,7 +1038,9 @@ def main(argv=None):
                     dt_cum_offsets = np.zeros(len(dt_cum))
                     dt_cum_offsets[offixs] = 1
                     dt_cum_offsets = dt_cum_offsets==1
-
+                else:
+                    dt_cum_offsets = None
+                
                 inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_unws(unwpatch, G, dt_cum, gamma, n_para_inv, gpu, dt_offsets = dt_cum_offsets,
                                                                    wvars = wvars, method = method, inv_alg = inv_alg)
                 #if inv_alg == 'WLS':
