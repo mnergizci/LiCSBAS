@@ -171,6 +171,7 @@ eqoffs_minmag="6"
 eqoffs_txtfile="eqoffsets.txt"
 eqoffs_buffer="0.1"
 
+
 #############################
 ### Run (No need to edit) ###
 #############################
