@@ -322,7 +322,11 @@ def main(argv=None):
             if not os.path.exists(offsetsfile):
                 raise Usage('Offsets file not provided')
             try:
+                offsets = io_lib.read_epochlist(offsetsfile, outasdt=False)
                 offsets_dt = io_lib.read_epochlist(offsetsfile, outasdt = True)
+                if not offsets_dt:
+                    print('Offsets file is empty, disabling offsets solution')
+                    offsetsflag = False
             except:
                 raise Usage('Offsets could not be loaded from '+offsetsfile)
         if inv_alg not in ['LS', 'WLS']:
@@ -489,6 +493,22 @@ def main(argv=None):
             bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
     
     bad_ifg_all = list(set(bad_ifg11+bad_ifg12))
+    # removing coseismic ifgs for standard solutions. this will cause gap that will get interpolated
+    # not needed/wanted for 'only_sb' and 'singular_gauss' methods
+    if offsetsflag and (not singular_gauss) and (not only_sb):
+        print('\n skipping coseismic interferograms \n')
+        print('WARNING, this will remove coseismic signal from the inverted data. \n')
+        print('( to prevent this, rerun with --singular_gauss or --only_sb ) \n')
+        coseismifgs = []
+        for i, ifgd in enumerate(ifgdates_all):
+            ep1 = int(ifgd[:8])
+            ep2 = int(ifgd[-8:])
+            for skep in offsets:
+                if (ep1 < int(skep)) and (ep2 > int(skep)):
+                    coseismifgs.append(ifgd)
+        print('identified '+str(len(coseismifgs))+' coseismic ifgs \n')
+        bad_ifg_all = list(set(bad_ifg_all + coseismifgs))
+
     bad_ifg_all.sort()
 
     ### Remove bad ifgs and images from list
@@ -1063,6 +1083,7 @@ def main(argv=None):
                 res_patch = np.zeros((n_ifg, n_pt_all), dtype=np.float32)*np.nan
                 res_patch[:, ix_unnan_pt] = unwpatch.T-np.dot(G, inc_tmp)
 
+                # Calculate RMSE of the inversion (should we add degrees of freedom?)
                 res_sumsq = np.nansum(res_patch**2, axis=0)
                 res_n = np.float32((~np.isnan(res_patch)).sum(axis=0))
                 res_n[res_n==0] = np.nan # To avoid 0 division
@@ -1076,12 +1097,14 @@ def main(argv=None):
                 bool_unnan_pt = ~np.isnan(cum_patch[1, :])
                 cum_patch[0, bool_unnan_pt] = 0
 
-                ## Drop (fill with nan) interpolated cum by 2 continuous gaps
-                for i in range(n_im-2): ## from 1->n_im-1
-                    gap2 = gap_patch[i, :]+gap_patch[i+1, :]
-                    bool_gap2 = (gap2==2) ## true if 2 continuous gaps for each point
-                    cum_patch[i+1, :][bool_gap2] = np.nan
-
+                # need this below only for nsbas:
+                if method == 'nsbas':
+                    ## Drop (fill with nan) interpolated cum by 2 continuous gaps
+                    for i in range(n_im-2): ## from 1->n_im-1
+                        gap2 = gap_patch[i, :]+gap_patch[i+1, :]
+                        bool_gap2 = (gap2==2) ## true if 2 continuous gaps for each point
+                        cum_patch[i+1, :][bool_gap2] = np.nan
+                #
                 ## Last (n_im th) image. 1 gap means interpolated
                 cum_patch[-1, :][gap_patch[-1, :]==1] = np.nan
 
@@ -1132,6 +1155,7 @@ def main(argv=None):
             ## velocity and noise indecies in results dir
             names = ['vel', 'vintercept', 'resid_rms', 'n_gap', 'n_ifg_noloop', 'maxTlen']
             data = [vel_patch, vconst_patch, res_rms_patch, ns_gap_patch, ns_ifg_noloop_patch, maxTlen_patch]
+
             for i in range(len(names)):
                 file = os.path.join(resultsdir, names[i])
                 with open(file, openmode) as f:
@@ -1278,6 +1302,19 @@ def main(argv=None):
         if cmins[i] == cmaxs[i]: cmins[i] = cmaxs[i]-1
 
         plot_lib.make_im_png(data, pngfile, cmaps[i], titles[i], cmins[i], cmaxs[i])
+
+    # additionally run cum2vel where this is possible:
+    if offsetsflag and (singular_gauss or only_sb):
+        print('\nRe-estimating velocity with offsets..', flush = True)
+        modelfile = os.path.join(tsadir, 'model.h5')
+        cmd = 'LiCSBAS_cum2vel.py -i '+cumh5file+' --store_to_results --offsets '+offsetsfile+' --png --export_model '+modelfile+' --vstd'
+        print('\n by running: ')
+        print(cmd)
+        os.system(cmd)
+        if os.path.exists(os.path.join(resultsdir, 'stc')):
+            print('\nNote vstd and stc were generated, step 14 is not needed. \n')
+        else:
+            print('\nWARNING, seems run of LiCSBAS_cum2vel failed')
 
     #%% Finish
     elapsed_time = time.time()-start

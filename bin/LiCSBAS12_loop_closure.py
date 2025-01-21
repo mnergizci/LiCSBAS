@@ -320,77 +320,82 @@ def main(argv=None):
     Aloop = loop_lib.make_loop_matrix(ifgdates)
     n_loop = Aloop.shape[0]
 
-    ### Extract no loop ifgs
-    ns_loop4ifg = np.abs(Aloop).sum(axis=0)
-    ixs_ifg_no_loop = np.where(ns_loop4ifg == 0)[0]
-    no_loop_ifg = [ifgdates[ix] for ix in ixs_ifg_no_loop]
-
-    # %% 1st loop closure check. First without reference
-    _n_para = n_para if n_para < n_loop else n_loop
-    print('\n1st Loop closure check and make png for all possible {} loops,'.format(n_loop), flush=True)
-    print('with {} parallel processing...'.format(_n_para), flush=True)
-
-    bad_ifg_cand = []
-    good_ifg = []
-
-    # replace .unw with .unw.ori OR REVERSE
-    #if save_ori_unw:
-    #    print('Saving original ifg files') # this will be done through the nullification function itself
-    '''
-        for ifgd in ifgdates:
-            unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw.ori')
-            unwfile = os.path.join(ifgdir, ifgd, ifgd + '.unw')
-            if not os.path.exists(unwfile_ori):
-                rc = shutil.move(unwfile, unwfile_ori)
-            ### if ori already exists, we should not modify it!
-            #unw = io_lib.read_img(unwfile, length, width)
-            #unw.tofile(unwfile_ori)
-    '''
-    ### Parallel processing
-    p = q.Pool(_n_para)
-    loop_ph_rms_ifg = np.array(p.map(loop_closure_1st_wrapper, range(n_loop)), dtype=np.float32)
-    p.close()
-
-    for i in range(n_loop):
-        ### Find index of ifg
-        ix_ifg12, ix_ifg23 = np.where(Aloop[i, :] == 1)[0]
-        ix_ifg13 = np.where(Aloop[i, :] == -1)[0][0]
-        ifgd12 = ifgdates[ix_ifg12]
-        ifgd23 = ifgdates[ix_ifg23]
-        ifgd13 = ifgdates[ix_ifg13]
-
-        ### List as good or bad candidate
-        if loop_ph_rms_ifg[i] >= loop_thre:  # Bad loop including bad ifg.
-            bad_ifg_cand.extend([ifgd12, ifgd23, ifgd13])
-        else:
-            good_ifg.extend([ifgd12, ifgd23, ifgd13])
-
-    if os.path.exists(loop_pngdir + '_old/'):
-        shutil.rmtree(loop_pngdir + '_old/')
-
-    # %% Identify bad ifgs and output text
-    bad_ifg1 = loop_lib.identify_bad_ifg(bad_ifg_cand, good_ifg)
-
-    bad_ifgfile = os.path.join(loopdir, 'bad_ifg_loop.txt')
-    with open(bad_ifgfile, 'w') as f:
-        for i in bad_ifg1:
-            print('{}'.format(i), file=f)
-
-    ### Drop manually indicated ifg
-    if rm_ifg_list:
-        rm_ifg = io_lib.read_ifg_list(rm_ifg_list)
-        bad_ifg = list(set(bad_ifg1 + rm_ifg))
-
-        rm_ifgfile = os.path.join(loopdir, 'rm_ifg_man.txt')
-        print("\nFollowing ifgs are manually removed by {}:".format(
-            rm_ifg_list), flush=True)
-        with open(rm_ifgfile, 'w') as f:
-            for i in rm_ifg:
-                print('{}'.format(i), file=f)
-                print('{}'.format(i), flush=True)
+    if n_loop == 0:
+        print('WARNING, no loops in the given ifg network')
+        no_loop_ifg = ifgdates
+        bad_ifg = []
     else:
-        rm_ifg = []
-        bad_ifg = bad_ifg1
+        ### Extract no loop ifgs
+        ns_loop4ifg = np.abs(Aloop).sum(axis=0)
+        ixs_ifg_no_loop = np.where(ns_loop4ifg == 0)[0]
+        no_loop_ifg = [ifgdates[ix] for ix in ixs_ifg_no_loop]
+
+        # %% 1st loop closure check. First without reference
+        _n_para = n_para if n_para < n_loop else n_loop
+        print('\n1st Loop closure check and make png for all possible {} loops,'.format(n_loop), flush=True)
+        print('with {} parallel processing...'.format(_n_para), flush=True)
+
+        bad_ifg_cand = []
+        good_ifg = []
+
+        # replace .unw with .unw.ori OR REVERSE
+        #if save_ori_unw:
+        #    print('Saving original ifg files') # this will be done through the nullification function itself
+        '''
+            for ifgd in ifgdates:
+                unwfile_ori = os.path.join(ifgdir, ifgd, ifgd + '.unw.ori')
+                unwfile = os.path.join(ifgdir, ifgd, ifgd + '.unw')
+                if not os.path.exists(unwfile_ori):
+                    rc = shutil.move(unwfile, unwfile_ori)
+                ### if ori already exists, we should not modify it!
+                #unw = io_lib.read_img(unwfile, length, width)
+                #unw.tofile(unwfile_ori)
+        '''
+        ### Parallel processing
+        p = q.Pool(_n_para)
+        loop_ph_rms_ifg = np.array(p.map(loop_closure_1st_wrapper, range(n_loop)), dtype=np.float32)
+        p.close()
+
+        for i in range(n_loop):
+            ### Find index of ifg
+            ix_ifg12, ix_ifg23 = np.where(Aloop[i, :] == 1)[0]
+            ix_ifg13 = np.where(Aloop[i, :] == -1)[0][0]
+            ifgd12 = ifgdates[ix_ifg12]
+            ifgd23 = ifgdates[ix_ifg23]
+            ifgd13 = ifgdates[ix_ifg13]
+
+            ### List as good or bad candidate
+            if loop_ph_rms_ifg[i] >= loop_thre:  # Bad loop including bad ifg.
+                bad_ifg_cand.extend([ifgd12, ifgd23, ifgd13])
+            else:
+                good_ifg.extend([ifgd12, ifgd23, ifgd13])
+
+        if os.path.exists(loop_pngdir + '_old/'):
+            shutil.rmtree(loop_pngdir + '_old/')
+
+        # %% Identify bad ifgs and output text
+        bad_ifg1 = loop_lib.identify_bad_ifg(bad_ifg_cand, good_ifg)
+
+        bad_ifgfile = os.path.join(loopdir, 'bad_ifg_loop.txt')
+        with open(bad_ifgfile, 'w') as f:
+            for i in bad_ifg1:
+                print('{}'.format(i), file=f)
+
+        ### Drop manually indicated ifg
+        if rm_ifg_list:
+            rm_ifg = io_lib.read_ifg_list(rm_ifg_list)
+            bad_ifg = list(set(bad_ifg1 + rm_ifg))
+
+            rm_ifgfile = os.path.join(loopdir, 'rm_ifg_man.txt')
+            print("\nFollowing ifgs are manually removed by {}:".format(
+                rm_ifg_list), flush=True)
+            with open(rm_ifgfile, 'w') as f:
+                for i in rm_ifg:
+                    print('{}'.format(i), file=f)
+                    print('{}'.format(i), flush=True)
+        else:
+            rm_ifg = []
+            bad_ifg = bad_ifg1
 
     ### Compute n_unw without bad_ifg11 and bad_ifg
     n_unw = np.zeros((length, width), dtype=np.int16)
@@ -408,37 +413,38 @@ def main(argv=None):
         unw[unw == 0] = np.nan  # Fill 0 with nan
         n_unw += ~np.isnan(unw)  # Summing number of unnan unw
 
-    # %% 2nd loop closure check without bad ifgs to define stable ref area
-    ### Devide n_loop for paralell proc
-    _n_para2, args = tools_lib.get_patchrow(1, n_loop, 2 ** 20 / 4, int(np.ceil(n_loop / n_para)))
+    if n_loop > 0:
+        # %% 2nd loop closure check without bad ifgs to define stable ref area
+        ### Devide n_loop for paralell proc
+        _n_para2, args = tools_lib.get_patchrow(1, n_loop, 2 ** 20 / 4, int(np.ceil(n_loop / n_para)))
 
-    print('\n2nd Loop closure check without bad ifgs to define ref area...', flush=True)
-    print('with {} parallel processing...'.format(_n_para2), flush=True)
+        print('\n2nd Loop closure check without bad ifgs to define ref area...', flush=True)
+        print('with {} parallel processing...'.format(_n_para2), flush=True)
 
-    ### Parallel processing
-    p = q.Pool(_n_para2)
-    res = np.array(p.map(loop_closure_2nd_wrapper, args), dtype=np.float32)
-    p.close()
+        ### Parallel processing
+        p = q.Pool(_n_para2)
+        res = np.array(p.map(loop_closure_2nd_wrapper, args), dtype=np.float32)
+        p.close()
 
-    ns_loop_ph = np.sum(res[:, 0, :, :, ], axis=0)
-    ns_loop_ph[ns_loop_ph == 0] = np.nan  # To avoid 0 division
+        ns_loop_ph = np.sum(res[:, 0, :, :, ], axis=0)
+        ns_loop_ph[ns_loop_ph == 0] = np.nan  # To avoid 0 division
 
-    ns_bad_loop = np.sum(res[:, 1, :, :, ], axis=0)
-    loop_ph_rms_points = np.sum(res[:, 2, :, :, ], axis=0)
-    # loop_ph_rms_points = np.sqrt(loop_ph_rms_points/ns_loop_ph)
-    loop_ph_rms_points = np.sqrt(loop_ph_rms_points ** 2 / ns_loop_ph)
+        ns_bad_loop = np.sum(res[:, 1, :, :, ], axis=0)
+        loop_ph_rms_points = np.sum(res[:, 2, :, :, ], axis=0)
+        # loop_ph_rms_points = np.sqrt(loop_ph_rms_points/ns_loop_ph)
+        loop_ph_rms_points = np.sqrt(loop_ph_rms_points ** 2 / ns_loop_ph)
 
-    ### Find stable ref area which have all n_unw and minimum ns_bad_loop and loop_ph_rms_points
-    mask1 = (n_unw == np.nanmax(n_unw))
-    min_ns_bad_loop = np.nanmin(ns_bad_loop)
-    while True:
-        mask2 = (ns_bad_loop == min_ns_bad_loop)
-        if np.all(~(mask1 * mask2)):  ## All masked
-            min_ns_bad_loop = min_ns_bad_loop + 1  ## Make mask2 again
-        else:
-            break
-    loop_ph_rms_points_masked = loop_ph_rms_points * mask1 * mask2
-    loop_ph_rms_points_masked[loop_ph_rms_points_masked == 0] = np.nan
+        ### Find stable ref area which have all n_unw and minimum ns_bad_loop and loop_ph_rms_points
+        mask1 = (n_unw == np.nanmax(n_unw))
+        min_ns_bad_loop = np.nanmin(ns_bad_loop)
+        while True:
+            mask2 = (ns_bad_loop == min_ns_bad_loop)
+            if np.all(~(mask1 * mask2)):  ## All masked
+                min_ns_bad_loop = min_ns_bad_loop + 1  ## Make mask2 again
+            else:
+                break
+        loop_ph_rms_points_masked = loop_ph_rms_points * mask1 * mask2
+        loop_ph_rms_points_masked[loop_ph_rms_points_masked == 0] = np.nan
     
     reffile120 = os.path.join(infodir, '120ref.txt')
     if os.path.exists(reffile120):
@@ -552,14 +558,15 @@ def main(argv=None):
         with open(reffile, 'w') as f:
             print('{0}:{1}/{2}:{3}'.format(refx1, refx2, refy1, refy2), file=f)
 
-    ### Save loop_ph_rms_masked and png
-    loop_ph_rms_maskedfile = os.path.join(loopdir, 'loop_ph_rms_masked')
-    loop_ph_rms_points_masked.tofile(loop_ph_rms_maskedfile)
+    if n_loop > 0:
+        ### Save loop_ph_rms_masked and png
+        loop_ph_rms_maskedfile = os.path.join(loopdir, 'loop_ph_rms_masked')
+        loop_ph_rms_points_masked.tofile(loop_ph_rms_maskedfile)
 
-    cmax = np.nanpercentile(loop_ph_rms_points_masked, 95)
-    pngfile = loop_ph_rms_maskedfile + '.png'
-    title = 'RMS of loop phase (rad)'
-    plot_lib.make_im_png(loop_ph_rms_points_masked, pngfile, cmap_noise_r, title, None, cmax)
+        cmax = np.nanpercentile(loop_ph_rms_points_masked, 95)
+        pngfile = loop_ph_rms_maskedfile + '.png'
+        title = 'RMS of loop phase (rad)'
+        plot_lib.make_im_png(loop_ph_rms_points_masked, pngfile, cmap_noise_r, title, None, cmax)
 
     ### Check ref exist in unw. If not, list as noref_ifg
     noref_ifg = []

@@ -113,6 +113,7 @@ def main(argv=None):
         web_path = 'https://gws-access.jasmin.ac.uk/public/nceo_geohazards/LiCSAR_products'
         fullwebpath_metadata = os.path.join(web_path, track, frame, 'metadata', 'metadata.txt')
         try:
+            import pandas as pd
             a = pd.read_csv(fullwebpath_metadata, sep='=', header=None)
             center_time = a[a[0] == 'center_time'][1].values[0]
             center_time_dt = dt.datetime.strptime(center_time, '%H:%M:%S.%f').time()
@@ -120,9 +121,16 @@ def main(argv=None):
             return False
         return center_time_dt
 
+    center_time_dt = ''
+    if not frame:
+        # try get frame id from the folder name..
+        frame = os.path.basename(os.path.dirname(os.path.abspath(tsdir)))
+        center_time_dt = _get_frametime(frame)
+
     if frame:
         center_time_dt = _get_frametime(frame)
-    else:
+
+    if not center_time_dt:
         center_time_dt = dt.datetime.strptime(acq_time, '%H:%M').time()
 
     # extract the region and min/max time of the dataset - from the TSDIR:
