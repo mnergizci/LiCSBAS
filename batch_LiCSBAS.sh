@@ -25,7 +25,7 @@ end_step="16"	# 01-05, 11-16
 
 cometdev='0' # shortcut to use COMET's experimental/dev functions. At this moment, '1' will turn on the nullification. Recommended: 0
 # sbovl='n' # if 'y', LiCSBAS will apply on sbovls  ## TODO
-eqoffs=''  # if 'y', it will do: get_eq_offsets, then invert. if singular_gauss (recommended?), then set use of model.
+eqoffs="n"  # if 'y', it will do: get_eq_offsets, then invert. if singular_gauss (recommended?), then set use of model.
 nlook="1"	# multilook factor, used in step02
 GEOCmldir="GEOCml${nlook}"	# If start from 11 or later after doing 03-05, use e.g., GEOCml${nlook}GACOSmaskclip
 n_para="" # Number of parallel processing in step 02-05,12,13,16. default: number of usable CPU
@@ -167,9 +167,9 @@ if [ $cometdev -gt 0 ]; then
 fi
 
 # eqoffs
-eqoffs_minmag='6'
-eqoffs_txtfile='eqoffsets.txt'
-eqoffs_buffer='0.1'
+eqoffs_minmag="6"
+eqoffs_txtfile="eqoffsets.txt"
+eqoffs_buffer="0.1"
 
 #############################
 ### Run (No need to edit) ###
