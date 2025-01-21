@@ -166,6 +166,7 @@ if [ $cometdev -gt 0 ]; then
     p13_inv_alg="LS"
 fi
 
+
 # eqoffs
 eqoffs_minmag="6"
 eqoffs_txtfile="eqoffsets.txt"
