@@ -31,7 +31,6 @@ import os
 import sys
 import time
 import numpy as np
-import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
 import lics_tstools as lts
 import cmcrameri.cm as cmc
@@ -96,7 +95,7 @@ def main(argv=None):
     #%%
     #vfilt_file = tsdir+'/results/vel_filt.mskd'
     vlos_eurfile = tsdir+'/results/vel_eurasia_los.tif'
-    if not os.path.exists(vlos_eurasia):
+    if not os.path.exists(vlos_eurfile):
         vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', vlos_eurfile)
     else:
         vlos_eurasia = lts.load_tif2xr(vlos_eurfile)
