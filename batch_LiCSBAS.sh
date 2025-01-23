@@ -160,15 +160,8 @@ p16_nomask="n"	# y/n. default: n
 p16_n_para=$n_para   # default: # of usable CPU
 
 
-# cometdev
-if [ $cometdev -gt 0 ]; then
-    # using --singular, so setting to simple LS instead of WLS
-    p13_inv_alg="LS"
-fi
-
-
 # eqoffs
-eqoffs_minmag="6"
+eqoffs_minmag="0"  # 0 means skipping the estimation!
 eqoffs_txtfile="eqoffsets.txt"
 eqoffs_buffer="0.1"
 
@@ -449,7 +442,7 @@ fi
 
 if [ $start_step -le 13 -a $end_step -ge 13 ];then
   # getting eq offsets here:
-  if [ "$eqoffs" == "y" ]; then
+  if [ "$eqoffs" == "y" -a $eqoffs_minmag -gt 0 ]; then
     extra='-M '$eqoffs_minmag
     extra=$extra' -t '$TSdir
     extra=$extra' -o '$eqoffs_txtfile
