@@ -270,7 +270,9 @@ def main(argv=None):
             import cupy as cp
         if modelfile:
             if not os.path.exists(modelfile):
+                print('Specified model file does not exist: '+modelfile)
                 modelfile = os.path.join(tsadir, 'model.h5')
+                print('checking for '+modelfile)
                 if not os.path.exists(modelfile):
                     inputresidflag = False
                     print('Warning, model file does not exist. Not using.\n')
