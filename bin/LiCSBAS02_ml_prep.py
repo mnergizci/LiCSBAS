@@ -298,7 +298,10 @@ def main(argv=None):
         if sbovl:
             sbovlmmfile = os.path.join(ifgdir1, ifgd+'.sbovldiff.adf.mm')
             sbovlccfile = os.path.join(ifgdir1, ifgd+'.sbovldiff.adf.cc')
-            if not (os.path.exists(sbovlmmfile) and os.path.exists(sbovlccfile)):
+            bovlmmfile = os.path.join(ifgdir1, ifgd+'.bovldiff.adf.mm')  # in case only bovl exists.
+            bovlccfile = os.path.join(ifgdir1, ifgd+'.bovldiff.adf.cc')
+            
+            if not ((os.path.exists(sbovlmmfile) and os.path.exists(sbovlccfile)) or (os.path.exists(bovlmmfile) and os.path.exists(bovlccfile))):
                 sbovldates.append(ifgd)
 
     n_ifg2 = len(ifgdates2)
@@ -306,19 +309,22 @@ def main(argv=None):
         n_sbovl = len(sbovldates)
     
     # Print existing status for unw and cc files
-    if n_ifg - n_ifg2 > 0:
-        print("  {0:3}/{1:3} unw and cc already exist. Skip".format(n_ifg - n_ifg2, n_ifg), flush=True)
-
-    if sbovl:
+    if not sbovl:
+        if n_ifg - n_ifg2 > 0:
+            print("  {0:3}/{1:3} unw and cc already exist. Skip".format(n_ifg - n_ifg2, n_ifg), flush=True)
+    else:
         # Print existing status for sbovldiff.adf.mm and sbovldiff.adf.cc files
         if n_ifg - n_sbovl > 0:
             print("  {0:3}/{1:3} sbovldiff.adf.mm and sbovldiff.adf.cc already exist. Skip".format(n_ifg - n_sbovl, n_ifg), flush=True)
-
-    
+           
+                   
     width = None
-    if n_ifg2 > 0:
-        if n_para > n_ifg2:
-            n_para = n_ifg2
+    ifgd_ok = []
+    sbovl_ok = []
+    if sbovl and n_sbovl > 0:
+        if n_ifg2 > 0:
+            if n_para > n_sbovl:
+                n_para = n_sbovl
 
         # Perform size check
         try:
@@ -331,58 +337,104 @@ def main(argv=None):
             print('no other-than-ifg tif is found')
             width = None
 
-        # Parallel processing for `ifg` data
-        print('  {} parallel processing for ifg...'.format(n_para), flush=True)
+        # Parallel processing for sbovl data
+        print('  {} parallel processing for sbovl...'.format(n_para), flush=True)
         p = q.Pool(n_para)
-        rc_ifg = p.starmap(convert_wrapper, [(i, False) for i in range(n_ifg2)])  # is_sbovl=False for ifg
+        rc_sbovl = p.starmap(convert_wrapper, [(sbovldates[i], True) for i in range(n_sbovl)])  # Pass sbovldates
         p.close()
 
-        # Parallel processing for `sbovl` data if flag is set
-        if sbovl:
-            print('  {} parallel processing for sbovl...'.format(n_para), flush=True)
-            p = q.Pool(n_para)
-            rc_sbovl = p.starmap(convert_wrapper, [(i, True) for i in range(n_ifg2)])  # is_sbovl=True for sbovl
-            p.close()
 
-        # Process result codes for ifg processing
-        ifgd_ok = []
-        for i, _rc in enumerate(rc_ifg):
+        # Parallel processing for `sbovl` data if flag is set
+        for i, _rc in enumerate(rc_sbovl):
             if _rc == 1:
                 with open(no_unw_list, 'a') as f:
-                    print('{}'.format(ifgdates2[i]), file=f)
+                    print('{}'.format(sbovldates[i]), file=f)
             elif _rc == 0:
-                ifgd_ok.append(ifgdates2[i])
+                sbovl_ok.append(sbovldates[i])
+        
+    else:
+        if n_ifg2 > 0:
+            if n_para > n_ifg2:
+                n_para = n_ifg2
 
-        # Process results for sbovl, if applicable
-        if sbovl:
-            sbovl_ok = []
-            for i, _rc in enumerate(rc_sbovl):
+            # Perform size check for unw
+            try:
+                tif = glob.glob(os.path.join(geocdir, '*.tif'))[0]
+                geotiff = gdal.Open(tif)
+                width = geotiff.RasterXSize
+                length = geotiff.RasterYSize
+                geotiff = None
+            except:
+                print('no other-than-ifg tif is found')
+                width = None    
+        
+            # Parallel processing for ifg data
+            print('  {} parallel processing for ifg...'.format(n_para), flush=True)
+            p = q.Pool(n_para)
+            rc_ifg = p.starmap(convert_wrapper, [(ifgdates2[i], False) for i in range(n_ifg2)])  # Pass ifgdates2
+            p.close()
+        
+            # Process results for ifg
+            for i, _rc in enumerate(rc_ifg):
                 if _rc == 1:
                     with open(no_unw_list, 'a') as f:
                         print('{}'.format(ifgdates2[i]), file=f)
                 elif _rc == 0:
-                    sbovl_ok.append(ifgdates2[i])
-
-
-        ### Read info
-        ## If all float already exist, this will not be done, but no problem because
-        ## par files should alerady exist!
-        if ifgd_ok:
-            example_date = ifgd_ok[0]
-            unw_tiffile = os.path.join(geocdir, example_date, example_date+'.geo.unw.tif')
-            geotiff = gdal.Open(unw_tiffile)
-            width = geotiff.RasterXSize
-            length = geotiff.RasterYSize
-            lon_w_p, dlon, _, lat_n_p, _, dlat = geotiff.GetGeoTransform()
-            ## lat lon are in pixel registration. dlat is negative
-            lon_w_g = lon_w_p + dlon/2
-            lat_n_g = lat_n_p + dlat/2
-            ## to grit registration by shifting half pixel inside
-            if nlook != 1:
-                width = int(width/nlook)
-                length = int(length/nlook)
-                dlon = dlon*nlook
-                dlat = dlat*nlook
+                    ifgd_ok.append(ifgdates2[i])
+                    
+    ### Read info
+    ## If all float already exist, this will not be done, but no problem because
+    ## par files should alerady exist!
+    if ifgd_ok:
+        example_date = ifgd_ok[0]
+        unw_tiffile = os.path.join(geocdir, example_date, example_date+'.geo.unw.tif')
+        geotiff = gdal.Open(unw_tiffile)
+        width = geotiff.RasterXSize
+        length = geotiff.RasterYSize
+        lon_w_p, dlon, _, lat_n_p, _, dlat = geotiff.GetGeoTransform()
+        ## lat lon are in pixel registration. dlat is negative
+        lon_w_g = lon_w_p + dlon/2
+        lat_n_g = lat_n_p + dlat/2
+        ## to grit registration by shifting half pixel inside
+        if nlook != 1:
+            width = int(width/nlook)
+            length = int(length/nlook)
+            dlon = dlon*nlook
+            dlat = dlat*nlook
+    elif sbovl_ok:
+        example_date = sbovl_ok[0]
+        unw_tiffile = os.path.join(geocdir, example_date, example_date+'.geo.sbovldiff.adf.mm.tif')
+        geotiff = gdal.Open(unw_tiffile)
+        width = geotiff.RasterXSize
+        length = geotiff.RasterYSize
+        lon_w_p, dlon, _, lat_n_p, _, dlat = geotiff.GetGeoTransform()
+        ## lat lon are in pixel registration. dlat is negative
+        lon_w_g = lon_w_p + dlon/2
+        lat_n_g = lat_n_p + dlat/2
+        ## to grit registration by shifting half pixel inside
+        if nlook != 1:
+            width = int(width/nlook)
+            length = int(length/nlook)
+            dlon = dlon*nlook
+            dlat = dlat*nlook
+    else:
+        print(f"No valid interferogram data found for processing or already processed, please check {outdir} exist or not!", flush=True)
+        example_date = ifgdates2[i]
+        unw_tiffile = os.path.join(geocdir, example_date, example_date+'.geo.unw.tif')
+        geotiff = gdal.Open(unw_tiffile)
+        width = geotiff.RasterXSize
+        length = geotiff.RasterYSize
+        lon_w_p, dlon, _, lat_n_p, _, dlat = geotiff.GetGeoTransform()
+        ## lat lon are in pixel registration. dlat is negative
+        lon_w_g = lon_w_p + dlon/2
+        lat_n_g = lat_n_p + dlat/2
+        ## to grit registration by shifting half pixel inside
+        if nlook != 1:
+            width = int(width/nlook)
+            length = int(length/nlook)
+            dlon = dlon*nlook
+            dlat = dlat*nlook
+                    
     # 2021-11-11 fix for case where all is done except of par files..
     if not width:
         tif = glob.glob(os.path.join(geocdir,'*.tif'))[0]
@@ -445,7 +497,7 @@ def main(argv=None):
     #%% bperp
     print('\nCopy baselines file', flush=True)
     imdates = tools_lib.ifgdates2imdates(ifgdates)
-    if os.path.exists(bperp_file_in):
+    if os.path.exists(bperp_file_in) and os.path.getsize(bperp_file_in) > 0:
         ## Check exisiting bperp_file
         if not io_lib.read_bperp_file(bperp_file_in, imdates):
             print('  baselines file found, but not complete. Make dummy', flush=True)
@@ -470,10 +522,9 @@ def main(argv=None):
 
 #%%
 # Wrapper function with `is_sbovl` parameter
-def convert_wrapper(i, is_sbovl=False):
-    ifgd = ifgdates2[i]
-    if np.mod(i, 10) == 0:
-        print("  {0:3}/{1:3}th IFG...".format(i, len(ifgdates2)), flush=True)
+def convert_wrapper(ifgd, is_sbovl=False):
+    # if np.mod(ifgd, 10) == 0:
+    print(f"  Processing {ifgd}...", flush=True)
 
     # Initialize suffix and cycle based on type
     if is_sbovl:

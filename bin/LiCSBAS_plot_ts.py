@@ -195,13 +195,14 @@ if __name__ == "__main__":
     vmax = None
     cmap_name = "cmc.roma_r"
     auto_crange = 99.0
+    sbovl_flag = False
 
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png="])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -244,6 +245,8 @@ if __name__ == "__main__":
                 ylen = float(a)
             elif o == '--ts_png':
                 ts_pngfile = a
+            elif o == '--sbovl':
+                sbovl_flag = True
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -526,10 +529,13 @@ if __name__ == "__main__":
     axt2 = pv.text(0.01, 0.99, 'Left-doubleclick:\n Plot time series\nRight-drag:\n Change ref area', fontsize=8, va='top')
     axt = pv.text(0.01, 0.78, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)'.format(refx1, refx2, refy1, refy2), fontsize=8, va='bottom')
 
-    ### Fisrt show
+    ### First show
     rax, = axv.plot([refx1h, refx2h, refx2h, refx1h, refx1h],
                     [refy1h, refy1h, refy2h, refy2h, refy1h], '--k', alpha=0.8)
-    data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
+    if not sbovl_flag:
+        data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
+    else:
+        data = vel*mask
     cax = axv.imshow(data, clim=[vmin, vmax], cmap=cmap, aspect=aspect, interpolation='nearest')
 
     axv.set_title('vel')
@@ -638,7 +644,8 @@ if __name__ == "__main__":
 
         if 'vel' in val_ind:  ## Velocity
             data = mapdict_data[val_ind]*mask
-            data = data-np.nanmean(data[refy1:refy2, refx1:refx2])
+            if not sbovl_flag:
+                data = data-np.nanmean(data[refy1:refy2, refx1:refx2])
             if vlimauto: ## auto
                 vmin = np.nanpercentile(data*mask, 100-auto_crange)
                 vmax = np.nanpercentile(data*mask, auto_crange)
@@ -700,7 +707,8 @@ if __name__ == "__main__":
 #        axv.set_title('Time = %s'%(dstr))
         axv.set_title('%s (Ref: %s)'%(dstr, dstr_ref))
         newv = (cum[timenearest, :, :]-cum_ref)*mask
-        newv = newv-np.nanmean(newv[refy1:refy2, refx1:refx2])
+        if not sbovl_flag:
+            newv = newv-np.nanmean(newv[refy1:refy2, refx1:refx2])
 
         cax.set_data(newv)
         cax.set_cmap(cmap)
@@ -829,12 +837,16 @@ if __name__ == "__main__":
 
         ### If not masked
         ### cumfile
-        vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
+        if not sbovl_flag:
+            vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
 
-        dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-#        dcum_ref = 0
-        dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
-
+            dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+#           dcum_ref = 0
+            dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
+        else:
+            vel1p = vel[ii, jj]
+            dcum_ref = cum_ref[ii, jj]
+            dph = cum[:, ii, jj]
         ## fit function
         lines1 = [0, 0, 0, 0]
         xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
@@ -849,10 +861,14 @@ if __name__ == "__main__":
 
         ### cumfile2
         if cumfile2:
-            vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
-            dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-            dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
-
+            if not sbovl_flag:
+                vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
+                dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
+            else:
+                vel2p = vel2[ii, jj]
+                dcum2_ref = cum2_ref[ii, jj]
+                dphf = cum2[:, ii, jj]
             ## fit function
             lines2 = [0, 0, 0, 0]
             for model, vis in enumerate(visibilities):

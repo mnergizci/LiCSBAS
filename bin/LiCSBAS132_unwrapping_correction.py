@@ -558,11 +558,18 @@ def plot_networks():
 
             ### Plot network
             ## Read bperp data or dummy
-            bperp_file = os.path.join(ccdir, 'baselines')
+            bperp_file = os.path.join(ifgdir, 'baselines')
             if os.path.exists(bperp_file):
-                bperp = io_lib.read_bperp_file(bperp_file, imdates)
-            else: #dummy
-                bperp = np.random.random(n_im).tolist()
+                with open(bperp_file, 'r') as f:
+                    lines = [line.strip() for line in f if line.strip()]  # Remove empty lines
+                if len(lines) >= len(imdates):  # Ensure enough entries
+                    bperp = io_lib.read_bperp_file(bperp_file, imdates)
+                else:
+                    ##baselines file contain fewer entries than the number of ifgs, so dummy values will be used
+                    bperp = np.random.random(len(imdates)).tolist()
+            else:  # Generate dummy baselines if file doesn't exist
+                print(f"WARNING: Baselines file not found. Using dummy values.")
+                bperp = np.random.random(len(imdates)).tolist()
 
             pngfile = os.path.join(netdir, 'network132_only_good_without_correction{}_{:.2f}_{:.2f}.png'.format(args.suffix, correction_thresh, target_thresh))
             plot_lib.plot_corrected_network(retained_ifgs, bperp, corrected_ifgs, pngfile, plot_corrected=False)

@@ -76,6 +76,8 @@ LiCSBAS12_loop_closure.py -d ifgdir [-t tsadir] [-l loop_thre] [--multi_prime]
 """
 # %% Change log
 '''
+20241221 Muhammet Nergizci
+ - check the baseline file empty or not
 v1.6.4 20230901 Lin Shen
  - Improved loop closure error check
 v1.6.3 20220330 Milan Lazecky
@@ -889,9 +891,17 @@ def main(argv=None):
     ## Read bperp data or dummy
     bperp_file = os.path.join(ifgdir, 'baselines')
     if os.path.exists(bperp_file):
-        bperp = io_lib.read_bperp_file(bperp_file, imdates)
-    else:  # dummy
-        bperp = np.random.random(n_im).tolist()
+        with open(bperp_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]  # Remove empty lines
+        if len(lines) >= len(imdates):  # Ensure enough entries
+            bperp = io_lib.read_bperp_file(bperp_file, imdates)
+        else:
+            ##baselines file contain fewer entries than the number of ifgs, so dummy values will be used
+            bperp = np.random.random(len(imdates)).tolist()
+    else:  # Generate dummy baselines if file doesn't exist
+        print(f"WARNING: Baselines file not found. Using dummy values.")
+        bperp = np.random.random(len(imdates)).tolist()
+    
 
     pngfile = os.path.join(netdir, 'network12_all.png')
     plot_lib.plot_network(ifgdates, bperp, [], pngfile)
