@@ -901,9 +901,11 @@ def main(argv=None):
         if not bperp:
             print('using dummy numbers instead of bperps')
             bperp = np.random.random(n_im).tolist()
+            io_lib.make_dummy_bperp(bperp_file, imdates)
     else:  # dummy
         print('using dummy numbers instead of bperps')
         bperp = np.random.random(n_im).tolist()
+        io_lib.make_dummy_bperp(bperp_file, imdates)
 
     pngfile = os.path.join(netdir, 'network12_all.png')
     plot_lib.plot_network(ifgdates, bperp, [], pngfile)
