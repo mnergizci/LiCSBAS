@@ -898,7 +898,11 @@ def main(argv=None):
     bperp_file = os.path.join(ifgdir, 'baselines')
     if os.path.exists(bperp_file):
         bperp = io_lib.read_bperp_file(bperp_file, imdates)
+        if not bperp:
+            print('using dummy numbers instead of bperps')
+            bperp = np.random.random(n_im).tolist()
     else:  # dummy
+        print('using dummy numbers instead of bperps')
         bperp = np.random.random(n_im).tolist()
 
     pngfile = os.path.join(netdir, 'network12_all.png')

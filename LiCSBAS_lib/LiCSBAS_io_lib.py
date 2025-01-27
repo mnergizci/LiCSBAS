@@ -145,10 +145,16 @@ def read_bperp_file(bperp_file, imdates):
     bperp_dict = {}
 
     ### Determine type of bperp_file; old or not
-    with open(bperp_file) as f:
-        line = f.readline().split() #list
-        if not line[0].startswith("2"):
-            line = f.readline().split()  # find first line that starts with '2'
+    try:
+        with open(bperp_file) as f:
+            line = f.readline().split() #list
+            if not (line[0].startswith("2") or line[0].startswith("1")):
+                line = f.readline().split()  # find first line that starts with '2' or '1'
+    except:
+        print('ERROR with baselines file')
+        #bperp = np.random.randn(len(imdates)) # keep small numbers
+        #return bperp
+        return False
 
     if len(line) == 4: ## new format
         bperp_dict[line[0]] = '0.00' ## single prime. unnecessary?
