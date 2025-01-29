@@ -145,10 +145,16 @@ def read_bperp_file(bperp_file, imdates):
     bperp_dict = {}
 
     ### Determine type of bperp_file; old or not
-    with open(bperp_file) as f:
-        line = f.readline().split() #list
-        if not line[0].startswith("2"):
-            line = f.readline().split()  # find first line that starts with '2'
+    try:
+        with open(bperp_file) as f:
+            line = f.readline().split() #list
+            if not (line[0].startswith("2") or line[0].startswith("1")):
+                line = f.readline().split()  # find first line that starts with '2' or '1'
+    except:
+        print('ERROR with baselines file')
+        #bperp = np.random.randn(len(imdates)) # keep small numbers
+        #return bperp
+        return False
 
     if len(line) == 4: ## new format
         bperp_dict[line[0]] = '0.00' ## single prime. unnecessary?
@@ -216,7 +222,7 @@ def read_ifg_list(ifg_listfile):
     line = f.readline()
 
     while line:
-        if line[0] == "2":
+        if (line[0] == "2") or (line[0] == "1"):
             ifgd = line.split()[0]
             ifgdates.append(str(ifgd))
             line = f.readline()
@@ -227,17 +233,28 @@ def read_ifg_list(ifg_listfile):
     return ifgdates
 
 
-def read_epochlist(txtfile):
+def read_epochlist(txtfile, outasdt = False):
+    ''' Reads txt file containing epochs, either yyyy-mm-dd or yyyymmdd '''
     f = open(txtfile)
     line = f.readline()
     out = []
     while line:
         if (line[0] == "2") or (line[0] == "1"):
-            out.append(str(line))
+            out.append(str(line.split()[0]))
             line = f.readline()
         else:
             line = f.readline()
             continue
+    out.sort()
+    if outasdt:
+        outdt = []
+        for epoch in out:
+            try:
+                outdt.append(dt.datetime.strptime(epoch, '%Y-%m-%d').date())
+            except:
+                outdt.append(dt.datetime.strptime(epoch, '%Y%m%d').date())
+        out = outdt
+    out = list(set(out))
     return out
 
 
