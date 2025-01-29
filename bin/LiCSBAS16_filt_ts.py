@@ -637,8 +637,11 @@ def main(argv=None):
         modelh5.close()
 
     ### Rerferencing cumulative displacement to new stable ref
-    for i in range(n_im):
-        cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
+    if not sbovl:
+        for i in range(n_im):
+            cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
+    else:
+        print('Skipping back referencing to stable point for SBOI?')
 
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
