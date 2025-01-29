@@ -402,21 +402,27 @@ def main(argv=None):
             dlon = dlon*nlook
             dlat = dlat*nlook
     elif sbovl_ok:
-        example_date = sbovl_ok[0]
-        unw_tiffile = os.path.join(geocdir, example_date, example_date+'.geo.sbovldiff.adf.mm.tif')
-        geotiff = gdal.Open(unw_tiffile)
-        width = geotiff.RasterXSize
-        length = geotiff.RasterYSize
-        lon_w_p, dlon, _, lat_n_p, _, dlat = geotiff.GetGeoTransform()
-        ## lat lon are in pixel registration. dlat is negative
-        lon_w_g = lon_w_p + dlon/2
-        lat_n_g = lat_n_p + dlat/2
-        ## to grit registration by shifting half pixel inside
-        if nlook != 1:
-            width = int(width/nlook)
-            length = int(length/nlook)
-            dlon = dlon*nlook
-            dlat = dlat*nlook
+        example_date = None
+        for date in sbovl_ok:
+            unw_tiffile = os.path.join(geocdir, date, f"{date}.geo.sbovldiff.adf.mm.tif")
+            geotiff = gdal.Open(unw_tiffile)
+            if geotiff is not None:
+                example_date = date
+                width = geotiff.RasterXSize
+                length = geotiff.RasterYSize
+                lon_w_p, dlon, _, lat_n_p, _, dlat = geotiff.GetGeoTransform()
+                lon_w_g = lon_w_p + dlon / 2
+                lat_n_g = lat_n_p + dlat / 2
+
+                if nlook != 1:
+                    width = int(width / nlook)
+                    length = int(length / nlook)
+                    dlon *= nlook
+                    dlat *= nlook
+                break  # Exit loop when a valid file is found
+        if example_date is None:
+            print("No valid sbovl data found. Exiting.")
+            sys.exit(1)
     else:
         print(f"No valid interferogram data found for processing or already processed, please check {outdir} exist or not!", flush=True)
         example_date = ifgdates2[i]
