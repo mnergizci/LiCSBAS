@@ -326,7 +326,12 @@ if __name__ == "__main__":
     print('\nReading {}'.format(os.path.relpath(cumfile)))
     cumh5 = h5.File(cumfile,'r')
     vel = cumh5['vel']
-    cum = cumh5['cum']
+    try:
+        cum = cumh5['cum']
+    except:
+        cum = cumh5['cum_model']
+        print('loading model cum data')
+    
     n_im, length, width = cum.shape
 
     try:
@@ -427,7 +432,13 @@ if __name__ == "__main__":
     if cumfile2:
         print('Reading {} as 2nd'.format(os.path.relpath(cumfile2)))
         cumh52 = h5.File(cumfile2,'r')
-        cum2 = cumh52['cum']
+
+        try:
+            cum2 = cumh52['cum']
+        except:
+            cum2 = cumh52['cum_model']
+            print('loading model cum data')
+
         cum2_ref = cum2[ix_m, :, :]
         vel2 = cumh52['vel']
 
