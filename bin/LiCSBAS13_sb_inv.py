@@ -498,13 +498,15 @@ def main(argv=None):
     if offsetsflag and (not singular_gauss) and (not only_sb):
         print('\n skipping coseismic interferograms \n')
         print('WARNING, this will remove coseismic signal from the inverted data. \n')
-        print('( to prevent this, rerun with --singular_gauss or --only_sb ) \n')
+        print('( to prevent this, rerun with --only_sb ) \n')
+        #print('( to prevent this, rerun with --singular_gauss or --only_sb ) \n')
+        print('\n Note, the offsets should be shifted by -1 day if they occur in the same acquisition date but before the acquisition time! \n')
         coseismifgs = []
         for i, ifgd in enumerate(ifgdates_all):
             ep1 = int(ifgd[:8])
             ep2 = int(ifgd[-8:])
             for skep in offsets:
-                if (ep1 < int(skep)) and (ep2 > int(skep)):
+                if (ep1 <= int(skep)) and (ep2 > int(skep)):
                     coseismifgs.append(ifgd)
         print('identified '+str(len(coseismifgs))+' coseismic ifgs \n')
         bad_ifg_all = list(set(bad_ifg_all + coseismifgs))
