@@ -861,7 +861,7 @@ fi
 
 if [ $eqminmag -gt 0 ]; then # && [ $clip == 1 ]; then
  sed -i 's/eqoffs=\"n/eqoffs=\"y/' batch_LiCSBAS.sh
- sed -i 's/eqoffs_minmag=\"6\"/eqoffs_minmag=\"'$eqminmag'\"/' batch_LiCSBAS.sh
+ sed -i 's/^eqoffs_minmag=\"[0-9.]*\"/eqoffs_minmag=\"'$eqminmag'\"/' batch_LiCSBAS.sh
 elif [ ! -z $eqofftxt ]; then
   if [ `cat $eqofftxt | wc -l` -lt 1 ]; then
     echo "WARNING, the "$eqofftxt" is empty. Will skip earthquake offsets estimation"
