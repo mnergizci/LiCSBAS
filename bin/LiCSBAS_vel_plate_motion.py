@@ -6,7 +6,8 @@
 Overview
 ========
 This script will remove plate motion effect from velocity and reference effect from vstd.
-Must be run from the folder containing GEOC with ENU.tif files. If this is not the case, please provide frame ID (works on LiCSAR only, for now)
+Must be run from the folder containing GEOC with ENU.tif files. If this is not the case, please provide frame ID (works on LiCSAR only, for now).
+Finally, note it expects you to have the filtered masked velocity calculated, i.e. please run step 16 first (on masked dataset)
 
 =====
 Usage
@@ -100,9 +101,9 @@ def main(argv=None):
     else:
         vlos_eurasia = lts.load_tif2xr(vlos_eurfile)
     vel_tiffile = tsdir+'/results/vel.filt.mskd.tif'
-    if not os.path.exists(vel_tiffile):
-        cmd = 'LiCSBAS_flt2geotiff.py -i {0}/results/vel.filt.mskd -p {0}/info/EQA.dem_par -o {0}/results/vel.filt.mskd.tif'.format(tsdir)
-        os.system(cmd)
+    # if not os.path.exists(vel_tiffile):   # why not to regenerate it....
+    cmd = 'LiCSBAS_flt2geotiff.py -i {0}/results/vel.filt.mskd -p {0}/info/EQA.dem_par -o {0}/results/vel.filt.mskd.tif'.format(tsdir)
+    os.system(cmd)
     if not os.path.exists(vel_tiffile):
         print('ERROR, cannot generate vlos tif file')
         exit()
@@ -130,10 +131,10 @@ def main(argv=None):
 
     if vstd_fix:
         # recalc vstd
-        if not os.path.exists(tsdir+'/results/vstd.tif'):
-            print('generating vstd tif')
-            cmd = 'LiCSBAS_flt2geotiff.py -i {0}/results/vstd -p {0}/info/EQA.dem_par -o {0}/results/vstd.tif'.format(tsdir)
-            os.system(cmd)
+        #if not os.path.exists(tsdir+'/results/vstd.tif'):
+        print('generating vstd tif')
+        cmd = 'LiCSBAS_flt2geotiff.py -i {0}/results/vstd -p {0}/info/EQA.dem_par -o {0}/results/vstd.tif'.format(tsdir)
+        os.system(cmd)
         #
         print('updating vstd (removing reference effect)')
         cmd = 'cd {0}/results; LiCSBAS_remove_reference_effect_from_vstd.py'.format(tsdir)

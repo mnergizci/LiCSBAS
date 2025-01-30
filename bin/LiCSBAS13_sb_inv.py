@@ -99,6 +99,9 @@ skipping here as will do it as post-processing:
 '''
 #%% Change log
 '''
+
+20241221 Muhammet Nergizci
+ - check baseline file empty or not
 20241207 ML
  - added singular_gauss
 20241102 MNergizci
@@ -596,11 +599,19 @@ def main(argv=None):
     ## Read bperp data or dummy
     bperp_file = os.path.join(ifgdir, 'baselines')
     if os.path.exists(bperp_file):
-        bperp_all = io_lib.read_bperp_file(bperp_file, imdates_all)
-        bperp = io_lib.read_bperp_file(bperp_file, imdates)
-    else: #dummy
+        with open(bperp_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]  # Remove empty lines
+        if len(lines) >= len(imdates):  # Ensure enough entries
+            bperp = io_lib.read_bperp_file(bperp_file, imdates)
+            bperp_all = io_lib.read_bperp_file(bperp_file, imdates_all)
+        else:
+            print("WARNING: Baselines file contains fewer entries than the number of ifgs. Using dummy values.")
+            bperp = np.random.random(len(imdates)).tolist()
+            bperp_all = np.random.random(len(imdates_all)).tolist()
+    else:  # Generate dummy baselines if file doesn't exist
+        print("WARNING: Baselines file not found. Using dummy values.")
+        bperp = np.random.random(len(imdates)).tolist()
         bperp_all = np.random.random(len(imdates_all)).tolist()
-        bperp = np.random.random(n_im).tolist()
 
     pngfile = os.path.join(netdir, 'network13_all.png')
     plot_lib.plot_network(ifgdates_all, bperp_all, [], pngfile)
@@ -677,45 +688,44 @@ def main(argv=None):
 
 
     #%% Ref phase for inversion
-    lengththis = refy2-refy1
-    countf = width*refy1
-    countl = width*lengththis # Number to be read
-    ref_unw = []
-    nanserror = []
-    for i, ifgd in enumerate(ifgdates):
-        if sbovl:
-            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
-        else:
+    if not sbovl:
+        lengththis = refy2-refy1
+        countf = width*refy1
+        countl = width*lengththis # Number to be read
+        ref_unw = []
+        nanserror = []
+        for i, ifgd in enumerate(ifgdates):
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
-        f = open(unwfile, 'rb')
-        f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd path, 4 means byte
+            f = open(unwfile, 'rb')
+            f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd path, 4 means byte
 
-        ### Read unw data (mm) at ref area
-        unw = np.fromfile(f, dtype=np.float32, count=countl).reshape((lengththis, width))[:, refx1:refx2]*coef_r2m
+            ### Read unw data (mm) at ref area
+            unw = np.fromfile(f, dtype=np.float32, count=countl).reshape((lengththis, width))[:, refx1:refx2]*coef_r2m
 
-        unw[unw == 0] = np.nan
-        if np.all(np.isnan(unw)):
-            print('All nan in ref area in {}. Removing from processing.'.format(ifgd))
-            #print('Rerun LiCSBAS12.')
+            unw[unw == 0] = np.nan
+            if np.all(np.isnan(unw)):
+                print('All nan in ref area in {}. Removing from processing.'.format(ifgd))
+                #print('Rerun LiCSBAS12.')
+                f.close()
+                nanserror.append(ifgd)
+                #return 1
+                continue
+
+            ref_unw.append(np.nanmean(unw))
+
             f.close()
-            nanserror.append(ifgd)
-            #return 1
-            continue
 
-        ref_unw.append(np.nanmean(unw))
-
-        f.close()
-
-    if nanserror:
-        print('There were still ifgs with all nan in ref area. Please rerun step 13')
-        print('you can check following file (remove it if you decide to change reference point):')
-        noref_ifgfile = os.path.join(infodir, '120bad_ifg.txt')
-        print(noref_ifgfile)
-        with open(noref_ifgfile, 'a') as f:
-            for i in nanserror:
-                print('{}'.format(i), file=f)
-        return 1
-
+        if nanserror:
+            print('There were still ifgs with all nan in ref area. Please rerun step 13')
+            print('you can check following file (remove it if you decide to change reference point):')
+            noref_ifgfile = os.path.join(infodir, '120bad_ifg.txt')
+            print(noref_ifgfile)
+            with open(noref_ifgfile, 'a') as f:
+                for i in nanserror:
+                    print('{}'.format(i), file=f)
+            return 1
+    else:
+        print('SBOVL: no reference phase set up??')
     #%% Open cum.h5 for output
     ### Decide here what to do re. cumh5file and reloading patches. Need to check that stored cumh5 file is the right size etc
     print('store_patches:', store_patches)
@@ -823,7 +833,10 @@ def main(argv=None):
                 ### Read unw data (mm) at patch area
                 unw = np.fromfile(f, dtype=np.float32, count=countl).reshape((lengththis, width))*coef_r2m
                 unw[unw == 0] = np.nan # Fill 0 with nan
-                unw = unw - ref_unw[i]
+                if not sbovl:
+                    unw = unw - ref_unw[i]
+                else:
+                    print('SBOVL: no reference removal set up??')
                 unwpatch[i] = unw
                 f.close()
 
@@ -1198,11 +1211,14 @@ def main(argv=None):
     print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
 
     ### Rerferencing cumulative displacement  and vel to new stable ref
-    for i in range(n_im):
-        cum[i, :, :] = cum[i, :, :] - cum[i, refy1s, refx1s]
-    vel = vel - vel[refy1s, refx1s]
-    vconst = vconst - vconst[refy1s, refx1s]
-
+    if not sbovl:
+        for i in range(n_im):
+            cum[i, :, :] = cum[i, :, :] - cum[i, refy1s, refx1s]
+        vel = vel - vel[refy1s, refx1s]
+        vconst = vconst - vconst[refy1s, refx1s]
+    else:
+        print('  Skip rerferencing cumulative displacement and velocity for sbovl data.', flush=True)
+        
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '13rms_cum_wrt_med')
     with open(rms_cum_wrt_med_file, 'w') as f:
@@ -1439,7 +1455,10 @@ def inc_png_wrapper(imx, sbovl=False):
     try:
         unw = io_lib.read_img(unwfile, length, width)*coef_r2m
         ix_ifg = ifgdates.index(ifgd)
-        unw = unw - ref_unw[ix_ifg]
+        if not sbovl:
+            unw = unw - ref_unw[ix_ifg]
+        else:
+            print('  Skip subtracting reference for sbovl data.', flush=True)
     except:
         unw = np.zeros((length, width), dtype=np.float32)*np.nan
 

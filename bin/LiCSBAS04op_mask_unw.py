@@ -41,6 +41,8 @@ LiCSBAS04op_mask_unw.py -i in_dir -o out_dir [-c coh_thre] [-s cc_ifg_thre] [-r 
 """
 #%% Change log
 '''
+20241220 Muhammet Nergizci
+ - skipping the non exist .unw .cc files in the mask_wrapper function
 20230803 Jack McGrath
  - add option to individually mask IFGs based on coh
 20220121 Andrew Watson
@@ -329,42 +331,54 @@ def main(argv=None):
 #%%
 def mask_wrapper(ifgix):
     ifgd = ifgdates2[ifgix]
-    if np.mod(ifgix,100) == 0:
+    if np.mod(ifgix, 100) == 0:
         print("  {0:3}/{1:3}th unw...".format(ifgix, len(ifgdates2)), flush=True)
 
-    unwfile = os.path.join(in_dir, ifgd, ifgd+'.unw')
+    # Construct file paths
+    unwfile = os.path.join(in_dir, ifgd, ifgd + '.unw')
+    ccfile = os.path.join(in_dir, ifgd, ifgd + '.cc')
+
+    # Check if the unw file exists
+    if not os.path.exists(unwfile):
+        print(f"  WARNING: File not found: {unwfile}. Skipping...", flush=True)
+        return
+
+    # Read unw file
     unw = io_lib.read_img(unwfile, length, width)
-    unw[unw==0] = np.nan
-        
-    ### Mask
+    unw[unw == 0] = np.nan
+
+    # Apply mask
     unw[bool_mask] = np.nan
 
+    # Check if cc file exists and apply coherence threshold
     if cc_ifg_thre:
-        ccfile = os.path.join(in_dir, ifgd, ifgd+'.cc')
-        if os.path.getsize(ccfile) == length*width:
-            coh = io_lib.read_img(ccfile, length, width, np.uint8)
-            coh = coh.astype(np.float32)/255
+        if not os.path.exists(ccfile):
+            print(f"  WARNING: File not found: {ccfile}. Skipping coherence masking...", flush=True)
         else:
-            coh = io_lib.read_img(ccfile, length, width)
-            coh[np.isnan(coh)] = 0 # Fill nan with 0
-        unw[np.where(coh < cc_ifg_thre)] = np.nan
+            if os.path.getsize(ccfile) == length * width:
+                coh = io_lib.read_img(ccfile, length, width, np.uint8)
+                coh = coh.astype(np.float32) / 255
+            else:
+                coh = io_lib.read_img(ccfile, length, width)
+                coh[np.isnan(coh)] = 0  # Fill NaNs with 0
+            unw[np.where(coh < cc_ifg_thre)] = np.nan
 
-    ### Output
+    # Create output directory
     out_dir1 = os.path.join(out_dir, ifgd)
-    if not os.path.exists(out_dir1): os.mkdir(out_dir1)
-    
-    unw.tofile(os.path.join(out_dir1, ifgd+'.unw'))
-    
-    if not os.path.exists(os.path.join(out_dir1, ifgd+'.cc')):
-        ccfile = os.path.join(in_dir, ifgd, ifgd+'.cc')
-        os.symlink(os.path.relpath(ccfile, out_dir1), os.path.join(out_dir1, ifgd+'.cc'))
+    if not os.path.exists(out_dir1):
+        os.mkdir(out_dir1)
 
-    ## Output png for masked unw
-    pngfile = os.path.join(out_dir1, ifgd+'.unw.png')
-    title = '{} ({}pi/cycle)'.format(ifgd, cycle*2)
-    plot_lib.make_im_png(np.angle(np.exp(1j*unw/cycle)*cycle), pngfile, cmap_wrap, title, -np.pi, np.pi, cbar=False)
+    # Save masked unw file
+    unw.tofile(os.path.join(out_dir1, ifgd + '.unw'))
 
+    # Create symbolic link for cc file
+    if not os.path.exists(os.path.join(out_dir1, ifgd + '.cc')):
+        os.symlink(os.path.relpath(ccfile, out_dir1), os.path.join(out_dir1, ifgd + '.cc'))
 
+    # Generate PNG for masked unw
+    pngfile = os.path.join(out_dir1, ifgd + '.unw.png')
+    title = '{} ({}pi/cycle)'.format(ifgd, cycle * 2)
+    plot_lib.make_im_png(np.angle(np.exp(1j * unw / cycle) * cycle), pngfile, cmap_wrap, title, -np.pi, np.pi, cbar=False)
 #%% main
 if __name__ == "__main__":
     sys.exit(main())
