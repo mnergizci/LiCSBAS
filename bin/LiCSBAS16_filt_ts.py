@@ -209,7 +209,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs"])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -252,6 +252,8 @@ def main(argv=None):
                 gpu = True
             elif o == '--nopngs':
                 nopngs = True
+            elif o == '--sbovl':
+                sbovl = True
             elif o == '--from_model':
                 modelfile = a
                 inputresidflag = True
