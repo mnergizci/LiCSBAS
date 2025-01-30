@@ -836,7 +836,7 @@ fi
 
 
 #preparing batch file
-#module load $LB_version   #TODO open here after pull requests?
+module load $LB_version   #TODO open here after pull requests?
 rm -f batch_LiCSBAS.sh 2>/dev/null
 copy_batch_LiCSBAS.sh >/dev/null
 
@@ -867,7 +867,7 @@ elif [ ! -z $eqofftxt ]; then
   if [ `cat $eqofftxt | wc -l` -lt 1 ]; then
     echo "WARNING, the "$eqofftxt" is empty. Will skip earthquake offsets estimation"
   else
-    cat $eqofftxt > eqoffsets.txt
+    cat $eqofftxt > eqoffsets.temp.deleteme; mv eqoffsets.temp.deleteme eqoffsets.txt
     sed -i 's/^eqoffs=\"n/eqoffs=\"y/' batch_LiCSBAS.sh
     sed -i "s/^eqoffs_txtfile=.*/eqoffs_txtfile=\'eqoffsets.txt\'/" batch_LiCSBAS.sh
   fi
@@ -965,7 +965,7 @@ if [ $run_jasmin -eq 1 ]; then
   #just a little export fix
   #multi=1
  #fi
- #echo "module load "$LB_version >> jasmin_run.sh ##TODO open here after accepting pull requests?
+ echo "module load "$LB_version >> jasmin_run.sh ##TODO open here after accepting pull requests?
  echo "./batch_LiCSBAS.sh" >> jasmin_run.sh
  
  if [ $clip -eq 1 ]; then clstr='clip'; else clstr=''; fi
@@ -1019,6 +1019,12 @@ if [ $run_jasmin -eq 1 ]; then
 
 if [ $platemotion -gt 0 ]; then
  echo "LiCSBAS_vel_plate_motion.py -t TS_"$geocd" -f "$frame" -o "$frame".vel_filt.mskd.eurasia.geo.tif --vstd_fix" >> jasmin_run.sh
+ echo "LiCSBAS_flt2geotiff.py -i "$geocd"/U -p "$geocd"/EQA.dem_par -o "$frame".U.geo.tif" >> jasmin_run.sh
+ echo "LiCSBAS_flt2geotiff.py -i "$geocd"/E -p "$geocd"/EQA.dem_par -o "$frame".E.geo.tif" >> jasmin_run.sh
+ echo "LiCSBAS_flt2geotiff.py -i "$geocd"/N -p "$geocd"/EQA.dem_par -o "$frame".N.geo.tif" >> jasmin_run.sh
+ echo "Note - the plate motion post-processing would run following extra commands: "
+ tail -n 4 jasmin_run.sh
+ echo ""
 fi
  echo "LiCSBAS_flt2geotiff.py -i TS_"$geocd"/results/vel.filt.mskd -p "$geocd"/EQA.dem_par -o "$frame".vel_filt.mskd.geo.tif" >> jasmin_run.sh
  echo "LiCSBAS_flt2geotiff.py -i TS_"$geocd"/results/vel.filt -p "$geocd"/EQA.dem_par -o "$frame".vel_filt.geo.tif" >> jasmin_run.sh
@@ -1040,7 +1046,7 @@ fi
  chmod 777 jasmin_run_cmd.sh
  #echo $cmd
  if [ $doublecheck -eq 1 ]; then
-  echo "now can check batch_LiCSBAS and then run ./jasmin_run_cmd.sh"
+  echo "now can edit batch_LiCSBAS.sh (or jasmin_run.sh) and then run ./jasmin_run_cmd.sh to send the job to LOTUS"
  else
   ./jasmin_run_cmd.sh
  fi
