@@ -246,7 +246,10 @@ def main(argv=None):
             backupsfolder = os.path.dirname(unwfile)[:-18]+'.backup'
             if not os.path.exists(backupsfolder):
                 os.mkdir(backupsfolder)
-            shutil.move(os.path.dirname(unwfile), os.path.join(backupsfolder, ifgd))
+            if os.path.exists(os.path.join(backupsfolder, ifgd)):
+                shutil.rmtree(os.path.join(backupsfolder, ifgd))
+            else:
+                shutil.move(os.path.dirname(unwfile), os.path.join(backupsfolder, ifgd))
 
     #%% Read date and network information
     ### Get dates
