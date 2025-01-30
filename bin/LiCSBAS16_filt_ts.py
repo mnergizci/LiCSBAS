@@ -178,7 +178,7 @@ def main(argv=None):
     inputresidflag = False
     interpolateflag = False
     gpu = False
-    sbovl = True
+    sbovl = False
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
