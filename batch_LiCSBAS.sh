@@ -113,6 +113,7 @@ p16_ex_range=""	# e.g. 10:100/20:200 (ix start from 0)
 p16_ex_range_geo=""	# e.g. 130.11/131.12/34.34/34.6 (in deg)
 p16_interpolate_nans="y"  # will interpolate nans in unmasked pixels
 p16_skippngs="" # y/n. n by default
+p16_sbovl="n"
 
 ### Less frequently used options. If blank, use default. ###
 p01_frame=""	# e.g. 021D_04972_131213 
@@ -571,7 +572,8 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z "$p16_range_geo" ];then p16_op="$p16_op --range_geo $p16_range_geo"; fi
   if [ ! -z "$p16_ex_range" ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
   if [ ! -z "$p16_ex_range_geo" ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
-  if [ "$p16_interpolate_nans" == "y" ] && [ "$p15_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
+  if [ "$p16_interpolate_nans" == "y" ] && [ "$p16_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
+  if [ "$p16_sbovl" == "y" ];then p16_op="$p16_op --sbovl"; fi
   if [ "$p16_skippngs" == "y" ];then p16_op="$p16_op --nopngs"; fi
 
   if [ "$eqoffs" == "y" ]; then
