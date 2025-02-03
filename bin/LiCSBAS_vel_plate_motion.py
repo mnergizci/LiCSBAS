@@ -12,13 +12,15 @@ Finally, note it expects you to have the filtered masked velocity calculated, i.
 =====
 Usage
 =====
-LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--vstd_fix]
+LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--vstd_fix] [--keep_absolute]
 
  -t TS_GEOC_dir  TS folder with finished processing including step 16 (mandatory)
  -f frame_ID  In case your GEOC folder does not contain ENU tif files, provide frame ID
  -o  Output tif file (Default: vel_pmm_fixed.tif)
  --vstd_fix  Would also perform reference fix in vstd
+ --keep_absolute  Do not fix to a reference point
 
+Note it will use the final output, i.e. masked filtered velocity after step 16.
 """
 #%% Change log
 '''
@@ -59,11 +61,11 @@ def main(argv=None):
     tsdir = ''
     outfile = 'vel_pmm_fixed.tif'
     frame = None
-
+    keep_absolute = False
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:f:o:", ["help", "vstd_fix"])
+            opts, args = getopt.getopt(argv[1:], "ht:f:o:", ["help", "vstd_fix", "keep_absolute"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -76,6 +78,8 @@ def main(argv=None):
                 frame = a
             elif o == '--vstd_fix':
                 vstd_fix = True
+            elif o == '--keep_absolute':
+                keep_absolute = True
             elif o == '-o':
                 outfile = a
 
@@ -111,8 +115,19 @@ def main(argv=None):
     vlos = lts.load_tif2xr(vel_tiffile)
     vlos_eurasia_reshaped = vlos_eurasia.interp_like(vlos)
 
-    # let's just remove the vlos, note this will make non-zero reference area...
     vlos.values = vlos.values - vlos_eurasia_reshaped.values
+    if not keep_absolute:
+        print('\n Fixing to the reference area selected at step 16 \n')
+        infodir = os.path.join(tsadir, 'info')
+        reffile = os.path.join(infodir, '16ref.txt')
+        if not os.path.exists(reffile):
+            print('ERROR, no 16ref.txt file exists! Refering to the median of whole scene instead \n')
+            vlos = vlos - vlos.where(vlos != 0).median()
+        else:
+            with open(reffile, "r") as f:
+                refarea = f.read().split()[0]  # str, x1/x2/y1/y2
+            refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
+            vlos.values = vlos.values - np.nanmean(vlos.values[refy1:refy2, refx1:refx2])
     lts.export_xr2tif(vlos, outfile, dogdal = False)
 
     # %% Make png if specified
