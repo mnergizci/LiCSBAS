@@ -35,7 +35,7 @@ Inputs in GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxbtemp maxbtemp] [--minbtemp minbtemp] [-s] [--sbovl]
+LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxbtemp maxbtemp] [--minbtemp minbtemp] [-s] [--sbovl] [--skip_dates eqoffsets.txt]
 
  -d  Path to the GEOCml* dir containing stack of unw data.
  -t  Path to the output TS_GEOCml* dir. (Default: TS_GEOCml*)
@@ -44,11 +44,14 @@ LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxb
  --minbtemp  Minimal Btemp in days (Default: 0 = not use)
  --maxbtemp  Maximal Btemp in days (Default: 0 = not use)
  -s  Check for coregistration error in the form of a significant azimuthal ramp
- --sbovl only applying step 11 for sbovl 
+ --sbovl only applying step 11 for sbovl
+ --skip_dates dates.txt  Will skip interferograms covering given dates (in the form of either yyyymmdd or yyyy-mm-dd inside the txt file)
 
 """
 #%% Change log
 '''
+20250109 ML
+ - add option to ignore ifgs covering given epoch
 20241030 M Nergizci
 - add sbovl flag
 20241028 ML
@@ -119,10 +122,12 @@ def main(argv=None):
     minbtemp = 0
     maxbtemp = 0 # 0 means not use
     sbovl = False
+    skipdatesfile = []
+
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "maxbtemp=","sbovl"])
+            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "skip_dates=", "maxbtemp=","sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -145,6 +150,8 @@ def main(argv=None):
                 check_coreg_slope = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--skip_dates':
+                skipdatesfile = a
 
         
         if not ifgdir:
@@ -153,6 +160,9 @@ def main(argv=None):
             raise Usage('No {} dir exists!'.format(ifgdir))
         elif not os.path.exists(os.path.join(ifgdir, 'slc.mli.par')):
                 raise Usage('No slc.mli.par file exists in {}!'.format(ifgdir))
+        if skipdatesfile:
+            if not os.path.exists(skipdatesfile):
+                raise Usage('skipdatesfile does not exist')
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -192,6 +202,20 @@ def main(argv=None):
     resultsdir = os.path.join(tsadir, 'results')
     if not os.path.exists(resultsdir): os.mkdir(resultsdir)
 
+    # txt file might be corrupted, so loading it here:
+    skipdates = []
+    if skipdatesfile:
+        with open(skipdatesfile, 'r') as f:
+            for l in f:
+                try:
+                    ep = l.split()[0]
+                    ep = ep.replace('-','')
+                    skipdates.append(int(ep))
+                except:
+                    print('a line from skipdatesfile file not loaded, continuing')
+        skipdates = list(set(skipdates))
+        print('Loaded ' + str(len(skipdates)) + ' epochs to skip:')
+        print(skipdates)
 
     ### Get size
     mlipar = os.path.join(ifgdir, 'slc.mli.par')
@@ -222,7 +246,10 @@ def main(argv=None):
             backupsfolder = os.path.dirname(unwfile)[:-18]+'.backup'
             if not os.path.exists(backupsfolder):
                 os.mkdir(backupsfolder)
-            shutil.move(os.path.dirname(unwfile), os.path.join(backupsfolder, ifgd))
+            if os.path.exists(os.path.join(backupsfolder, ifgd)):
+                shutil.rmtree(os.path.join(ifgdir, ifgd))
+            else:
+                shutil.move(os.path.join(ifgdir, ifgd), os.path.join(backupsfolder, ifgd))
 
     #%% Read date and network information
     ### Get dates
@@ -350,13 +377,16 @@ def main(argv=None):
     ## Read bperp data or dummy
     bperp_file = os.path.join(ifgdir, 'baselines')
     if os.path.exists(bperp_file):
-        try:
+        with open(bperp_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]  # Remove empty lines
+        if len(lines) >= len(imdates):  # Ensure enough entries
             bperp = io_lib.read_bperp_file(bperp_file, imdates)
-        except:
-            print('some error in the baselines file - setting dummy values')
-            bperp = np.random.random(n_im).tolist()
-    else: #dummy
-        bperp = np.random.random(n_im).tolist()
+        else:
+            ##baselines file contain fewer entries than the number of ifgs, so dummy values will be used
+            bperp = np.random.random(len(imdates)).tolist()
+    else:  # Generate dummy baselines if file doesn't exist
+        print(f"WARNING: Baselines file not found. Using dummy values.")
+        bperp = np.random.random(len(imdates)).tolist()
 
 
     #%% Identify bad ifgs, link ras and output stats information
@@ -392,6 +422,18 @@ def main(argv=None):
         #return 2
 
     for i, ifgd in enumerate(ifgdates):
+        if skipdates:
+            toskip = False
+            ep1 = int(ifgd[:8])
+            ep2 = int(ifgd[-8:])
+            for skep in skipdates:
+                if (ep1 < skep) and (ep2 > skep):
+                    print('skipping coseismic ifg '+ifgd)
+                    bad_ifgdates.append(ifgd)
+                    toskip = True
+                    continue
+            if toskip:
+                continue
         if suffix:
             if sbovl:
                 rasname = ifgdates[i]+'.sbovldiff.adf.mm'+suffix
@@ -402,14 +444,13 @@ def main(argv=None):
             if not os.path.exists(rasorg):
                 print('WARNING: No browse image {} available!\n'.format(rasorg))
                 print('assuming there is an error and skipping this ifg')
-                bad_ifgdates.append(ifgdates[i])
+                bad_ifgdates.append(ifgd)
                 continue
 
         ### Identify bad ifgs and link ras
         if rate_cov[i] < unw_cov_thre or coh_avg_ifg[i] < coh_thre or \
            np.isnan(rate_cov[i]) or np.isnan(coh_avg_ifg[i]) or ifg_containing_coreg_error_epochs[i] > 0:
-            bad_ifgdates.append(ifgdates[i])
-            ixs_bad_ifgdates.append(i)
+            bad_ifgdates.append(ifgd)
             rm_flag = '*'
             if suffix:
                 os.symlink(os.path.relpath(rasorg, bad_ifg_rasdir), os.path.join(bad_ifg_rasdir, rasname))
@@ -442,8 +483,6 @@ def main(argv=None):
         remsel = list(np.array(ifgdates)[np.array(btemps) <= minbtemp])
         bad_ifgdates += remsel
         print('Disabling ' + str(len(remsel)) + ' interferograms below min Btemp = ' + str(minbtemp) + ' days.')
-        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) < minbtemp])
-        bad_ifgdates = list(set(bad_ifgdates))
 
     # Not use ifgs above given btemp
     if maxbtemp > 0:
@@ -451,10 +490,9 @@ def main(argv=None):
         remsel = list(np.array(ifgdates)[np.array(btemps) >= maxbtemp])
         bad_ifgdates += remsel
         print('Disabling ' + str(len(remsel)) + ' interferograms above max Btemp = ' + str(maxbtemp) + ' days.')
-        # bad_ifgdates += list(np.array(ifgdates)[np.array(btemps) > maxbtemp])
-        bad_ifgdates = list(set(bad_ifgdates))
 
     # regenerating full ixs:
+    bad_ifgdates = list(set(bad_ifgdates))
     ixs_ifgdates = np.array(range(len(ifgdates)))
     ixs_bad_ifgdates = ixs_ifgdates[np.isin(ifgdates, bad_ifgdates)]
 

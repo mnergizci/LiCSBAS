@@ -29,9 +29,9 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
  --mask  Path to mask file for ref phase calculation (Default: No mask)
  --png   Make png file (Default: Not make png)
  --eqoffsets  minmag  Estimate also offsets for earthquakes above minmag (float) in the region (defaults to M6.5+)
- --offsets offsets.txt  Estimate offsets read from external txt file - must have lines in the form of yyyy-mm-dd
+ --offsets offsets.txt  Estimate offsets read from external txt file - both yyyymmdd and yyyy-mm-dd form is supported
  --export_model modelfile.h5  Export the model time series to H5 file. Can be used for step 16 (Default: not export)
-
+ --store_to_results  Setting this parameter, outputs will be stored to the results directory (overwriting existing files)
 """
 #%% Change log
 '''
@@ -110,17 +110,18 @@ def main(argv=None):
     exportmodelfile = []
     modelflag = False
     minmag = 6.5
-    cmap = cmc.roma.reversed()
+    cmap = cmc.romaO.reversed()
     cmap_vstd = 'viridis_r'
     cmap_stc = 'viridis_r'
     cmap_amp = 'viridis_r'
     cmap_dt = cmc.romaO.reversed()
     compress = 'gzip'
+    store_to_results = False
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "vstd", "sin", "eqoffsets=", "offsets=","export_model=","png", "ref_geo=", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "store_to_results", "vstd", "sin", "eqoffsets=", "offsets=","export_model=","png", "ref_geo=", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -158,6 +159,8 @@ def main(argv=None):
             elif o == '--export_model':
                 exportmodelfile = a
                 modelflag = True
+            elif o == '--store_to_results':
+                store_to_results = True
         if not os.path.exists(cumfile):
             raise Usage('No {} exists! Use -i option.'.format(cumfile))
         if sinflag and (eqoffsetsflag or offsetsflag):
@@ -166,6 +169,11 @@ def main(argv=None):
             if not os.path.exists(offsetsfile):
                 raise Usage('Offsets file not provided')
                 #raise Usage('Sorry, this functionality is not implemented yet - please raise Issue on github')
+        if store_to_results:
+            tsdir = os.path.dirname(cumfile)
+            resultsdir = os.path.join(tsdir, 'results')
+            if not os.path.exists(resultsdir):
+                raise Usage('ERROR: The results directory is not provided with the input file')
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -191,14 +199,7 @@ def main(argv=None):
 
     if offsetsflag:
         if not eqoffsetsflag:
-            offsets = []
-        with open(offsetsfile, 'r') as f:
-            for l in f:
-                try:
-                    offsets.append(dt.datetime.strptime(l.split()[0], '%Y-%m-%d').date())
-                except:
-                    print('a line from offsets file not loaded, continuing')
-        offsets = list(set(offsets))
+            offsets = io_lib.read_epochlist(offsetsfile, outasdt=True)
         print('Loaded '+str(len(offsets))+' offsets:')
         print(offsets)
         print('')
@@ -278,8 +279,12 @@ def main(argv=None):
     if not outfile:
         outfile = '{}_{}'.format(imd_s, imd_e)
 
-    velfile = outfile + '.vel' + suffix_mask
-    vconstfile = outfile + '.vconst' + suffix_mask
+    if store_to_results:
+        velfile = os.path.join(resultsdir, 'vel'+suffix_mask)
+        vconstfile = os.path.join(resultsdir, 'vconst'+suffix_mask)
+    else:
+        velfile = outfile + '.vel' + suffix_mask
+        vconstfile = outfile + '.vconst' + suffix_mask
 
     #%% Display info
     print('')
@@ -323,8 +328,14 @@ def main(argv=None):
             print('storing '+dvarname)
             dvar = np.zeros((length, width), dtype=np.float32)*np.nan
             dvar[~bool_allnan] = result[i,:]
-            outvarfile = outfile+'.'+dvarname+suffix_mask
+            if store_to_results:
+                outvarfile = os.path.join(resultsdir, dvarname + suffix_mask)
+            else:
+                outvarfile = outfile+'.'+dvarname+suffix_mask
             dvar.tofile(outvarfile)
+            # also use vel (and vconst?) as usual:
+            if dvarname == 'vel':
+                vel = dvar
             if exportmodelfile:
                 # also export to the h5 (why not)
                 modh5.create_dataset(dvarname, data=dvar, compression=compress)
@@ -334,7 +345,9 @@ def main(argv=None):
             if pngflag:
                 pngfile = outvarfile + '.png'
                 # title = 'n_im: {}, Ref X/Y {}:{}/{}:{}'.format(n_im, refx1, refx2, refy1, refy2)
-                plot_lib.make_im_png(dvar, pngfile, cmap, dvarname)
+                cmin = np.nanpercentile(dvar, 1)
+                cmax = np.nanpercentile(dvar, 99)
+                plot_lib.make_im_png(dvar, pngfile, cmap, dvarname, cmin, cmax)
         if modelflag:
             model = inv_lib.get_model_cum(G, params_sorted)
             degfree=len(params_sorted)
@@ -353,8 +366,12 @@ def main(argv=None):
             print('Calc velocity and annual components...')
             amp = np.zeros((length, width), dtype=np.float32)*np.nan
             delta_t = np.zeros((length, width), dtype=np.float32)*np.nan
-            ampfile = outfile+'.amp'+suffix_mask
-            dtfile = outfile+'.dt'+suffix_mask
+            if store_to_results:
+                ampfile = os.path.join(resultsdir, 'amp' + suffix_mask)
+                dtfile = os.path.join(resultsdir, 'dt' + suffix_mask)
+            else:
+                ampfile = outfile+'.amp'+suffix_mask
+                dtfile = outfile+'.dt'+suffix_mask
             if modelflag:
                 coef_s = np.zeros((length, width), dtype=np.float32)*np.nan
                 coef_c = np.zeros((length, width), dtype=np.float32) * np.nan
@@ -382,7 +399,10 @@ def main(argv=None):
             count = np.sum(~np.isnan(resid), axis=0, dtype=np.float32)
             count[count == 0] = np.nan
             rmse = np.sqrt(np.nansum(resid ** 2, axis=0) / (count - degfree))
-            rmsefile = outfile+'.rmse'+suffix_mask
+            if store_to_results:
+                rmsefile = os.path.join(resultsdir, 'rmse' + suffix_mask)
+            else:
+                rmsefile = outfile+'.rmse'+suffix_mask
             rmse.tofile(rmsefile)
             del resid
         except:
@@ -390,7 +410,10 @@ def main(argv=None):
 
     ### vstd
     if vstdflag:
-        vstdfile = outfile+'.vstd'+suffix_mask
+        if store_to_results:
+            vstdfile = os.path.join(resultsdir, 'vstd' + suffix_mask)
+        else:
+            vstdfile = outfile+'.vstd'+suffix_mask
         vstd = np.zeros((length, width), dtype=np.float32)*np.nan
 
         print('Calc vstd...')
@@ -408,7 +431,10 @@ def main(argv=None):
         if stcflag:
             print('Calc stc...')
             # here, stc calc accepts nans and need 3D cube - so getting the original cum_tmp then
-            stcfile = outfile + '.stc' + suffix_mask
+            if store_to_results:
+                stcfile = os.path.join(resultsdir, 'stc' + suffix_mask)
+            else:
+                stcfile = outfile + '.stc' + suffix_mask
             # cum_tmp = cum_tmp.reshape(n_im, length, width) # this will not work!
             if offsetsflag or eqoffsetsflag:
                 cum_tmp = cum_tmp - model  # or should this be transposed?
@@ -421,9 +447,11 @@ def main(argv=None):
     #%% Make png if specified
     if pngflag:
         pngfile = velfile+'.png'
-        title = 'n_im: {}, Ref X/Y {}:{}/{}:{}'.format(n_im, refx1, refx2, refy1, refy2)
-        plot_lib.make_im_png(vel, pngfile, cmap, title)
-
+        title = 'Velocity (n_im: {}, Ref X/Y {}:{}/{}:{})'.format(n_im, refx1, refx2, refy1, refy2)
+        cmin = np.nanpercentile(vel, 1)
+        cmax = np.nanpercentile(vel, 99)
+        plot_lib.make_im_png(vel, pngfile, cmap, title, cmin, cmax)
+        # plot_lib.make_im_png(dvar, pngfile, cmap, dvarname, cmin, cmax)
         if sinflag:
             amp_max = np.nanpercentile(amp, 99)
             plot_lib.make_im_png(amp, ampfile+'.png', cmap_amp, title, vmax=amp_max)

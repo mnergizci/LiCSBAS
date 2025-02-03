@@ -24,6 +24,8 @@ start_step="01"	# 01-05, 11-16
 end_step="16"	# 01-05, 11-16
 
 cometdev='0' # shortcut to use COMET's experimental/dev functions. At this moment, '1' will turn on the nullification. Recommended: 0
+# sbovl='n' # if 'y', LiCSBAS will apply on sbovls  ## TODO
+eqoffs="n"  # if 'y', it will do: get_eq_offsets, then invert. if singular_gauss (recommended?), then set use of model.
 nlook="1"	# multilook factor, used in step02
 GEOCmldir="GEOCml${nlook}"	# If start from 11 or later after doing 03-05, use e.g., GEOCml${nlook}GACOSmaskclip
 n_para="" # Number of parallel processing in step 02-05,12,13,16. default: number of usable CPU
@@ -111,6 +113,7 @@ p16_ex_range=""	# e.g. 10:100/20:200 (ix start from 0)
 p16_ex_range_geo=""	# e.g. 130.11/131.12/34.34/34.6 (in deg)
 p16_interpolate_nans="y"  # will interpolate nans in unmasked pixels
 p16_skippngs="" # y/n. n by default
+p16_sbovl="n"
 
 ### Less frequently used options. If blank, use default. ###
 p01_frame=""	# e.g. 021D_04972_131213 
@@ -158,11 +161,10 @@ p16_nomask="n"	# y/n. default: n
 p16_n_para=$n_para   # default: # of usable CPU
 
 
-# cometdev
-if [ $cometdev -gt 0 ]; then
-    # using --singular, so setting to simple LS instead of WLS
-    p13_inv_alg="LS"
-fi
+# eqoffs
+eqoffs_minmag="0"  # 0 means skipping the estimation!
+eqoffs_txtfile="eqoffsets.txt"
+eqoffs_buffer="0.1"
 
 
 #############################
@@ -440,6 +442,18 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
 fi
 
 if [ $start_step -le 13 -a $end_step -ge 13 ];then
+  # getting eq offsets here:
+  if [ "$eqoffs" == "y" -a $eqoffs_minmag -gt 0 ]; then
+    extra='-M '$eqoffs_minmag
+    extra=$extra' -t '$TSdir
+    extra=$extra' -o '$eqoffs_txtfile
+    extra=$extra' --buffer '$eqoffs_buffer
+    if [ "$check_only" == "y" ];then
+      echo "LiCSBAS_get_eqoffsets.py $extra"
+    else
+      LiCSBAS_get_eqoffsets.py $extra
+    fi
+  fi
   p13_op=""
   if [ ! -z "$p13_GEOCmldir" ];then p13_op="$p13_op -d $p13_GEOCmldir";
     else p13_op="$p13_op -d $GEOCmldir"; fi
@@ -458,17 +472,23 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
   if [ "$p13_skippngs" == "y" ];then p13_op="$p13_op --nopngs"; fi
   if [ "$gpu" == "y" ];then p13_op="$p13_op --gpu"; fi
 
-  if [ "$check_only" == "y" ];then
-    echo "LiCSBAS13_sb_inv.py $p13_op"
-  else
-    if [ "$cometdev" -eq 1 ];then
+  if [ "$cometdev" -eq 1 ];then
       extra='--nopngs'
       if [ -z "$p13_n_unw_r_thre" ];then extra="$extra --n_unw_r_thre 0.4"; fi
       extra="$extra --singular_gauss"
     else
       extra=''
-    fi
+  fi
 
+  if [ "$eqoffs" == "y" ]; then
+    touch $eqoffs_txtfile # just in case it would fail earlier
+    extra='--offsets '$eqoffs_txtfile
+  fi
+
+
+  if [ "$check_only" == "y" ];then
+    echo "LiCSBAS13_sb_inv.py $extra $p13_op"
+  else
     LiCSBAS13_sb_inv.py $extra $p13_op 2>&1 | tee -a $log
     pstat=(${PIPESTATUS[0]})
 
@@ -490,11 +510,16 @@ if [ $start_step -le 14 -a $end_step -ge 14 ];then
     else p14_op="$p14_op -t $TSdir"; fi
   if [ ! -z $p14_mem_size ];then p14_op="$p14_op --mem_size $p14_mem_size"; fi
   if [ $gpu == "y" ];then p14_op="$p14_op --gpu"; fi
-
-  if [ $check_only == "y" ];then
-    echo "LiCSBAS14_vel_std.py $p14_op"
+  if [ "$eqoffs" == "y" ]; then
+    # we then do not want to regenerate vstd
+    extra='--skipexisting'
   else
-    LiCSBAS14_vel_std.py $p14_op 2>&1 | tee -a $log
+    extra=''
+  fi
+  if [ $check_only == "y" ];then
+    echo "LiCSBAS14_vel_std.py $extra $p14_op"
+  else
+    LiCSBAS14_vel_std.py $extra $p14_op 2>&1 | tee -a $log
     if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
   fi
 fi
@@ -547,13 +572,20 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z "$p16_range_geo" ];then p16_op="$p16_op --range_geo $p16_range_geo"; fi
   if [ ! -z "$p16_ex_range" ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
   if [ ! -z "$p16_ex_range_geo" ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
-  if [ "$p16_interpolate_nans" == "y" ] && [ "$p15_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
+  if [ "$p16_interpolate_nans" == "y" ] && [ "$p16_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
+  if [ "$p16_sbovl" == "y" ];then p16_op="$p16_op --sbovl"; fi
   if [ "$p16_skippngs" == "y" ];then p16_op="$p16_op --nopngs"; fi
 
-  if [ "$check_only" == "y" ];then
-    echo "LiCSBAS16_filt_ts.py $p16_op"
+  if [ "$eqoffs" == "y" ]; then
+    extra='--from_model '$TSdir/model.h5
   else
-    LiCSBAS16_filt_ts.py $p16_op 2>&1 | tee -a $log
+    extra=''
+  fi
+
+  if [ "$check_only" == "y" ];then
+    echo "LiCSBAS16_filt_ts.py $extra $p16_op"
+  else
+    LiCSBAS16_filt_ts.py $extra $p16_op 2>&1 | tee -a $log
     if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
   fi
 fi

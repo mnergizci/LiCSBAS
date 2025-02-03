@@ -53,22 +53,22 @@ import matplotlib.path as path
 try:
     from scipy import interpolate
 except:
-    print('scipy not installed. no interpolation tools')
+    print('warning, scipy not installed') #. no interpolation tools')
 
 try:
     import networkx as nx
 except:
-    print('networkx is not installed. Some LiCSBAS Plus functions will not work')
+    print('warning, networkx is not installed') #. Some LiCSBAS Plus functions will not work')
 import h5py as h5
 try:
     import pandas as pd
 except:
-    print('no pandas installed. Recommended for earthquake offsets')
+    print('warning, pandas is not installed')
 
 try:
     from libcomcat.search import search
 except:
-    print('libcomcat is not installed. Identification of earthquake offsets will not work')
+    print('warning, libcomcat is not installed')
 
 #%%
 def bl2xy(lon, lat, width, length, lat1, postlat, lon1, postlon):
@@ -967,6 +967,8 @@ def get_earthquake_dates(cumfile, minmag = 6.5, maxdepth=60):
                 if e.time.time() < center_time_dt:
                     #print('checking the event time, an event will be set towards previous epoch')
                     offdate = offdate - dt.timedelta(days=1)
+                else:
+                    offdate = offdate + dt.timedelta(days=1)
         offsetdates.append(offdate)
 
     offsetdates = list(set(offsetdates))

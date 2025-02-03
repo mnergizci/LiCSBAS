@@ -178,7 +178,7 @@ def main(argv=None):
     inputresidflag = False
     interpolateflag = False
     gpu = False
-    sbovl = True
+    sbovl = False
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -209,7 +209,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs"])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -252,6 +252,8 @@ def main(argv=None):
                 gpu = True
             elif o == '--nopngs':
                 nopngs = True
+            elif o == '--sbovl':
+                sbovl = True
             elif o == '--from_model':
                 modelfile = a
                 inputresidflag = True
@@ -268,7 +270,14 @@ def main(argv=None):
         if gpu:
             print("\nGPU option is activated. Need cupy module.\n")
             import cupy as cp
-
+        if modelfile:
+            if not os.path.exists(modelfile):
+                print('Specified model file does not exist: '+modelfile)
+                modelfile = os.path.join(tsadir, 'model.h5')
+                print('checking for '+modelfile)
+                if not os.path.exists(modelfile):
+                    inputresidflag = False
+                    print('Warning, model file does not exist. Not using.\n')
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
         print("  "+str(err.msg), file=sys.stderr)
@@ -630,8 +639,11 @@ def main(argv=None):
         modelh5.close()
 
     ### Rerferencing cumulative displacement to new stable ref
-    for i in range(n_im):
-        cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
+    if not sbovl:
+        for i in range(n_im):
+            cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
+    else:
+        print('Skipping back referencing to stable point for SBOI?')
 
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')

@@ -268,19 +268,21 @@ def main(argv=None):
     #%% Output png
     print('\nOutput png images...')
 
-    stc = io_lib.read_img(stcfile, length, width)
-    pngfile = stcfile+'.png'
-    title = 'Spatio-temporal consistency (mm)'
-    cmin = np.nanpercentile(stc, 1)
-    cmax = np.nanpercentile(stc, 99)
-    plot_lib.make_im_png(stc, pngfile, cmap_noise_r, title, cmin, cmax)
+    if dostc:
+        stc = io_lib.read_img(stcfile, length, width)
+        pngfile = stcfile+'.png'
+        title = 'Spatio-temporal consistency (mm)'
+        cmin = np.nanpercentile(stc, 1)
+        cmax = np.nanpercentile(stc, 99)
+        plot_lib.make_im_png(stc, pngfile, cmap_noise_r, title, cmin, cmax)
 
-    vstd = io_lib.read_img(vstdfile, length, width)
-    pngfile = vstdfile+'.png'
-    title = 'STD of velocity (mm/yr)'
-    cmin = np.nanpercentile(vstd, 1)
-    cmax = np.nanpercentile(vstd, 99)
-    plot_lib.make_im_png(vstd, pngfile, cmap_noise_r, title, cmin, cmax)
+    if dovstd:
+        vstd = io_lib.read_img(vstdfile, length, width)
+        pngfile = vstdfile+'.png'
+        title = 'STD of velocity (mm/yr)'
+        cmin = np.nanpercentile(vstd, 1)
+        cmax = np.nanpercentile(vstd, 99)
+        plot_lib.make_im_png(vstd, pngfile, cmap_noise_r, title, cmin, cmax)
     
     if ransac:
         vel2 = io_lib.read_img(vel2file, length, width)

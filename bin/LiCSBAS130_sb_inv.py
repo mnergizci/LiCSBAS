@@ -63,6 +63,8 @@ LiCSBAS130_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float]
 """
 #%% Change log
 '''
+20241221 Muhammet Nergizci
+ - check the baseline file empty or not
 v1.5.3 20211122 Milan Lazecky, Leeds Uni
  - use fast_nsbas and only_sb to help make processing faster
 v1.5.2 20210311 Yu Morishita, GSI
@@ -315,11 +317,18 @@ def main():
 
     #%% Plot network
     ## Read bperp data or dummy
-    bperp_file = os.path.join(ccdir, 'baselines')
+    bperp_file = os.path.join(ifgdir, 'baselines')
     if os.path.exists(bperp_file):
-        bperp = io_lib.read_bperp_file(bperp_file, imdates)
-    else: #dummy
-        bperp = np.random.random(n_im).tolist()
+        with open(bperp_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]  # Remove empty lines
+        if len(lines) >= len(imdates):  # Ensure enough entries
+            bperp = io_lib.read_bperp_file(bperp_file, imdates)
+        else:
+            ##baselines file contain fewer entries than the number of ifgs, so dummy values will be used
+            bperp = np.random.random(len(imdates)).tolist()
+    else:  # Generate dummy baselines if file doesn't exist
+        print(f"WARNING: Baselines file not found. Using dummy values.")
+        bperp = np.random.random(len(imdates)).tolist()
 
 
     #%% Get patch row number

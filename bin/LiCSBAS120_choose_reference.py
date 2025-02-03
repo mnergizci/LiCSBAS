@@ -44,7 +44,9 @@ LiCSBAS120_choose_reference.py [-h] [-f FRAME_DIR] [-g UNW_DIR] [-t TS_DIR] [-w 
 
 #%% Change log
 '''
-20241030 M Nergizci
+20241221 Muhammet Nergizci
+- check baseline file empty or not 
+20241030 Muhammet Nergizci
 - add sbovl flag
 20240928 ML
  - check for existence of conn. components, avoiding if not 
@@ -438,11 +440,20 @@ def get_bperp_from_ifgdates(ifgdates):
     ## Read bperp data or dummy
     imdates = tools_lib.ifgdates2imdates(ifgdates)
     bperp_file = os.path.join(ccdir, 'baselines')
+    
+    # Check if the baselines file exists and contains sufficient data
     if os.path.exists(bperp_file):
-        bperp = io_lib.read_bperp_file(bperp_file, imdates)
-    else: #dummy
-        n_im = len(imdates)
-        bperp = np.random.random(n_im).tolist()
+        with open(bperp_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]  # Remove empty lines
+        if len(lines) >= len(imdates):  # Ensure enough entries
+            bperp = io_lib.read_bperp_file(bperp_file, imdates)
+        else:
+            ##baselines file contain fewer entries than the number of ifgs, so dummy values will be used
+            bperp = np.random.random(len(imdates)).tolist()
+    else:  # Generate dummy baselines if file doesn't exist
+        print(f"WARNING: Baselines file not found. Using dummy values.")
+        bperp = np.random.random(len(imdates)).tolist()
+    
     return bperp
 
 
