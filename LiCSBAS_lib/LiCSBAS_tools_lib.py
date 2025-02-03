@@ -967,6 +967,8 @@ def get_earthquake_dates(cumfile, minmag = 6.5, maxdepth=60):
                 if e.time.time() < center_time_dt:
                     #print('checking the event time, an event will be set towards previous epoch')
                     offdate = offdate - dt.timedelta(days=1)
+                else:
+                    offdate = offdate + dt.timedelta(days=1)
         offsetdates.append(offdate)
 
     offsetdates = list(set(offsetdates))

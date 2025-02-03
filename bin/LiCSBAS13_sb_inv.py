@@ -58,7 +58,7 @@ Outputs in TS_GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--singular_gauss] [--only_sb] [--nopngs] [--sbovl]
+LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs] [--sbovl]
                  [--no_storepatches] [--load_patches] [--nullify_noloops] [--offsets eqoffsets.txt]
 
  -d  Path to the GEOCml* dir containing stack of unw data
@@ -80,7 +80,6 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
      Not remove inc and resid files (Default: remove them)
  --gpu        Use GPU (Need cupy module)
  --singular   Use more economic computation  (unconstrained SBAS with filling gaps in second step; faster and less demanding solution but should be further improved)
- --singular_gauss  Will turn on --singular but will estimate gaps using Gaussian kernel
  --only_sb    Perform only SB processing (skipping points with NaNs)
  --nopngs     Avoid generating some (unnecessary) PNG previews of increment residuals etc.
  --no_storepatches Don't store completed patch data [default: store patches in case of job timeout]
@@ -103,7 +102,7 @@ skipping here as will do it as post-processing:
 20241221 Muhammet Nergizci
  - check baseline file empty or not
 20241207 ML
- - added singular_gauss
+ - added singular_gauss (but do not show in help as it still needs some dev...)
 20241102 MNergizci
  - added sbovl flag
 20240423 ML
@@ -509,11 +508,13 @@ def main(argv=None):
             ep1 = int(ifgd[:8])
             ep2 = int(ifgd[-8:])
             for skep in offsets:
-                ##making int
                 skep_int = int(skep.replace("-", ""))
-                if (ep1 <= int(skep_int)) and (ep2 > int(skep_int)):
+                if (ep1 < int(skep_int)) and (ep2 > int(skep_int)):
                     coseismifgs.append(ifgd)
-        print('identified '+str(len(coseismifgs))+' coseismic ifgs \n')
+                elif ep1 == int(skep_int) or ep2 == int(skep_int):
+                    print('WARNING, the offset '+str(skep_int)+' is the same date as the acquisition. Skipping '+ifgd)
+                    coseismifgs.append(ifgd)
+        print('\n .. identified '+str(len(coseismifgs))+' coseismic ifgs \n')
         bad_ifg_all = list(set(bad_ifg_all + coseismifgs))
 
     bad_ifg_all.sort()
