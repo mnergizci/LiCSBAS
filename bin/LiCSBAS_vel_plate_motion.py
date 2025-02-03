@@ -118,8 +118,7 @@ def main(argv=None):
     vlos.values = vlos.values - vlos_eurasia_reshaped.values
     if not keep_absolute:
         print('\n Fixing to the reference area selected at step 16 \n')
-        infodir = os.path.join(tsadir, 'info')
-        reffile = os.path.join(infodir, '16ref.txt')
+        reffile = os.path.join(tsdir, 'info', '16ref.txt')
         if not os.path.exists(reffile):
             print('ERROR, no 16ref.txt file exists! Refering to the median of whole scene instead \n')
             vlos = vlos - vlos.where(vlos != 0).median()

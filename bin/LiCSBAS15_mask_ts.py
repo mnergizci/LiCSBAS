@@ -332,7 +332,7 @@ def main(argv=None):
         if not 'stc' in thre_dict: thre_dict['stc'] = 10 # tested as more appropriate
         if not sbovl:
             if (not 'n_loop_err' in thre_dict) and ('n_loop_err' in names): thre_dict['n_loop_err'] = 5
-        if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 50 # as the ref point would cause issues
+        if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 15
     
     thre_dict['n_unw'] = int(n_im*thre_dict['n_unw_r'])
     if n_gap_use_merged:
