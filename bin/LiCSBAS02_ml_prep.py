@@ -403,8 +403,8 @@ def main(argv=None):
             dlat = dlat*nlook
     elif sbovl_ok:
         example_date = None
-        for date in sbovl_ok:
-            unw_tiffile = os.path.join(geocdir, date, f"{date}.geo.sbovldiff.adf.mm.tif")
+        for pair in sbovl_ok:
+            unw_tiffile = os.path.join(geocdir, pair, f"{pair}.geo.sbovldiff.adf.mm.tif")
             geotiff = gdal.Open(unw_tiffile)
             if geotiff is not None:
                 example_date = date
