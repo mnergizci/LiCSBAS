@@ -329,7 +329,7 @@ if __name__ == "__main__":
             ax.set_xticks([])
             ax.set_yticks([])
         plt.tight_layout()
-        plt.show()
+        # plt.show()
         # fig.savefig(output_dir+tif.basename+".png", format='PNG', dpi=300, bbox_inches='tight')
         fig.savefig(args.png, format='PNG', dpi=300, bbox_inches='tight')
 
@@ -379,6 +379,6 @@ if __name__ == "__main__":
             ax.set_xticks([])
             ax.set_yticks([])
         plt.tight_layout()
-        plt.show()
+        #plt.show()
 
     finish()
