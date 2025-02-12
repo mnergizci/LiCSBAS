@@ -508,10 +508,11 @@ def main(argv=None):
             ep1 = int(ifgd[:8])
             ep2 = int(ifgd[-8:])
             for skep in offsets:
-                if (ep1 < int(skep)) and (ep2 > int(skep)):
+                skep_int = int(skep.replace("-", ""))
+                if (ep1 < int(skep_int)) and (ep2 > int(skep_int)):
                     coseismifgs.append(ifgd)
-                elif ep1 == int(skep) or ep2 == int(skep):
-                    print('WARNING, the offset '+str(skep)+' is the same date as the acquisition. Skipping '+ifgd)
+                elif ep1 == int(skep_int) or ep2 == int(skep_int):
+                    print('WARNING, the offset '+str(skep_int)+' is the same date as the acquisition. Skipping '+ifgd)
                     coseismifgs.append(ifgd)
         print('\n .. identified '+str(len(coseismifgs))+' coseismic ifgs \n')
         bad_ifg_all = list(set(bad_ifg_all + coseismifgs))
