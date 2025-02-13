@@ -32,6 +32,7 @@ v1.0 20250122 Milan Lazecky, Uni of Leeds
 import getopt
 import re
 import os
+import re
 import sys
 import time
 import numpy as np
@@ -119,8 +120,12 @@ def main(argv=None):
     vlos.values = vlos.values - vlos_eurasia_reshaped.values
     if not keep_absolute:
         print('\n Fixing to the reference area selected at step 16 \n')
+<<<<<<< HEAD
         infodir = os.path.join(tsdir, 'info')
         reffile = os.path.join(infodir, '16ref.txt')
+=======
+        reffile = os.path.join(tsdir, 'info', '16ref.txt')
+>>>>>>> origin/dev
         if not os.path.exists(reffile):
             print('ERROR, no 16ref.txt file exists! Refering to the median of whole scene instead \n')
             vlos = vlos - vlos.where(vlos != 0).median()

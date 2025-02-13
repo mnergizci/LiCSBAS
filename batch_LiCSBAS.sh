@@ -25,7 +25,7 @@ end_step="16"	# 01-05, 11-16
 
 cometdev='0' # shortcut to use COMET's experimental/dev functions. At this moment, '1' will turn on the nullification. Recommended: 0
 # sbovl='n' # if 'y', LiCSBAS will apply on sbovls  ## TODO
-eqoffs="n"  # if 'y', it will do: get_eq_offsets, then invert. if singular_gauss (recommended?), then set use of model.
+eqoffs="n"  # if 'y', it will do: get_eq_offsets, then invert. if singular_gauss, then set use of model (not recommended now, experimental/need some work).
 nlook="1"	# multilook factor, used in step02
 GEOCmldir="GEOCml${nlook}"	# If start from 11 or later after doing 03-05, use e.g., GEOCml${nlook}GACOSmaskclip
 n_para="" # Number of parallel processing in step 02-05,12,13,16. default: number of usable CPU
@@ -96,7 +96,7 @@ p15_stc_thre=""	# default: 10 mm
 p15_n_ifg_noloop_thre=""	# default: 500 - setting this much higher than orig since we nullify them (p13_nullify_noloops)
 p15_n_loop_err_thre=""	# default: 5
 p15_n_loop_err_ratio_thre=""	# default: 0.7 - in future we will switch to this ratio term, instead of n_loop_err
-p15_resid_rms_thre=""	# default: 50 mm, but setting much higher than orig since it depends on (automatic) ref point, must be optimised
+p15_resid_rms_thre=""	# default: 15 mm
 p15_avg_phasebias="" # default: not used. Setting 1 or 1.2 rad is good option
 p15_n_gap_use_merged="y" # default: 'y'
 p15_sbovl="n"
@@ -162,9 +162,9 @@ p16_n_para=$n_para   # default: # of usable CPU
 
 
 # eqoffs
-eqoffs_minmag="0"  # 0 means skipping the estimation!
-eqoffs_txtfile="eqoffsets.txt"
-eqoffs_buffer="0.1"
+eqoffs_minmag="0"  # min magnitude of earthquakes to auto-find. 0 means skipping the estimation.
+eqoffs_txtfile="eqoffsets.txt"  # path to txt file containing custom-set earthquake dates (if eqoffs_minmag is disabled/0) or that will use results of auto-find
+eqoffs_buffer="0.1"  # buffer (in degrees, assuming work with WGS-84 geocoded data) to search for earthquakes (if eqoffs_minmag is set)
 
 
 #############################
