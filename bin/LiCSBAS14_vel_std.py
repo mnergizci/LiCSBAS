@@ -292,6 +292,7 @@ def main(argv=None):
         cmin = np.nanpercentile(bootvel, 1)
         cmax = np.nanpercentile(bootvel, 99)
         cmap_vel = cmc.roma.reversed()
+        bootvel = io_lib.read_img(bootvelfile, length, width)
         plot_lib.make_im_png(bootvel, bootvelfile + '.png', cmap_vel, title, cmin, cmax)
     
     if ransac:
