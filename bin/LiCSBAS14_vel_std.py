@@ -288,6 +288,7 @@ def main(argv=None):
         cmin = np.nanpercentile(vstd, 1)
         cmax = np.nanpercentile(vstd, 99)
         plot_lib.make_im_png(vstd, pngfile, cmap_noise_r, title, cmin, cmax)
+        bootvel = io_lib.read_img(bootvelfile, length, width)
         title = 'Bootstrapped velocity (mm/yr)'
         cmin = np.nanpercentile(bootvel, 1)
         cmax = np.nanpercentile(bootvel, 99)
