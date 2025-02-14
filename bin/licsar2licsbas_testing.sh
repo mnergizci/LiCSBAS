@@ -259,14 +259,10 @@ if [ $reunw -gt 0 ]; then
     extofproc='diff_unfiltered_pha'
   fi
 elif [ $sbovl -gt 0 ]; then
-  echo "You are running this script for sbovl, so you don't need to think about gacos, reunwrapping, deramp, hgt correction, only iono and SET correction will be applied (In preb)!"
+  echo "You are sbovl, only iono(-i) and SET(-e) correction can be applied"
   # echo "Example: licsar2licsbas.sh -M 10 -n 4 -W -b -i -e  021D_05266_252525 20240101 20240301"
-  if [ $prelb_backup -gt 0 ]; then
-    echo "Error - you tried running longwave signal removal from burst overlap interferograms - not implemented in this tool, yet?"
-    # exit
-    prelb_backup=0
-    extofproc='sbovldiff.adf.mm'
-  fi
+  extofproc='sbovldiff.adf.mm'
+  extofproc2='bovldiff.adf.mm'
 else
   extofproc='unw'
 fi
@@ -349,15 +345,64 @@ if [ $dogacos == 1 ]; then
   framebatch_update_gacos.sh $frame
   #echo "debug gacos 1"
 fi
+
 cd GEOC
+
+# Set a flag to track if we need to run rangeENU2aziENU.py
+need_to_generate_azi=0
+
 for meta in E N U hgt; do
- if [ -f lookangles/$master.geo.$meta.tif ]; then
-  echo "getting metafiles from GEOC/lookangles - might need updating in future"
-  ln -s `pwd`/lookangles/$master.geo.$meta.tif `pwd`/$master.geo.$meta.tif
- else
-  ln -s $metadir/$frame.geo.$meta.tif
- fi
+  echo "Getting metafiles from metadir everytime!"
+  ln -sf "$metadir/$frame.geo.$meta.tif" "$frame.geo.$meta.tif"
+
+  if [ "$sbovl" -gt 0 ] && [ "$meta" != "hgt" ]; then
+    if [ -s "$metadir/$frame.geo.$meta.azi.tif" ]; then  # Check the file and ensure it's not empty
+      ln -sf "$metadir/$frame.geo.$meta.azi.tif" "$frame.geo.$meta.azi.tif"
+    else
+      need_to_generate_azi=1  # Mark that we need to generate azi files
+    fi
+  fi
 done
+
+# Run rangeENU2aziENU.py only once if required
+if [ "$sbovl" -gt 0 ] && [ "$need_to_generate_azi" -eq 1 ]; then
+  echo "Running rangeENU2aziENU.py for frame: $frame"
+  
+  # Store the current working directory
+  curr_dir=$(pwd)
+  echo "Current directory before changing: $curr_dir"
+  
+  # Navigate two levels up safely
+  pushd ../../ > /dev/null || { echo "Error: Unable to change directory"; exit 1; } ##pushd remember the original directory rather than cd
+  
+  echo "Checkpoint 1 - Now in: $(pwd)"
+  echo "Processing frame: $frame"
+
+  if ! command -v rangeENU2aziENU.py &> /dev/null; then
+    echo "Error: rangeENU2aziENU.py not found. Ensure it is in PATH."
+    popd > /dev/null   ## later restores the orginal directory safely
+    exit 1
+  fi
+
+  # Run the script
+  rangeENU2aziENU.py "$frame"
+
+  # Return to the original directory
+  popd > /dev/null
+  echo "Checkpoint 2 - Returned to: $(pwd)"
+
+  # Ensure we are in GEOC directory before creating symbolic links
+  cd "$curr_dir" || { echo "Error: Failed to return to $curr_dir"; exit 1; }
+
+  # Create missing symbolic links for azi files
+  for meta in E N U; do # hgt is same 
+    if [ ! -s "$frame.geo.$meta.azi.tif" ]; then
+      ln -sf "$metadir/$frame.geo.$meta.azi.tif" "$frame.geo.$meta.azi.tif"
+    fi
+  done
+fi
+
+
 if [ $dolocal == 1 ]; then
  if [ ! -f $frame.geo.hgt.tif ]; then
   #echo "warning, doing local proc only - avoiding possible problems (mismatch frame vs local data) by just removing the linked ENU files"
@@ -472,23 +517,38 @@ fi
 # backup the orig ext (and link them)
 if [ $prelb_backup -gt 0 ]; then
   echo "Creating temporary backup of the input ifgs"
-  #extofproc= ...
-  disdir=`pwd`
-  for pair in `ls -d 20??????_20??????`; do
-    cd $pair
-    toback=$pair.geo.$extofproc.tif
-    if [ ! -f $toback ]; then
-      echo "error, no original "$extofproc" tif exists for pair "$pair". removing"
-      cd $disdir; mkdir -p ../GEOC.removed; if [ -d ../GEOC.removed/$pair ]; then rm -rf ../GEOC.removed/$pair; fi; mv $pair ../GEOC.removed/.
+  disdir=$(pwd)
+
+  for pair in $(ls -d 20??????_20??????); do
+    cd "$pair" || continue
+
+    toback1="$pair.geo.$extofproc.tif"
+    toback2="$pair.geo.$extofproc2.tif" # This handles missing sbovl while bovl is available
+
+    # Determine which file to back up
+    if [ -f "$toback1" ]; then
+        toback="$toback1"
+    elif [ -f "$toback2" ]; then
+        toback="$toback2"
     else
-      if [ ! -f $toback.prelb.tif ]; then
-        mv $toback $toback.prelb.tif
-        ln -s $toback.prelb.tif $toback
-      else
-        echo "Inconsistency detected - inform Milan for debugging"; exit
-      fi
-      cd $disdir
+      echo "error, no original $extofproc or $extofproc2 tif exists for pair $pair. Removing..."
+      cd "$disdir"
+      mkdir -p ../GEOC.removed
+      if [ -d ../GEOC.removed/"$pair" ]; then rm -rf ../GEOC.removed/"$pair"; fi
+      mv "$pair" ../GEOC.removed/.
+      continue
     fi
+
+    # Proceed with backup only if a valid `toback` file was found
+    if [ ! -f "$toback.prelb.tif" ]; then
+      mv "$toback" "$toback.prelb.tif"
+      ln -s "$toback.prelb.tif" "$toback"
+    else
+      echo "Inconsistency detected - inform Milan for debugging"
+      exit
+    fi
+
+    cd "$disdir"
   done
 fi
 
@@ -522,8 +582,13 @@ if [ $icams -gt 0 ]; then
 fi
 
 if [ $setides -gt 0 ]; then
-  echo "checking/generating solid earth tides data"
-  create_LOS_tide_frame_allepochs $frame
+  if [ $sbovl -gt 0 ]; then
+    echo "checking/generating solid earth tides data in Azimuth"
+    create_LOS_tide_frame_allepochs_mn $frame $startdate $enddate --sbovl # this will create the tides in azimuth and dates between startdate and enddate
+  else
+    echo "checking/generating solid earth tides data in LOS"
+    create_LOS_tide_frame_allepochs_mn $frame $startdate $enddate
+  fi
   disprocdir=`pwd`
   if [ $reunw -gt 0 ]; then  # in such case we correct before unwrapping
      echo "applying the SET correction"
@@ -578,7 +643,11 @@ if [ $setides -gt 0 ]; then
    echo "Linking solid earth tide corrections per epoch"
    cd $disprocdir
    mkdir -p GEOC.EPOCHS; cd GEOC.EPOCHS; disdir=`pwd`;
-   extfull=tide.geo.tif
+   if [ $sbovl -gt 0 ]; then
+    extfull=tide.geo.azi.tif
+   else
+    extfull=tide.geo.tif
+   fi
    for epochpath in `ls $epochdir/20?????? -d`; do
       epoch=`basename $epochpath`
       if [ -f $epochpath/$epoch.$extfull ]; then
@@ -595,10 +664,11 @@ if [ $setides -gt 0 ]; then
   cd $workdir
 fi
 
+echo "checkpoint SET done"
 
 if [ $iono -gt 0 ]; then
  echo "checking/generating ionospheric correction data"
- python3 -c "from iono_correct import *; make_all_frame_epochs('"$frame"')"
+ python3 -c "from iono_correct_mn import *; make_all_frame_epochs('"$frame"')"
  disprocdir=`pwd`
  if [ $reunw -gt 0 ]; then
 	 echo "applying the ionospheric correction"
@@ -607,7 +677,7 @@ if [ $iono -gt 0 ]; then
 	 disdir=`pwd`
 	 #hgtfile=`ls *.geo.hgt.tif | head -n 1`
 	 tmpy=`pwd`/../tmp.py
-	 echo "from iono_correct import correct_iono_pair;" > $tmpy
+	 echo "from iono_correct_mn import correct_iono_pair;" > $tmpy
 	 if [ $setides -gt 0 ]; then
 		 outext=$extofproc.notides.noiono
 	 else
@@ -632,7 +702,7 @@ if [ $iono -gt 0 ]; then
 		 ionod2=$epochdir/$date2/$date2.geo.iono.code.tif   # should be A-B....
 		 if [ -f $ionod1 ] && [ -f $ionod2 ]; then
 			#echo $pair
-			#python3 -c "from iono_correct import *;
+			#python3 -c "from iono_correct_mn import *;
 			echo "print('"$pair"')" >> $tmpy
 			echo "try:" >> $tmpy
 			echo "    correct_iono_pair(frame = '"$frame"', pair = '"$pair"', ifgtype = '"$extofproc"', infile = '"$infile"', source = 'code', fixed_f2_height_km = 450, outif='"$outfile"')" >> $tmpy
@@ -708,6 +778,10 @@ if [ $iono -gt 0 ]; then
   #fi
   cd $workdir
 fi
+
+echo "checkpoint"
+exit
+
 
 
 #hgtfile=/gws/nopw/j04/nceo_geohazards_vol1/public/LiCSAR_products/12/012A_05443_131313/metadata/012A_05443_131313.geo.hgt.tif
@@ -894,9 +968,10 @@ else
  sed -i 's/p11_coh_thre=\"\"/p11_coh_thre=\"0.025\"/' batch_LiCSBAS.sh
  sed -i 's/p12_loop_thre=\"\"/p12_loop_thre=\"10\"/' batch_LiCSBAS.sh
  sed -i 's/p15_n_gap_thre=\"\"/p15_n_gap_thre=\"50\"/' batch_LiCSBAS.sh
- if [ $sbovl -gt 0 ]; then 
-   sed -i 's/p15_resid_rms_thre=\"\"/p15_resid_rms_thre=\"30\"/' batch_LiCSBAS.sh
-   sed -i 's/p15_stc_thre=\"/p15_stc_thre=\"20/' batch_LiCSBAS.sh
+ if [ $sbovl -gt 0 ]; then
+   sed -i 's/p11_coh_thre=\"\"/p11_coh_thre=\"0.8\"/' batch_LiCSBAS.sh  #the sbovl is adf filtered and the coh calculated from adf filter, so keep it higher  
+   sed -i 's/p15_resid_rms_thre=\"\"/p15_resid_rms_thre=\"100\"/' batch_LiCSBAS.sh   ##TODO: testing no filter right now, we can change them in the future (kudos ML) 
+   sed -i 's/p15_stc_thre=\"/p15_stc_thre=\"100/' batch_LiCSBAS.sh
  else
    sed -i 's/p15_resid_rms_thre=\"/p15_resid_rms_thre=\"10/' batch_LiCSBAS.sh
 
