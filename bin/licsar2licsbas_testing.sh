@@ -666,7 +666,7 @@ fi
 
 echo "checkpoint SET done"
 
-if [ $iono -gt 0 ]; then
+if [ "$iono" -gt 0 ] && [ "$sbovl" -eq 0 ]; then   ### 2025-02-16: iono correction is not yet implemented for sbovl
  echo "checking/generating ionospheric correction data"
  python3 -c "from iono_correct_mn import *; make_all_frame_epochs('"$frame"')"
  disprocdir=`pwd`
@@ -778,10 +778,6 @@ if [ $iono -gt 0 ]; then
   #fi
   cd $workdir
 fi
-
-echo "checkpoint"
-exit
-
 
 
 #hgtfile=/gws/nopw/j04/nceo_geohazards_vol1/public/LiCSAR_products/12/012A_05443_131313/metadata/012A_05443_131313.geo.hgt.tif
@@ -922,7 +918,7 @@ if [ $sbovl -gt 0 ]; then
  sed -i 's/p120_sbovl=\"n\"/p120_sbovl=\"y\"/' batch_LiCSBAS.sh
  sed -i 's/p13_sbovl=\"n\"/p13_sbovl=\"y\"/' batch_LiCSBAS.sh
  sed -i 's/p15_sbovl=\"n\"/p15_sbovl=\"y\"/' batch_LiCSBAS.sh
- sed -i 's/p16_sbovl=\"n\"/p16_sbovl=\"y\"/' batch_LiCSBAS.sh
+ sed -i 's/p16_sbovl=\"n\"/p16_sbovl=\"n\"/' batch_LiCSBAS.sh  #TODO: check the step16 filtering options for SBOI.
 fi
 
 
@@ -970,8 +966,8 @@ else
  sed -i 's/p15_n_gap_thre=\"\"/p15_n_gap_thre=\"50\"/' batch_LiCSBAS.sh
  if [ $sbovl -gt 0 ]; then
    sed -i 's/p11_coh_thre=\"\"/p11_coh_thre=\"0.8\"/' batch_LiCSBAS.sh  #the sbovl is adf filtered and the coh calculated from adf filter, so keep it higher  
-   sed -i 's/p15_resid_rms_thre=\"\"/p15_resid_rms_thre=\"100\"/' batch_LiCSBAS.sh   ##TODO: testing no filter right now, we can change them in the future (kudos ML) 
-   sed -i 's/p15_stc_thre=\"/p15_stc_thre=\"100/' batch_LiCSBAS.sh
+   sed -i 's/p15_resid_rms_thre=\"\"/p15_resid_rms_thre=\"100\"/' batch_LiCSBAS.sh   ##TODO: testing no filter right now, we can change them in the future  
+   sed -i 's/p15_stc_thre=\"/p15_stc_thre=\"100/' batch_LiCSBAS.sh  ##TODO: testing no filter right now, we can change them in the future 
  else
    sed -i 's/p15_resid_rms_thre=\"/p15_resid_rms_thre=\"10/' batch_LiCSBAS.sh
 
