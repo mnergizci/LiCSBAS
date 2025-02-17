@@ -377,7 +377,7 @@ if __name__ == "__main__":
         plt.tight_layout()
         # plt.show()
         # fig.savefig(output_dir+tif.basename+".png", format='PNG', dpi=300, bbox_inches='tight')
-        fig.savefig(args.png, format='PNG', dpi=300, bbox_inches='tight')
+        fig.savefig(args.png, format='PNG', dpi=150, bbox_inches='tight')
 
         # Export scaled uncertainty map to tif format.
         driver = gdal.GetDriverByName("GTiff")
@@ -426,6 +426,6 @@ if __name__ == "__main__":
             ax.set_yticks([])
         plt.tight_layout()
         # plt.show()
-        fig.savefig(args.png, format='PNG', dpi=300, bbox_inches='tight')
+        fig.savefig(args.png, format='PNG', dpi=150, bbox_inches='tight')
 
     finish()
