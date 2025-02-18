@@ -666,9 +666,15 @@ fi
 
 echo "checkpoint SET done"
 
-if [ "$iono" -gt 0 ] && [ "$sbovl" -eq 0 ]; then   ### 2025-02-16: iono correction is not yet implemented for sbovl
- echo "checking/generating ionospheric correction data"
- python3 -c "from iono_correct_mn import *; make_all_frame_epochs('"$frame"')"
+if [ "$iono" -gt 0 ]; then  
+  echo "checking/generating ionospheric correction data"
+  
+  if [ "$sbovl" -gt 0 ]; then
+    echo "using iono correction in azimuth"
+    python3 -c "from iono_correct_mn import *; make_all_frame_epochs('$frame', sbovl=True)"
+  else
+    python3 -c "from iono_correct_mn import *; make_all_frame_epochs('$frame')"
+  fi
  disprocdir=`pwd`
  if [ $reunw -gt 0 ]; then
 	 echo "applying the ionospheric correction"
@@ -759,26 +765,45 @@ if [ "$iono" -gt 0 ] && [ "$sbovl" -eq 0 ]; then   ### 2025-02-16: iono correcti
   fi
   #else
    # correct only on epoch level, i.e. now just link to 
-   echo "Linking iono corrections per epoch"
-   cd $disprocdir
-   mkdir -p GEOC.EPOCHS; cd GEOC.EPOCHS; disdir=`pwd`;
-   extfull=geo.iono.code.tif
-   for epochpath in `ls $epochdir/20?????? -d`; do
-      epoch=`basename $epochpath`
-      if [ -f $epochpath/$epoch.$extfull ]; then
-        if [ ! -e $epoch/$epoch.$extfull ]; then
-         mkdir -p $epoch
-         cd $epoch
-         ln -s $epochpath/$epoch.$extfull
-         cd $disdir
+  echo "Linking iono corrections per epoch"
+  cd $disprocdir
+  mkdir -p GEOC.EPOCHS
+  cd GEOC.EPOCHS
+  disdir=`pwd`
+
+  # Define file extensions based on sbovl flag
+  if [ "$sbovl" -gt 0 ]; then
+    extfull=("geo.iono.code.sTECA.tif" "geo.iono.code.sTECB.tif")  # sTECA & sTECB for sbovl
+  else
+    extfull=("geo.iono.code.tif")  # Standard iono correction
+  fi
+
+  # Loop through all epoch directories
+  for epochpath in `ls $epochdir/20?????? -d`; do
+    epoch=`basename $epochpath`
+    
+    # Iterate through all defined file extensions
+    for ext in "${extfull[@]}"; do
+      if [ -f "$epochpath/$epoch.$ext" ]; then
+        if [ ! -e "$epoch/$epoch.$ext" ]; then
+          mkdir -p "$epoch"
+          cd "$epoch"
+          ln -s "$epochpath/$epoch.$ext"
+          cd "$disdir"
         fi
       fi
-   done
+    done
+
+  done
    cd $disprocdir
   #fi
   cd $workdir
 fi
 
+
+
+echo "checkpoint IONO done"
+exit 
 
 #hgtfile=/gws/nopw/j04/nceo_geohazards_vol1/public/LiCSAR_products/12/012A_05443_131313/metadata/012A_05443_131313.geo.hgt.tif
  #epath=/gws/nopw/j04/nceo_geohazards_vol1/public/LiCSAR_products/12/012A_05443_131313/epochs

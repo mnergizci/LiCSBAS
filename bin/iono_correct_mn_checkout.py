@@ -207,7 +207,7 @@ def make_ionocorr_epoch(frame, epoch, source = 'code', fixed_f2_height_km = 450,
     theta = np.radians(avg_incidence_angle)
     wgs84 = nv.FrameE(name='WGS84')
     Pscene_center = wgs84.GeoPoint(latitude=scene_center_lat, longitude=scene_center_lon, degrees=True)
-    #    burst_len = 7100*2.758277 #approx. satellite velocity on the ground 7100 [m/s] * burst_interval [s]
+    burst_len = 7100*2.758277 #approx. satellite velocity on the ground 7100 [m/s] * burst_interval [s]
     ###### do the satg_lat, lon
     azimuthDeg = heading - 90  # yes, azimuth is w.r.t. N (positive to E)
     elevationDeg = 90 - avg_incidence_angle  # this is to get the avg sat altitude/range
@@ -279,16 +279,17 @@ def make_ionocorr_epoch(frame, epoch, source = 'code', fixed_f2_height_km = 450,
         tecxr = alpha * tecxr
     print('getting TEC values sampled by {} km.'.format(str(round(ionosampling / 1000))))
     
-    for i in range(len(range2iono.lat.values)):
-        # print(str(i) + '/' + str(len(range2iono.lat.values)))
-        for j in range(len(range2iono.lon.values)):
-            if ~np.isnan(incml.values[i, j]):
-                # theta = float(np.radians(incml.values[i, j]))
-                eledeg = float(90 - incml.values[i, j])
-                #ground_scene
-                ilat_ground, ilon_ground = range2iono.lat.values[i], range2iono.lon.values[j]
-                
-                if not sbovl:
+    if not sbovl:  ##I could put the condition in the for loop but it's better to keep it clean.
+        
+        for i in range(len(range2iono.lat.values)):
+            # print(str(i) + '/' + str(len(range2iono.lat.values)))
+            for j in range(len(range2iono.lon.values)):
+                if ~np.isnan(incml.values[i, j]):
+                    # theta = float(np.radians(incml.values[i, j]))
+                    eledeg = float(90 - incml.values[i, j])
+                    #ground_scene
+                    ilat_ground, ilon_ground = range2iono.lat.values[i], range2iono.lon.values[j]
+                    
                     ##it directly starts from IPP scene
                     x, y, z = aer2ecef(azimuthDeg, eledeg, range2iono.values[i, j], ilat_ground, ilon_ground, 0)
                                     #  float(hgtml.values[i, j])) # to consider hgt ... better without
@@ -298,16 +299,48 @@ def make_ionocorr_epoch(frame, epoch, source = 'code', fixed_f2_height_km = 450,
                         ionoij = get_vtec_from_tecxr(tecxr, acqtime, ilat, ilon)
                     elif source=='iri':
                         ionoij = get_tecs(ilat, ilon, sat_alt_km, [acqtime], False)[0]  ##why sat_alt_km rather than ialt? MN
+                        
+                    else:
+                        print(f'The source{source} model is not supported, try code or iri!')
                     
                     ##VTEC2STEC
                     theta = float(np.radians(incml.values[i, j]))
                     sin_thetaiono = earth_radius / (earth_radius + hiono) * np.sin(theta)
                     ionoxr.values[i, j] = ionoij / np.sqrt(1 - sin_thetaiono ** 2) # with the last term, we get it to LOS (STEC)
+        
+        if not return_phase:
+            # if we want to return only TEC
+            ionoxr = interpolate_nans_bivariate(ionoxr)
+            ionoxr = ionoxr.interp_like(inc, method='linear', kwargs={"bounds_error": False, "fill_value": None})
+            if np.max(np.isnan(ionoxr.values)):
+                ionoxr = interpolate_nans_bivariate(ionoxr)  # not the best (memory...) but needed
+            outputxr = ionoxr
+        else:
+            # now, convert TEC values into 'phase' - simplified here (?)
+            f0 = 5.4050005e9
+            # inc = avg_incidence_angle  # e.g. 39.1918 ... oh but... it actually should be the iono-squint-corrected angle. ignoring now
+            # ionoxr = -4*np.pi*40.308193/speed_of_light/f0*ionoxr/np.cos(np.radians(incml))
+            # we change the sign here as the effect on phase is opposite (ionospheric phase advance; less negative in case of stronger ionosphere)
+            tecphase = 4 * np.pi * 40.308193 / speed_of_light / f0 * ionoxr
+            # tecphase = ionoxr #get_tecphase(epoch)
+            tecphase = interpolate_nans_bivariate(tecphase)
+            tecphase = tecphase.interp_like(inc, method='linear', kwargs={"bounds_error": False, "fill_value": None})
+            if np.max(np.isnan(tecphase.values)):
+                tecphase = interpolate_nans_bivariate(tecphase)  # not the best (memory...) but needed
+            outputxr = tecphase
+        if outif:
+            export_xr2tif(outputxr, outif)
+        return outputxr           
                     
-                    else:
-                        print(f'The source{source} model is not supported, try code or iri!')
-                    
-                elif sbovl:
+    elif sbovl:
+        for i in range(len(range2iono.lat.values)):
+            # print(str(i) + '/' + str(len(range2iono.lat.values)))
+            for j in range(len(range2iono.lon.values)):
+                if ~np.isnan(incml.values[i, j]):
+                    # theta = float(np.radians(incml.values[i, j]))
+                    eledeg = float(90 - incml.values[i, j])
+                    #ground_scene
+                    ilat_ground, ilon_ground = range2iono.lat.values[i], range2iono.lon.values[j]
                     ##satellite scene, we need to consider satellite scene again for BOI
                     x, y, z = aer2ecef(azimuthDeg, eledeg, slantRange, ilat_ground, ilon_ground, 0) #scene_alt) ### this is wrt ellipsoid! ##TODO rather than the center slant range near center and far range can be added! IDK it's effect.
                     satg_lat, satg_lon, sat_alt = ecef2latlonhei(x, y, z) ##satellite scene is changed becasue of the elevation degree change along the range direction
@@ -324,7 +357,7 @@ def make_ionocorr_epoch(frame, epoch, source = 'code', fixed_f2_height_km = 450,
                     #then get A', B'
                     PippAt, _azimuth = Pippg.displace(distance=burst_len, azimuth=heading-180, method='ellipsoid', degrees=True) #We extend burst_len to cover the intersection area. theorically burst_length/2 ideal
                     PippBt, _azimuth = Pippg.displace(distance=burst_len, azimuth= heading, method='ellipsoid', degrees=True)
-                    
+        
                     ##intersection, to make sure IPP coordinates found
                     path_ipp = nv.GeoPath(PippAt, PippBt)
                     Pscene_center = wgs84.GeoPoint(latitude=ilat_ground, longitude=ilon_ground, degrees=True)
@@ -333,74 +366,42 @@ def make_ionocorr_epoch(frame, epoch, source = 'code', fixed_f2_height_km = 450,
                     # these two points are the ones where we should get TEC
                     PippA = path_ipp.intersect(path_scene_satgA).to_geo_point()
                     PippB = path_ipp.intersect(path_scene_satgB).to_geo_point()
-                    
+        
                     if source=='code':
                         # print('code selected')
                         ionoijA = get_vtec_from_tecxr(tecxr, acqtime, PippA.latitude_deg, PippA.longitude_deg)
                         ionoijB = get_vtec_from_tecxr(tecxr, acqtime, PippB.latitude_deg, PippB.longitude_deg)
                     else:
                         # print('iri selected')
-                        ionoijA = get_tecs(PippA.latitude_deg, PippA.longitude_deg, sat_alt_km, [acqtime], False, source=source)[0]
+                        ionoijA = get_tecs(PippA.latitude_deg, PippA.longitude_deg, sat_alt_km, [acqtime], False, source=source)[0]  ##TODO ask Milan why we set the sat_alt_km rather than ipp_alt when we apply IRI model? it select IPP itself?
                         ionoijB = get_tecs(PippB.latitude_deg, PippB.longitude_deg, sat_alt_km, [acqtime], False, source=source)[0]
-                    
+        
                     #VTEC2STEC        
                     theta = float(np.radians(incml.values[i, j]))
                     sin_thetaiono = earth_radius / (earth_radius + hiono) * np.sin(theta)
                     ionoxrA.values[i, j] = ionoijA / np.sqrt(1 - sin_thetaiono ** 2)
                     ionoxrB.values[i, j] = ionoijB / np.sqrt(1 - sin_thetaiono ** 2)
-                            
+        
+        # Let's make it a bit more robust 
+        ionoxr_dict = {'A': ionoxrA, 'B': ionoxrB}
+        outputxr_dict = {}
+
+        for key in ['A', 'B']:
+            ionoxr_dict[key] = interpolate_nans_bivariate(ionoxr_dict[key])
+            ionoxr_dict[key] = ionoxr_dict[key].interp_like(inc, method='linear', kwargs={"bounds_error": False, "fill_value": None})
+
+            if np.max(np.isnan(ionoxr_dict[key].values)):
+                ionoxr_dict[key] = interpolate_nans_bivariate(ionoxr_dict[key])  # Not the best, but needed
+
+            outputxr_dict[key] = ionoxr_dict[key]
+
+        # Return the processed values
+        return outputxr_dict['A'], outputxr_dict['B']
+                                    
                     
-    if not return_phase or sbovl:
-        if not sbovl:
-            # if we want to return only TEC
-            ionoxr = interpolate_nans_bivariate(ionoxr)
-            ionoxr = ionoxr.interp_like(inc, method='linear', kwargs={"bounds_error": False, "fill_value": None})
-            if np.max(np.isnan(ionoxr.values)):
-                ionoxr = interpolate_nans_bivariate(ionoxr)  # not the best (memory...) but needed
-            outputxr = ionoxr
-        else:
-            azpix=14000 #azimuth pixel spacing
-            PRF = 486.486  ##Pulse repetition frequency [Hz]
-            k = 40.308193 # m^3 / s^2
-            f0 = 5.4050005e9
-            c = speed_of_light 
-            fH = f0 + dfDC*0.5
-            fL = f0 - dfDC*0.5
-            scaling_tif=os.path.join(GEOC_folder, pair, pair +'.geo.sbovl_scaling.tif')
-            
-            if os.path.file.exists and not empty(scaling_tif):
-                scaling_factor=load_tif2xr(scaling_tif)
-                dfDC=azpix*PRF/(2*np.pi*scaling_factor)
-            else:
-                print('Scaling factor tif not found, using default scaling factor of 1')
-                dfDC = 4300
-
-            #tecovl = (TECs_B1 - TEC_master_B1)/(fH*fH) - (TECs_B2 - TEC_master_B2)/(fL*fL)   ##Milan's note! 
-            #daz_iono = -2*PRF*k*f0/c/dfDC * tecovl
-            # 2023 - oh well, it was best to do straightforward equations, see Lazecky et al., 2023, GRL
-            tecovl = (tec_A_master - selected_frame_esds['TECS_A'])/fH - (tec_B_master - selected_frame_esds['TECS_B'])/fL
-            daz_iono = 2*PRF*k/c/dfDC * tecovl
-            
-    else:
-        # now, convert TEC values into 'phase' - simplified here (?)
-        f0 = 5.4050005e9
-        # inc = avg_incidence_angle  # e.g. 39.1918 ... oh but... it actually should be the iono-squint-corrected angle. ignoring now
-        # ionoxr = -4*np.pi*40.308193/speed_of_light/f0*ionoxr/np.cos(np.radians(incml))
-        # we change the sign here as the effect on phase is opposite (ionospheric phase advance; less negative in case of stronger ionosphere)
-        tecphase = 4 * np.pi * 40.308193 / speed_of_light / f0 * ionoxr
-        # tecphase = ionoxr #get_tecphase(epoch)
-        tecphase = interpolate_nans_bivariate(tecphase)
-        tecphase = tecphase.interp_like(inc, method='linear', kwargs={"bounds_error": False, "fill_value": None})
-        if np.max(np.isnan(tecphase.values)):
-            tecphase = interpolate_nans_bivariate(tecphase)  # not the best (memory...) but needed
-        outputxr = tecphase
-    if outif:
-        export_xr2tif(outputxr, outif)
-    return outputxr
-
 
 # test frame: 144A_04689_111111
-def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_height_km = 450, alpha = 0.85):
+def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_height_km = 450, alpha = 0.85, sbovl = False):
     ''' use either 'code' or 'iri' as the source model for the correction
     This function will generate ionosphere phase screens (LOS) [rad] per epoch.
     
@@ -410,6 +411,7 @@ def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_he
         epochslist (list): e.g. ['20180930', '20181012'] - if given, only IPS for only those epochs are created, otherwise for all epochs
         fixed_f2_height_km (num): for CODE only. CODE is valid for 450 km. if None, it will use IRI to estimate ionospheric height
         alpha (float): for CODE only
+        sbovl (bool): if True, it will calculate TEC values for BOI's different piercing points
     '''
     framepubdir = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])), frame)
     hgtfile = os.path.join(framepubdir, 'metadata', frame+'.geo.hgt.tif')
@@ -423,11 +425,28 @@ def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_he
         epochdir = os.path.join(framepubdir, 'epochs', epoch)
         if not os.path.exists(epochdir):
             os.mkdir(epochdir)
-        tif = os.path.join(epochdir, epoch+'.geo.iono.'+source+'.tif')
-        if not os.path.exists(tif):
-            print(epoch)
-            xrda = make_ionocorr_epoch(frame, epoch, source = source, fixed_f2_height_km = fixed_f2_height_km, alpha = alpha)
-            xrda = xrda.where(mask)
-            export_xr2tif(xrda, tif) #, refto=hgtfile)
-            os.system('chmod 777 '+tif)
-            # but it still does not really fit - ok, because the xarray outputs here are gridline-registered while our ifgs are pixel registered...hmmm..
+        
+        if not sbovl:
+            tif = os.path.join(epochdir, epoch+'.geo.iono.'+source+'.tif')
+            if not os.path.exists(tif):
+                print(epoch)
+                xrda = make_ionocorr_epoch(frame, epoch, source = source, fixed_f2_height_km = fixed_f2_height_km, alpha = alpha, sbovl = sbovl)
+                xrda = xrda.where(mask)
+                export_xr2tif(xrda, tif) #, refto=hgtfile)
+                os.system('chmod 777 '+tif)
+                # but it still does not really fit - ok, because the xarray outputs here are gridline-registered while our ifgs are pixel registered...hmmm..
+        elif sbovl:
+            tif1= os.path.join(epochdir, epoch+'.geo.iono.'+source+'sTECA.tif')
+            tif2= os.path.join(epochdir, epoch+'.geo.iono.'+source+'sTECB.tif')
+            if not os.path.exists(tif1) or not os.path.exists(tif2):
+                print(epoch)
+                xrdaA, xrdaB = make_ionocorr_epoch(frame, epoch, source = source, fixed_f2_height_km = fixed_f2_height_km, alpha = alpha, sbovl = sbovl)
+                #mask
+                xrdaA = xrdaA.where(mask)
+                xrdaB = xrdaB.where(mask)
+                #export
+                export_xr2tif(xrdaA, tif1) #, refto=hgtfile)
+                export_xr2tif(xrdaA, tif2) #, refto=hgtfile)
+                #permmssion
+                os.system('chmod 777 '+tif1)
+                os.system('chmod 777 '+tif2)
