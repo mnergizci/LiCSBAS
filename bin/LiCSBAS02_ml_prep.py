@@ -607,6 +607,7 @@ def convert_wrapper(ifgd, is_sbovl=False):
 
     # Save float outputs
     unw.tofile(unwfile)
+    cc = np.nan_to_num(cc, nan=0)
     cc = cc.astype(np.uint8)  # Convert NaNs to 0, auto-floor to max 255
     cc.tofile(ccfile)
 

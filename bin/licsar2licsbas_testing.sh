@@ -375,8 +375,8 @@ if [ "$sbovl" -gt 0 ] && [ "$need_to_generate_azi" -eq 1 ]; then
   # Navigate two levels up safely
   pushd ../../ > /dev/null || { echo "Error: Unable to change directory"; exit 1; } ##pushd remember the original directory rather than cd
   
-  echo "Checkpoint 1 - Now in: $(pwd)"
-  echo "Processing frame: $frame"
+  # echo "Checkpoint 1 - Now in: $(pwd)"
+  # echo "Processing frame: $frame"
 
   if ! command -v rangeENU2aziENU.py &> /dev/null; then
     echo "Error: rangeENU2aziENU.py not found. Ensure it is in PATH."
@@ -389,7 +389,7 @@ if [ "$sbovl" -gt 0 ] && [ "$need_to_generate_azi" -eq 1 ]; then
 
   # Return to the original directory
   popd > /dev/null
-  echo "Checkpoint 2 - Returned to: $(pwd)"
+  echo "Returned to: $(pwd)"
 
   # Ensure we are in GEOC directory before creating symbolic links
   cd "$curr_dir" || { echo "Error: Failed to return to $curr_dir"; exit 1; }
@@ -581,99 +581,142 @@ if [ $icams -gt 0 ]; then
    done
 fi
 
-if [ $setides -gt 0 ]; then
-  if [ $sbovl -gt 0 ]; then
+if [ "$setides" -gt 0 ]; then
+  if [ "$sbovl" -gt 0 ]; then
     echo "checking/generating solid earth tides data in Azimuth"
-    create_LOS_tide_frame_allepochs_mn $frame $startdate $enddate --sbovl # this will create the tides in azimuth and dates between startdate and enddate
+    create_LOS_tide_frame_allepochs_mn "$frame" "$startdate" "$enddate" --sbovl
   else
     echo "checking/generating solid earth tides data in LOS"
-    create_LOS_tide_frame_allepochs_mn $frame $startdate $enddate
+    create_LOS_tide_frame_allepochs_mn "$frame" "$startdate" "$enddate"
   fi
-  disprocdir=`pwd`
-  if [ $reunw -gt 0 ]; then  # in such case we correct before unwrapping
-     echo "applying the SET correction"
-	 # now using them to create either pha or unw tifs (to GEOC)
-	 cd GEOC; disdir=`pwd`
-	 hgtfile=$disdir/`ls *.geo.hgt.tif | head -n 1`
-	 regt=`gmt grdinfo $hgtfile | grep registration | gawk {'print $2'}`
-	 #if [ $extofproc == 'unw' ]; then grdmextra=''; else grdmextra='WRAP'; fi   # now use only for wrapped data..
-	 grdmextra='WRAP'
-	 for pair in `ls -d 20??????_20??????`; do
-	   echo $pair
-	   cd $pair
-	   infile=`pwd`/$pair.geo.$extofproc.tif
-	   if [ ! -L $infile ]; then
-		 echo "ERROR - inconsistency detected - the file "$infile" should be already a link. Contact Milan for debugging"
-		 exit
-	   fi
-	   date1=`echo $pair | cut -d '_' -f1`
-	   date2=`echo $pair | cut -d '_' -f2`
-	   outfile=`pwd`/$pair.geo.$extofproc.notides.tif
-	   if [ ! -f $outfile ]; then
-		 tided1=$epochdir/$date1/$date1.tide.geo.tif
-		 tided2=$epochdir/$date2/$date2.tide.geo.tif   # should be A-B....
-		 if [ -f $tided1 ] && [ -f $tided2 ]; then
-			#echo $pair
-			#
-			if [ `gmt grdinfo $infile | grep registration | gawk {'print $2'}` == $regt ]; then  #Pixel ]; then
-			 gmt grdmath -N $infile'=gd:Gtiff+n0' 0 NAN $tided1 $tided2 SUB 226.56 MUL SUB $grdmextra = $outfile'=gd:Gtiff'
-			else
-			 # half pixel issue in older frames! but ok for tides, so:
-			 # echo "print('"$pair"')" >> $tmpy
-			 echo "Warning, the pair "$pair" is in pixel registration. Slower workaround"
-			 ifg_remove_tides.py $hgtfile $infile $tided1 $tided2 $outfile
-			 # now the output is in Gridline but it says pixel (or opposite, depending on $regt)
-			 # may work anyway...
-			fi
-			if [ -f $outfile ]; then
-			  rm $infile  # only removing the link
-			  ln -s `basename $outfile` `basename $infile`
-			fi
-		 else
-		   echo "WARNING: SET estimates do not exist for pair "$pair" - perhaps one of epochs is not stored in LiCSAR_public - keeping this pair anyway"
-		 fi
-	   fi
-	   cd $disdir
-	 done
+
+  disprocdir=$(pwd)
+
+  if [ "$reunw" -gt 0 ] || [ "$sbovl" -gt 0 ]; then  # in such case we correct before unwrapping
+    if [ "$sbovl" -gt 0 ]; then
+      echo "applying the SET correction in azimuth"
+    else
+      echo "applying the SET correction in range"
+    fi
+    # now using them to create either pha or unw tifs (to GEOC)
+    cd GEOC
+    disdir=$(pwd)
+    hgtfile=$(ls *.geo.hgt.tif 2>/dev/null | head -n 1)
+    if [ -z "$hgtfile" ]; then
+      echo "Error: No height file (*.geo.hgt.tif) found!"
+      exit 1
+    fi
+    hgtfile="$disdir/$hgtfile"
+    regt=$(gmt grdinfo "$hgtfile" | grep "registration" | awk '{print $2}')
+    #if [ $extofproc == 'unw' ]; then grdmextra=''; else grdmextra='WRAP'; fi   # now use only for wrapped data..
+    # grdmextra='WRAP'
+    if [ "${extofproc}" == "sbovldiff.adf.mm" ]; then grdmextra=""; else grdmextra="WRAP"; fi 
+    
+    for pair in $(ls -d 20??????_20??????); do
+      echo "$pair"
+      cd "$pair"
+      infile="$(pwd)/$pair.geo.$extofproc.tif"
+      infile2="$(pwd)/$pair.geo.$extofproc2.tif" ##sbovl and bovl double check, if not sbovl exist, checking bovl
+
+      echo "Checking file: $infile"
+
+      # First, check if infile is a symlink
+      if [ ! -L "$infile" ]; then
+        if [ "$sbovl" -gt 0 ]; then
+          echo "Warning: $infile is not a symlink, checking alternative file..."
+          infile="$infile2"
+        fi
+      fi
+
+      # Now check if the updated infile is still missing
+      if [ ! -L "$infile" ]; then
+        echo "ERROR - inconsistency detected: $infile should be a symlink. Contact Milan for debugging."
+        exit
+      fi
+
+      date1=$(echo "$pair" | cut -d '_' -f1)
+      date2=$(echo "$pair" | cut -d '_' -f2)
+      outfile="$(pwd)/$pair.geo.$extofproc.notides.tif" ##after that one sbovl and bovl is called as sbovl?
+
+      if [ ! -f "$outfile" ]; then
+        if [ "$sbovl" -gt 0 ]; then
+          tided1="$epochdir/$date1/$date1.tide.geo.azi.tif"
+          tided2="$epochdir/$date2/$date2.tide.geo.azi.tif" 
+        else
+          tided1="$epochdir/$date1/$date1.tide.geo.tif"
+          tided2="$epochdir/$date2/$date2.tide.geo.tif" # should be A-B....
+        fi
+
+        if [ -f "$tided1" ] && [ -f "$tided2" ]; then
+          #echo $pair
+          if [ "$(gmt grdinfo "$infile" | grep registration | awk '{print $2}')" == "$regt" ]; then #Pixel ]; then ## (either "Pixel" or "Gridline")
+            if [ "$sbovl" -le 0 ]; then
+              gmt grdmath -N "$infile"=gd:Gtiff+n0 0 NAN "$tided1" "$tided2" SUB 226.56 MUL SUB "$grdmextra" = "$outfile"=gd:Gtiff ##226=(4*np.pi)/(0.055465) for m2rad
+            else
+              gmt grdmath -N "$infile"=gd:Gtiff+n0 0 NAN "$tided1" "$tided2" SUB 1000 MUL SUB "$grdmextra" = "$outfile"=gd:Gtiff  ##1000 for m2mm
+            fi
+          else
+            # half pixel issue in older frames! but ok for tides, so:
+            # echo "print('"$pair"')" >> $tmpy
+            echo "Warning, the pair $pair is in pixel registration. Slower workaround"
+            ifg_remove_tides_mn.py "$hgtfile" "$infile" "$tided1" "$tided2" "$outfile"
+            #echo "$hgtfile" "$infile" "$tided1" "$tided2" "$outfile"
+            
+            # now the output is in Gridline but it says pixel (or opposite, depending on $regt)
+			      # may work anyway...
+          fi
+
+          if [ -f "$outfile" ]; then
+            rm "$infile" # only removing the link
+            ln -s "$(basename "$outfile")" "$(basename "$infile")"
+          fi
+
+        else
+          echo "WARNING: SET estimates do not exist for pair $pair - perhaps one of epochs is not stored in LiCSAR_public - keeping this pair anyway"
+        fi
+      fi
+	    cd $disdir
+    done  
+  fi
   #else   # i mean, link it anyway, as we might want to check loading to cube etc.
   #else
   #  echo "WARNING: Without reunwrapping, the SET and iono corrs are only ready but not applied. Contact Milan - work in progress"
-  fi
-   # correct only on epoch level, i.e. now just link to 
-   echo "Linking solid earth tide corrections per epoch"
-   cd $disprocdir
-   mkdir -p GEOC.EPOCHS; cd GEOC.EPOCHS; disdir=`pwd`;
-   if [ $sbovl -gt 0 ]; then
+  #TODO: Discuss here with Milan, in SBOI we can apply SET and iono directly as we wait the deformation is smaller than the phase jumb threshold (0.7m) in SBOI?
+  ##reunwrapping finalized here.
+  # correct only on epoch level, i.e. now just link to 
+  echo "Linking solid earth tide corrections per epoch"
+  cd $disprocdir
+  mkdir -p GEOC.EPOCHS; cd GEOC.EPOCHS; disdir=`pwd`;
+  if [ $sbovl -gt 0 ]; then
     extfull=tide.geo.azi.tif
-   else
+    else
     extfull=tide.geo.tif
-   fi
-   for epochpath in `ls $epochdir/20?????? -d`; do
-      epoch=`basename $epochpath`
-      if [ -f $epochpath/$epoch.$extfull ]; then
-        if [ ! -e $epoch/$epoch.$extfull ]; then
-         mkdir -p $epoch
-         cd $epoch
-         ln -s $epochpath/$epoch.$extfull
-         cd $disdir
-        fi
+  fi
+  for epochpath in `ls $epochdir/20?????? -d`; do
+    epoch=`basename $epochpath`
+    if [ -f $epochpath/$epoch.$extfull ]; then
+      if [ ! -e $epoch/$epoch.$extfull ]; then
+          mkdir -p $epoch
+          cd $epoch
+          ln -s $epochpath/$epoch.$extfull
+          cd $disdir
       fi
-   done
-   cd $disprocdir
-  #fi
+    fi
+  done
+  cd $disprocdir
   cd $workdir
 fi
 
-echo "checkpoint SET done"
+echo "Checkpoint correction of SET"
+exit
 
-if [ "$iono" -gt 0 ]; then  
-  echo "checking/generating ionospheric correction data"
-  
+if [ "$iono" -gt 0 ]; then    
   if [ "$sbovl" -gt 0 ]; then
-    echo "using iono correction in azimuth"
-    python3 -c "from iono_correct_mn import *; make_all_frame_epochs('$frame', sbovl=True)"
+    echo "checking/generating ionospheric correction data in azimuth"
+    python3 -c "from iono_correct_mn import *; make_all_frame_epochs('$frame', startdate='$startdate', enddate='$enddate', sbovl=True)"
   else
-    python3 -c "from iono_correct_mn import *; make_all_frame_epochs('$frame')"
+    echo "checking/generating ionospheric correction data in range"
+    python3 -c "from iono_correct_mn import *; make_all_frame_epochs('$frame')" #TODO:We can put the startdate and enddate here as well.
   fi
  disprocdir=`pwd`
  if [ $reunw -gt 0 ]; then
@@ -943,7 +986,7 @@ if [ $sbovl -gt 0 ]; then
  sed -i 's/p120_sbovl=\"n\"/p120_sbovl=\"y\"/' batch_LiCSBAS.sh
  sed -i 's/p13_sbovl=\"n\"/p13_sbovl=\"y\"/' batch_LiCSBAS.sh
  sed -i 's/p15_sbovl=\"n\"/p15_sbovl=\"y\"/' batch_LiCSBAS.sh
- sed -i 's/p16_sbovl=\"n\"/p16_sbovl=\"n\"/' batch_LiCSBAS.sh  #TODO: check the step16 filtering options for SBOI.
+ sed -i 's/p16_sbovl=\"n\"/p16_sbovl=\"n\"/' batch_LiCSBAS.sh  #TODO: check the step16 filtering options for SBOI discuss with Milan.
 fi
 
 

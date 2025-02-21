@@ -399,9 +399,8 @@ def make_ionocorr_epoch(frame, epoch, source = 'code', fixed_f2_height_km = 450,
         return outputxr_dict['A'], outputxr_dict['B']
                                     
                     
-
 # test frame: 144A_04689_111111
-def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_height_km = 450, alpha = 0.85, sbovl = False):
+def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_height_km = 450, alpha = 0.85, sbovl = False, startdate='20141001', enddate=None):
     ''' use either 'code' or 'iri' as the source model for the correction
     This function will generate ionosphere phase screens (LOS) [rad] per epoch.
     
@@ -412,7 +411,15 @@ def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_he
         fixed_f2_height_km (num): for CODE only. CODE is valid for 450 km. if None, it will use IRI to estimate ionospheric height
         alpha (float): for CODE only
         sbovl (bool): if True, it will calculate TEC values for BOI's different piercing points
+        startdate (str): Start date for filtering epochs, format "YYYYMMDD".
+        enddate (str): End date for filtering epochs, format "YYYYMMDD".
     '''
+    if enddate is None:
+        enddate = pd.to_datetime("today").strftime("%Y%m%d")
+
+    startdate = pd.to_datetime(startdate, format="%Y%m%d")
+    enddate = pd.to_datetime(enddate, format="%Y%m%d")
+    
     framepubdir = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])), frame)
     hgtfile = os.path.join(framepubdir, 'metadata', frame+'.geo.hgt.tif')
     hgt = load_tif2xr(hgtfile)
@@ -422,6 +429,11 @@ def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_he
         epochslist.sort()
         #epochslist = os.listdir(os.path.join(framepubdir, 'epochs')) # careful, non-epoch folders would cause error!
     for epoch in epochslist:
+        epoch_date = pd.to_datetime(epoch, format="%Y%m%d")
+        
+        if (epoch_date < startdate or epoch_date > enddate): ##just to scale between given time
+            continue  # Skip epochs outside the selected date range if sbovl is True
+ 
         epochdir = os.path.join(framepubdir, 'epochs', epoch)
         if not os.path.exists(epochdir):
             os.mkdir(epochdir)
@@ -436,8 +448,8 @@ def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_he
                 os.system('chmod 777 '+tif)
                 # but it still does not really fit - ok, because the xarray outputs here are gridline-registered while our ifgs are pixel registered...hmmm..
         elif sbovl:
-            tif1= os.path.join(epochdir, epoch+'.geo.iono.'+source+'sTECA.tif')
-            tif2= os.path.join(epochdir, epoch+'.geo.iono.'+source+'sTECB.tif')
+            tif1= os.path.join(epochdir, epoch+'.geo.iono.'+source+'.sTECA.tif')
+            tif2= os.path.join(epochdir, epoch+'.geo.iono.'+source+'.sTECB.tif')
             if not os.path.exists(tif1) or not os.path.exists(tif2):
                 print(epoch)
                 xrdaA, xrdaB = make_ionocorr_epoch(frame, epoch, source = source, fixed_f2_height_km = fixed_f2_height_km, alpha = alpha, sbovl = sbovl)
