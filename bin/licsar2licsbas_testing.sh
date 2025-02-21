@@ -623,7 +623,7 @@ if [ "$setides" -gt 0 ]; then
       # First, check if infile is a symlink
       if [ ! -L "$infile" ]; then
         if [ "$sbovl" -gt 0 ]; then
-          echo "Warning: $infile is not a symlink, checking alternative file..."
+          echo "Warning: $infile is not a symlink, checking alternative file (bovl)..."
           infile="$infile2"
         fi
       fi
@@ -707,8 +707,6 @@ if [ "$setides" -gt 0 ]; then
   cd $workdir
 fi
 
-echo "Checkpoint correction of SET"
-exit
 
 if [ "$iono" -gt 0 ]; then    
   if [ "$sbovl" -gt 0 ]; then
@@ -803,9 +801,91 @@ if [ "$iono" -gt 0 ]; then
 	   cd $disdir
 	 done
 	 rm $tmpy
-  #else
-  # echo "WARNING: Without reunwrapping, the SET and iono corrs are only ready but not applied. Contact Milan - work in progress"
-  fi
+  elif [ $sbovl -gt 0 ]; then ##Iono looks more complex so let's do it in another elif block
+   echo "applying the ionospheric correction for SBOI"    
+
+   ######
+	 cd GEOC
+	 # using them to either pha or unw tifs (to GEOC)
+	 disdir=`pwd`
+	 #hgtfile=`ls *.geo.hgt.tif | head -n 1`
+	 tmpy=`pwd`/../tmp.py
+	 echo "from iono_correct_mn import correct_iono_pair_sboi;" > $tmpy
+	 if [ $setides -gt 0 ]; then
+		 outext=$extofproc.notides.noiono
+	 else
+		 outext=$extofproc.noiono
+	 fi
+	 for pair in `ls -d 20??????_20??????`; do
+	   cd $pair
+	   # here use the linked
+	   infile="$(pwd)/$pair.geo.$extofproc.tif"
+     infile2="$(pwd)/$pair.geo.$extofproc2.tif" ##sbovl and bovl double check, if not sbovl exist, checking bovl
+
+	   if [ ! -L "$infile" ]; then
+      echo "Warning: $infile is not a symlink, checking alternative file (bovl)..."
+      infile="$infile2"
+		 fi
+
+     if [ ! -L "$infile" ]; then
+       echo "ERROR - inconsistency detected: $infile should be a symlink. Contact Milan for debugging."
+       exit
+     fi
+
+
+	   # as input, and then store as .iono.
+	   # and make the link back!
+	   date1=`echo $pair | cut -d '_' -f1`
+	   date2=`echo $pair | cut -d '_' -f2`
+	   #$epochdir
+	   outfile=`pwd`/$pair.geo.$outext.tif
+	   if [ ! -f $outfile ]; then
+		 ionod1A=$epochdir/$date1/$date1.geo.iono.code.sTECA.tif
+		 ionod1B=$epochdir/$date1/$date1.geo.iono.code.sTECB.tif   # should be A-B....
+     ionod2A=$epochdir/$date2/$date2.geo.iono.code.sTECA.tif
+		 ionod2B=$epochdir/$date2/$date2.geo.iono.code.sTECB.tif   # should be A-B....
+		 if [ -f $ionod1A ] && [ -f $ionod1B ] && [ -f $ionod2A ] && [ -f $ionod2B ]; then
+			echo "print('"$pair"')" >> $tmpy
+			echo "try:" >> $tmpy
+			echo "    correct_iono_pair_mn(frame = '"$frame"', pair = '"$pair"', ifgtype = '"$extofproc"', infile = '"$infile"', source = 'code', fixed_f2_height_km = 450, outif='"$outfile"')" >> $tmpy
+			echo "except:" >> $tmpy
+			echo "    print('error correcting pair "$pair"')" >> $tmpy
+		 else
+		   echo "WARNING: iono estimates do not exist for pair "$pair" - perhaps one of epochs is not stored in LiCSAR_public - keeping this pair anyway"
+		 fi
+	   fi
+	   cd $disdir
+	 done
+	 pairstoproc=`grep frame $tmpy | wc -l`
+	 if [ $pairstoproc -gt 0 ]; then
+	  echo "Correcting the ionosphere for "`grep frame $tmpy | wc -l`" pairs"
+	  #python3 $tmpy
+	 fi
+	 disdir=`pwd`
+	 for pair in `ls -d 20??????_20??????`; do
+	   cd $pair
+	   outfile=$pair.geo.$outext.tif
+	   if [ -e ${outfile} ]; then
+		 # link this one instead of this link
+		 ifglink=$pair.geo.$extofproc.tif
+		 if [ -L $ifglink ]; then
+      echo 'hi' 
+		#	rm $ifglink
+		#	ln -s $outfile $ifglink
+		 else
+			echo "ERROR, the file "$ifglink" should be a link - not continuing"
+		#	exit
+		 fi
+	   fi
+	   cd $disdir
+	 done
+	 #rm $tmpy
+
+
+
+######
+  fi ## echo "WARNING: Without reunwrapping, the SET and iono corrs are only ready but not applied. Contact Milan - work in progress"
+  
   #else
    # correct only on epoch level, i.e. now just link to 
   echo "Linking iono corrections per epoch"
