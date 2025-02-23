@@ -149,7 +149,7 @@ def make_ionocorr_pair(frame, pair, sbovl=False,source = 'code', fixed_f2_height
         fL = f0 - dfDC*0.5
 
         ##gradient method Lazecky et al. 2023,GRL #https://github.com/comet-licsar/daz/blob/main/lib/daz_iono.py#L561
-        tecovl = (tecsA2 - tecsA1)/fH - (tecsB2 - tecsB1)/fL
+        tecovl = (tecsA2 - tecsA1)/fH - (tecsB2 - tecsB1)/fL ##TODO ask the milan for confirmation: A2,B2 is secondary epoch and A1,B1 is primary epoch, 
         iono_grad = 2*PRF*k/c/dfDC * tecovl #unitless
         iono_grad_mm=iono_grad*azpix #mm
             

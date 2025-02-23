@@ -815,6 +815,15 @@ if [ "$iono" -gt 0 ]; then
 	 else
 		 outext=$extofproc.noiono
 	 fi
+   
+   ## Check if scaling factor file exists
+   if ls "$metadir"/*geo.sbovl.scaling.tif 1> /dev/null 2>&1; then
+     echo "Scaling factor exists."
+   else
+     echo "Scaling factor missing. Running Python script..."
+     scaling_factor_sbovl.py ## This script will create the scaling factor file
+   fi
+
 	 for pair in `ls -d 20??????_20??????`; do
 	   cd $pair
 	   # here use the linked
@@ -859,7 +868,7 @@ if [ "$iono" -gt 0 ]; then
 	 if [ $pairstoproc -gt 0 ]; then
 	  echo "Correcting the ionosphere for "`grep frame $tmpy | wc -l`" pairs"
     # echo `pwd`
-	  #python3 $tmpy
+	  python3 $tmpy
 	 fi
 	 disdir=`pwd`
 	 for pair in `ls -d 20??????_20??????`; do
@@ -869,9 +878,8 @@ if [ "$iono" -gt 0 ]; then
 		 # link this one instead of this link
 		 ifglink=$pair.geo.$extofproc.tif
 		 if [ -L $ifglink ]; then
-      echo 'hi' 
-		#	rm $ifglink
-		#	ln -s $outfile $ifglink
+			rm $ifglink
+			ln -s $outfile $ifglink
 		 else
 			echo "ERROR, the file "$ifglink" should be a link - not continuing"
 		#	exit
