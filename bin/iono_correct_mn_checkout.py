@@ -61,13 +61,14 @@ def get_resolution(hgt, in_m=True):
 
 
 
-def make_ionocorr_pair(frame, pair, source = 'code', fixed_f2_height_km = 450, outif=None):
+def make_ionocorr_pair(frame, pair, sbovl=False,source = 'code', fixed_f2_height_km = 450, outif=None):
     """ This will generate ionospheric correction for given frame-pair.
     It would optionally output the result to a geotiff.
     
     Args:
         frame (str):    frame ID
         pair (str):     pair (e.g. '20180930_20181012')
+        sbovl (bool):   if the sbovl true, ionospheric gradient calculated
         source (str):   source model for TEC values. Either 'iri' or 'code'.
         fixed_f2_height_km (int):  if None, it will estimate this using IRI
         outif (str):    if given, will export the iono phase screen to given geotiff
@@ -75,32 +76,86 @@ def make_ionocorr_pair(frame, pair, source = 'code', fixed_f2_height_km = 450, o
         xr.DataArray:   estimated ionospheric phase screen
     """
     # TODO - this below will mean we cannot use local ifgs. But can/must be (easily) improved!
-    ifg = load_ifg(frame, pair, unw = False, mag = False, prefer_unfiltered = False, stdout = False) # just to get mask etc.
-    epochs = pair.split('_')
-    tecphase1 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[0],epochs[0]+'.geo.iono.'+source+'.tif')
-    tecphase2 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[1],epochs[1]+'.geo.iono.'+source+'.tif')
-    if os.path.exists(tecphase1):
-        tecphase1 = load_tif2xr(tecphase1)
+    if not sbovl:
+        ifg = load_ifg(frame, pair, unw = False, mag = False, prefer_unfiltered = False, stdout = False) # just to get mask etc.
+        epochs = pair.split('_')
+        tecphase1 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[0],epochs[0]+'.geo.iono.'+source+'.tif')
+        tecphase2 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[1],epochs[1]+'.geo.iono.'+source+'.tif')
+        if os.path.exists(tecphase1):
+            tecphase1 = load_tif2xr(tecphase1)
+        else:
+            tecphase1 = make_ionocorr_epoch(frame, epochs[0], fixed_f2_height_km = fixed_f2_height_km, source = source)
+        if os.path.exists(tecphase2):
+            tecphase2 = load_tif2xr(tecphase2)
+        else:
+            tecphase2 = make_ionocorr_epoch(frame, epochs[1], fixed_f2_height_km = fixed_f2_height_km, source = source)
+        # do their difference
+        tecdiff = tecphase1 - tecphase2
+        #    # tecdiff = interpolate_nans_pyinterp(tecdiff)
+        #tecdiff = interpolate_nans_bivariate(tecdiff)
+        #tecdiff = tecdiff.interp_like(ifg, method='linear', kwargs={"bounds_error": False, "fill_value": None})
+        #tecdiff = interpolate_nans_bivariate(tecdiff) # not needed?
+        #    if np.max(np.isnan(tecdiff.values)):
+        #        tecdiff = interpolate_nans_bivariate(tecdiff)
+        ifg['tecdiff'] = ifg['mask']*0.1
+        ifg.tecdiff.values = tecdiff.values
+        tecdiff = ifg.tecdiff.where(ifg.mask_extent == 1).rename('tecdiff_pha')
     else:
-        tecphase1 = make_ionocorr_epoch(frame, epochs[0], fixed_f2_height_km = fixed_f2_height_km, source = source)
-    if os.path.exists(tecphase2):
-        tecphase2 = load_tif2xr(tecphase2)
-    else:
-        tecphase2 = make_ionocorr_epoch(frame, epochs[1], fixed_f2_height_km = fixed_f2_height_km, source = source)
-    # do their difference
-    tecdiff = tecphase1 - tecphase2
-    #    # tecdiff = interpolate_nans_pyinterp(tecdiff)
-    #tecdiff = interpolate_nans_bivariate(tecdiff)
-    #tecdiff = tecdiff.interp_like(ifg, method='linear', kwargs={"bounds_error": False, "fill_value": None})
-    #tecdiff = interpolate_nans_bivariate(tecdiff) # not needed?
-    #    if np.max(np.isnan(tecdiff.values)):
-    #        tecdiff = interpolate_nans_bivariate(tecdiff)
-    ifg['tecdiff'] = ifg['mask']*0.1
-    ifg.tecdiff.values = tecdiff.values
-    tecdiff = ifg.tecdiff.where(ifg.mask_extent == 1).rename('tecdiff_pha')
-    if outif:
-        export_xr2tif(tecdiff,outif)
-    return tecdiff
+        print('sbovl iono correction')
+        epochs = pair.split('_')
+        tecsA1 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[0],epochs[0]+'.geo.iono.'+source+'.sTECA.tif') #A,B=backward,forward LOS side in azimuth; 1,2=prime,second epoch.
+        tecsB1 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[0],epochs[0]+'.geo.iono.'+source+'.sTECB.tif')
+        tecsA2 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[1],epochs[1]+'.geo.iono.'+source+'.sTECA.tif')
+        tecsB2 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[1],epochs[1]+'.geo.iono.'+source+'.sTECB.tif') 
+        ##check the sTECs
+        #epoch1
+        if os.path.exists(tecsA1) and os.path.exists(tecsB1):
+            tecsA1 = load_tif2xr(tecsA1)
+            tecsB1 = load_tif2xr(tecsB1)
+        else:
+            tecsA1, tecsB1 = make_ionocorr_epoch(frame, epoch[0], source = source, fixed_f2_height_km = fixed_f2_height_km, alpha = alpha, sbovl = sbovl)
+        #epoch2
+        if os.path.exists(tecsA2) and os.path.exists(tecsB2):
+            tecsA2 = load_tif2xr(tecsA2)
+            tecsB2 = load_tif2xr(tecsB2)
+        else:
+            tecsA2, tecsB2 = make_ionocorr_epoch(frame, epoch[1], source = source, fixed_f2_height_km = fixed_f2_height_km, alpha = alpha, sbovl = sbovl)
+
+        ###parameter for TEC gradient
+        azpix=14000
+        PRF = 486.486
+        k = 40.308193 # m^3 / s^2
+        f0 = 5.4050005e9
+        c = speed_of_light
+        ##scaling_tif
+        metafolder = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])), frame, 'metadata')
+        # Check if the metadata folder exists
+        if os.path.exists(metafolder) and os.path.isdir(metafolder):
+            scaling_tif = None  # Initialize variable to track if a file is found
+            
+            for files in os.listdir(metafolder):  
+                if files.endswith('.geo.sbovl_scaling.tif'):
+                    scaling_tif = os.path.join(metafolder, files)
+            # Check if no scaling file was found
+            if scaling_tif is None:
+                print("No .geo.sbovl_scaling.tif file found in metadata folder.")
+        else:
+            print(f"metadata is not exist in LiCSAR_public")  
+
+        ##scaling2dfdc
+        scaling_factor=load_tif2xr(scaling_tif)
+        dfDC=azpix*PRF/(2*np.pi*scaling_factor)
+        fH = f0 + dfDC*0.5
+        fL = f0 - dfDC*0.5
+
+        ##gradient method Lazecky et al. 2023,GRL #https://github.com/comet-licsar/daz/blob/main/lib/daz_iono.py#L561
+        tecovl = (tecsA2 - tecsA1)/fH - (tecsB2 - tecsB1)/fL
+        iono_grad = 2*PRF*k/c/dfDC * tecovl #unitless
+        iono_grad_mm=iono_grad*azpix #mm
+            
+        if outif:
+            export_xr2tif(iono_grad_mm,outif)
+        return iono_grad_mm
 
 
 def correct_iono_pair(frame, pair, ifgtype = 'diff_pha', dolocal = False, infile = None, source = 'code', fixed_f2_height_km = 450, outif=None):
@@ -109,7 +164,7 @@ def correct_iono_pair(frame, pair, ifgtype = 'diff_pha', dolocal = False, infile
     Args:
         frame (str):    frame ID
         pair (str):     pair (e.g. '20180930_20181012')
-        ifgtype (str):  one of 'diff_pha', 'diff_unfiltered_pha', 'unw' to correct (or any other extension but apart from 'unw' it will wrap the phase)
+        ifgtype (str):  one of 'diff_pha', 'diff_unfiltered_pha', 'unw' , s(bovl) to correct (or any other extension but apart from 'unw' it will wrap the phase)
         dolocal (bool): if True, it will try to find the ifg in local GEOC folder
         infile (str):   if given, it will use this path to load the tif instead of loading from LiCSAR_public
         source (str):   source model for TEC values. Either 'iri' or 'code'.
@@ -118,8 +173,12 @@ def correct_iono_pair(frame, pair, ifgtype = 'diff_pha', dolocal = False, infile
     Returns:
         xr.DataArray:  corrected ifg
     """
-    if ifgtype == 'unw':
+    sbovl=False
+    
+    if ifgtype == 'unw' or ifgtype == 'sbovldiff.adf.mm' or ifgtype == 'bovldiff.adf.mm':
         unw = True
+        if ifgtype == 'sbovldiff.adf.mm' or ifgtype == 'bovldiff.adf.mm':
+            sbovl=True
     else:
         unw = False
     if not infile:
@@ -138,7 +197,7 @@ def correct_iono_pair(frame, pair, ifgtype = 'diff_pha', dolocal = False, infile
     else:
         ifg = load_tif2xr(infile)
     ifg = ifg.where(ifg != 0)
-    tecdiff = make_ionocorr_pair(frame, pair, source=source, fixed_f2_height_km=fixed_f2_height_km, outif=None)
+    tecdiff = make_ionocorr_pair(frame, pair, sbovl=sbovl, source=source, fixed_f2_height_km=fixed_f2_height_km, outif=None)
     ifg.values = ifg.values - tecdiff.values # AREA_OR_POINT might clash. Assuming same it may differ by 1/2 pixel (ok for ionosphere..)
     if not unw:
         ifg.values = wrap2phase(ifg.values)

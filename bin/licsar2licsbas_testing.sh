@@ -707,7 +707,7 @@ if [ "$setides" -gt 0 ]; then
   cd $workdir
 fi
 
-
+####ionocorrection
 if [ "$iono" -gt 0 ]; then    
   if [ "$sbovl" -gt 0 ]; then
     echo "checking/generating ionospheric correction data in azimuth"
@@ -803,14 +803,13 @@ if [ "$iono" -gt 0 ]; then
 	 rm $tmpy
   elif [ $sbovl -gt 0 ]; then ##Iono looks more complex so let's do it in another elif block
    echo "applying the ionospheric correction for SBOI"    
-
    ######
 	 cd GEOC
 	 # using them to either pha or unw tifs (to GEOC)
 	 disdir=`pwd`
 	 #hgtfile=`ls *.geo.hgt.tif | head -n 1`
 	 tmpy=`pwd`/../tmp.py
-	 echo "from iono_correct_mn import correct_iono_pair_sboi;" > $tmpy
+	 echo "from iono_correct_mn import correct_iono_pair;" > $tmpy
 	 if [ $setides -gt 0 ]; then
 		 outext=$extofproc.notides.noiono
 	 else
@@ -847,7 +846,7 @@ if [ "$iono" -gt 0 ]; then
 		 if [ -f $ionod1A ] && [ -f $ionod1B ] && [ -f $ionod2A ] && [ -f $ionod2B ]; then
 			echo "print('"$pair"')" >> $tmpy
 			echo "try:" >> $tmpy
-			echo "    correct_iono_pair_mn(frame = '"$frame"', pair = '"$pair"', ifgtype = '"$extofproc"', infile = '"$infile"', source = 'code', fixed_f2_height_km = 450, outif='"$outfile"')" >> $tmpy
+			echo "    correct_iono_pair(frame = '"$frame"', pair = '"$pair"', ifgtype = '"$extofproc"', infile = '"$infile"', source = 'code', fixed_f2_height_km = 450, outif='"$outfile"')" >> $tmpy
 			echo "except:" >> $tmpy
 			echo "    print('error correcting pair "$pair"')" >> $tmpy
 		 else
@@ -859,6 +858,7 @@ if [ "$iono" -gt 0 ]; then
 	 pairstoproc=`grep frame $tmpy | wc -l`
 	 if [ $pairstoproc -gt 0 ]; then
 	  echo "Correcting the ionosphere for "`grep frame $tmpy | wc -l`" pairs"
+    # echo `pwd`
 	  #python3 $tmpy
 	 fi
 	 disdir=`pwd`
