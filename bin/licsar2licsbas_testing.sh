@@ -583,10 +583,10 @@ fi
 
 if [ "$setides" -gt 0 ]; then
   if [ "$sbovl" -gt 0 ]; then
-    echo "checking/generating solid earth tides data in Azimuth"
+    echo "checking/generating solid earth tides data in azimuth"
     create_LOS_tide_frame_allepochs_mn "$frame" "$startdate" "$enddate" --sbovl
   else
-    echo "checking/generating solid earth tides data in LOS"
+    echo "checking/generating solid earth tides data in range"
     create_LOS_tide_frame_allepochs_mn "$frame" "$startdate" "$enddate"
   fi
 
@@ -801,6 +801,7 @@ if [ "$iono" -gt 0 ]; then
 	   cd $disdir
 	 done
 	 rm $tmpy
+
   elif [ $sbovl -gt 0 ]; then ##Iono looks more complex so let's do it in another elif block
    echo "applying the ionospheric correction for SBOI"    
    ######
@@ -817,7 +818,7 @@ if [ "$iono" -gt 0 ]; then
 	 fi
    
    ## Check if scaling factor file exists
-   if ls "$metadir"/*geo.sbovl.scaling.tif 1> /dev/null 2>&1; then
+   if ls "$metadir"/*geo.sbovl_scaling.tif 1> /dev/null 2>&1; then
      echo "Scaling factor exists."
    else
      echo "Scaling factor missing. Running Python script..."
@@ -887,7 +888,7 @@ if [ "$iono" -gt 0 ]; then
 	   fi
 	   cd $disdir
 	 done
-	 #rm $tmpy
+	 rm $tmpy
 
 
 
@@ -930,11 +931,6 @@ if [ "$iono" -gt 0 ]; then
   #fi
   cd $workdir
 fi
-
-
-
-echo "checkpoint IONO done"
-exit 
 
 #hgtfile=/gws/nopw/j04/nceo_geohazards_vol1/public/LiCSAR_products/12/012A_05443_131313/metadata/012A_05443_131313.geo.hgt.tif
  #epath=/gws/nopw/j04/nceo_geohazards_vol1/public/LiCSAR_products/12/012A_05443_131313/epochs

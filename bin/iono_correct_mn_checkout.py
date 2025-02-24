@@ -100,10 +100,14 @@ def make_ionocorr_pair(frame, pair, sbovl=False,source = 'code', fixed_f2_height
         ifg['tecdiff'] = ifg['mask']*0.1
         ifg.tecdiff.values = tecdiff.values
         tecdiff = ifg.tecdiff.where(ifg.mask_extent == 1).rename('tecdiff_pha')
+        if outif:
+            export_xr2tif(tecdiff,outif)
+        return tecdiff
+
     else:
-        print('sbovl iono correction')
+        # print('sbovl iono correction')
         epochs = pair.split('_')
-        tecsA1 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[0],epochs[0]+'.geo.iono.'+source+'.sTECA.tif') #A,B=backward,forward LOS side in azimuth; 1,2=prime,second epoch.
+        tecsA1 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[0],epochs[0]+'.geo.iono.'+source+'.sTECA.tif') #A,B=backward,forward lookings in azimuth; 1,2=prime,second epoch.
         tecsB1 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[0],epochs[0]+'.geo.iono.'+source+'.sTECB.tif')
         tecsA2 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[1],epochs[1]+'.geo.iono.'+source+'.sTECA.tif')
         tecsB2 = os.path.join(os.environ['LiCSAR_public'], str(int(frame[:3])),frame,'epochs',epochs[1],epochs[1]+'.geo.iono.'+source+'.sTECB.tif') 
@@ -149,7 +153,7 @@ def make_ionocorr_pair(frame, pair, sbovl=False,source = 'code', fixed_f2_height
         fL = f0 - dfDC*0.5
 
         ##gradient method Lazecky et al. 2023,GRL #https://github.com/comet-licsar/daz/blob/main/lib/daz_iono.py#L561
-        tecovl = (tecsA2 - tecsA1)/fH - (tecsB2 - tecsB1)/fL ##TODO ask the milan for confirmation: A2,B2 is secondary epoch and A1,B1 is primary epoch, 
+        tecovl = (tecsA2 - tecsA1)/fH - (tecsB2 - tecsB1)/fL ##TODO ask the milan for confirmation: A2,B2 is secondary epoch and A1,B1 is primary epoch,  tecovl = (tec_A_master - selected_frame_esds['TECS_A'])/fH - (tec_B_master - selected_frame_esds['TECS_B'])/fL
         iono_grad = 2*PRF*k/c/dfDC * tecovl #unitless
         iono_grad_mm=iono_grad*azpix #mm
             
@@ -517,7 +521,7 @@ def make_all_frame_epochs(frame, source = 'code', epochslist = None, fixed_f2_he
                 xrdaB = xrdaB.where(mask)
                 #export
                 export_xr2tif(xrdaA, tif1) #, refto=hgtfile)
-                export_xr2tif(xrdaA, tif2) #, refto=hgtfile)
+                export_xr2tif(xrdaB, tif2) #, refto=hgtfile)
                 #permmssion
                 os.system('chmod 777 '+tif1)
                 os.system('chmod 777 '+tif2)
