@@ -395,7 +395,7 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
       echo "LiCSBAS120_choose_reference.py $dirset "$extra
     else
       LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
-      if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+      if [ ${PIPESTATUS[0]} -ne 0 ];then echo "WARNING, LiCSBAS120 failed. Reverting to original LiCSBAS ref selection"; fi; #exit 1; fi # this often fails, so only warning message
     fi
   fi
 
@@ -434,7 +434,8 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
           echo "LiCSBAS120_choose_reference.py $dirset "$extra
         else
           LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
-          if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+          if [ ${PIPESTATUS[0]} -ne 0 ];then echo "WARNING, LiCSBAS120 failed. Reverting to original LiCSBAS ref selection"; fi; #
+          # if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
         fi
       #fi
       fi
