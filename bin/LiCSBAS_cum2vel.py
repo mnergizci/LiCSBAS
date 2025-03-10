@@ -412,16 +412,20 @@ def main(argv=None):
     if vstdflag:
         if store_to_results:
             vstdfile = os.path.join(resultsdir, 'vstd' + suffix_mask)
+            bootvelfile = os.path.join(resultsdir, 'bootvel' + suffix_mask)
         else:
             vstdfile = outfile+'.vstd'+suffix_mask
+            bootvelfile = outfile+'.bootvel'+suffix_mask
         vstd = np.zeros((length, width), dtype=np.float32)*np.nan
+        bootvel = np.zeros((length, width), dtype=np.float32) * np.nan
 
         print('Calc vstd...')
         if offsetsflag or eqoffsetsflag:
             cum_tmp_resh = cum_tmp_resh - model.reshape(n_im, length*width)[:, ~bool_allnan.ravel()].transpose()
 
-        vstd[~bool_allnan] = inv_lib.calc_velstd_withnan(cum_tmp_resh, dt_cum)
+        vstd[~bool_allnan], bootvel[~bool_allnan] = inv_lib.calc_velstd_withnan(cum_tmp_resh, dt_cum)
         vstd.tofile(vstdfile)
+        bootvel.tofile(bootvelfile)
         #
         #_cum = cum[:, rows[0]-row_ex1:rows[1]+row_ex2, :].reshape(n_im, lengththis+row_ex1+row_ex2, width)
 
@@ -462,6 +466,10 @@ def main(argv=None):
             cmin = np.nanpercentile(vstd, 1)
             cmax = np.nanpercentile(vstd, 99)
             plot_lib.make_im_png(vstd, vstdfile+'.png', cmap_vstd, title, cmin, cmax)
+            title = 'Bootstrapped velocity (mm/yr)'
+            cmin = np.nanpercentile(bootvel, 1)
+            cmax = np.nanpercentile(bootvel, 99)
+            plot_lib.make_im_png(bootvel, bootvelfile + '.png', cmap, title, cmin, cmax)
 
         if stcflag:
             title = 'Spatio-temporal consistency (mm)'
