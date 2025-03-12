@@ -783,11 +783,11 @@ if __name__ == "__main__":
                 label.set_horizontalalignment('right')
 
         ### Ref info at side
-        axtref = pts.text(0.83, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
+        axtref = pts.text(0.92, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
 
 
         ### Fit function for time series
-        fitbox = pts.add_axes([0.83, 0.10, 0.16, 0.25])
+        fitbox = pts.add_axes([0.92, 0.10, 0.13, 0.25])
         models = ['Linear', 'Annual+L', 'Quad', 'Annual+Q']
         visibilities = [True, True, False, False]
         fitcheck = CheckButtons(fitbox, models, visibilities)
@@ -941,14 +941,13 @@ if __name__ == "__main__":
 
     if correction_flag:
         #%% Plot figure of time series at a point
-        pts = plt.figure('Time-series')
-        axts = pts.add_axes([0.12, 0.14, 0.7,0.8])
-
+        # Create a figure with 2 rows and 1 column
+        fig, axs = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+        # fig.suptitle('Time-Series and Corrections', fontsize=14)
+        axts_corr = axs[0]
+        axts = axs[1]
         axts.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
-        axts.grid()
-
-        axts.set_xlabel('Time')
-        axts.set_ylabel('Displacement (mm)')
+        axts_corr.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
 
         loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
         try:  # Only support from Matplotlib 3.1
@@ -960,11 +959,14 @@ if __name__ == "__main__":
                 label.set_horizontalalignment('right')
 
         ### Ref info at side
-        axtref = pts.text(0.83, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
+        if sbovl_flag:
+            axtref = fig.text(0.92, 0.95, 'Ref date:\n {}'.format(imdates[ix_m]), fontsize=8, va='top')
+        else:
+            axtref = fig.text(0.92, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
 
 
         ### Fit function for time series
-        fitbox = pts.add_axes([0.83, 0.10, 0.16, 0.25])
+        fitbox = fig.add_axes([0.92, 0.10, 0.13, 0.25])
         models = ['Linear', 'Annual+L', 'Quad', 'Annual+Q']
         visibilities = [True, True, False, False]
         fitcheck = CheckButtons(fitbox, models, visibilities)
@@ -976,7 +978,7 @@ if __name__ == "__main__":
             if cumfile2:
                 lines2[index].set_visible(not lines2[index].get_visible())
 
-            pts.canvas.draw()
+            fig.canvas.draw()
 
         fitcheck.on_clicked(fitfunc)
 
@@ -1008,11 +1010,20 @@ if __name__ == "__main__":
             pax2.set_data(jj, ii)
             pv.canvas.draw()
 
+            # First subplot: Plot corrections (tide and iono)
+            axts_corr.cla()
+            axts_corr.set_ylabel('Correction (mm)')
+            axts_corr.grid(zorder=0)
+            axts_corr.set_axisbelow(True)
+            axts_corr.set_title('Tide and Ionospheric Corrections')
+
+            # Second subplot: Plot cumulative displacement
             axts.cla()
-            axts.grid(zorder=0)
-            axts.set_axisbelow(True)
             axts.set_xlabel('Time')
             axts.set_ylabel('Displacement (mm)')
+            axts.grid(zorder=0)
+            axts.set_axisbelow(True)
+            axts.set_title('Cumulative Displacement and Corrected Displacement')
 
             ### Get values of noise indices and incidence angle
             noisetxt = ''
@@ -1034,14 +1045,19 @@ if __name__ == "__main__":
             ### Get lat lon and show Ref info at side
             if geocod_flag:
                 lat, lon = tools_lib.xy2bl(jj, ii, lat1, dlat, lon1, dlon)
-                axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                if not sbovl_flag:
+                    axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                if sbovl_flag:
+                    axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef date:\n {}\n\n{}'.format(lat, lon, imdates[ix_m], noisetxt))
             else:
-                axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
-
+                if not sbovl_flag:
+                    axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                if sbovl_flag:
+                    axtref.set_text('Ref date:\n {}\n\n{}'.format(imdates[ix_m], noisetxt))
             ### If masked
             if np.isnan(mask[ii, jj]):
                 axts.set_title('NaN @({}, {})'.format(jj, ii), fontsize=10)
-                pts.canvas.draw()
+                fig.canvas.draw()
                 return
 
             try: # Only support from Matplotlib 3.1!
@@ -1053,7 +1069,21 @@ if __name__ == "__main__":
                     label.set_horizontalalignment('right')
 
 
-            ### If not masked
+            ##plot tide and iono separately in the top panel
+            if tide is not None:
+                tide_adjusted = tide[:, ii, jj]
+                # Plot adjusted tide correction
+                axts_corr.scatter(imdates_dt, tide_adjusted, label=label_tide, c='#FFA500', alpha=0.8, zorder=4, marker="o")  # Orange
+                axts_corr.plot(imdates_dt, tide_adjusted, color='#FFA500', alpha=0.8, linestyle='-', zorder=4)  # Orange line
+                
+            if iono is not None:
+                # Adjust iono correction by subtracting the reference value
+                iono_adjusted = iono[:, ii, jj] 
+                # Plot adjusted iono correction
+                axts_corr.scatter(imdates_dt, iono_adjusted, label=label_iono, c='#800080', alpha=0.8, zorder=4, marker="^")  # Purple
+                axts_corr.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line      
+            
+            ##plot cum and cum_corr in the bottom panel
             ### cumfile
             if not sbovl_flag:
                 vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
@@ -1077,7 +1107,28 @@ if __name__ == "__main__":
             if not novel_flag:
                 axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
                 axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
-
+            
+            ##cum_corrected
+            # if not cumfile2: ## I assumed the cumfile2 also include the correction, therefore I skip that to avoid dublication ## I dublicate right now to make sure cum_filt.h5 is correct.
+            dph_corr = dph.copy()
+            if tide is not None:
+                dph_corr -= tide_adjusted
+            if iono is not None:
+                dph_corr -= iono_adjusted
+                
+            #Compute corrected velocity (vel_corr)
+            vel_corr = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_corr, 1)[0] * 365.25  # Convert to mm/yr
+            
+            #Fit function for corrected disp
+            lines_corr = [0, 0, 0, 0]
+            for model, vis in enumerate(visibilities):
+                yvalues_corr = calc_model(dph_corr, imdates_ordinal, xvalues, model)
+                if not novel_flag:
+                    lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, 'pink', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
+                
+            axts.scatter(imdates_dt, dph_corr, label='corrected_cum', c='pink', alpha=0.8, zorder=5, marker="s")  # Cyan markers
+            axts.set_title('vel(1) = {:.1f} mm/yr, vel(cor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_corr, jj, ii), fontsize=10)
+            
             ### cumfile2
             if cumfile2:
                 if not sbovl_flag:
@@ -1096,29 +1147,8 @@ if __name__ == "__main__":
                         lines2[model], = axts.plot(xvalues_dt, yvalues, 'r-', visible=vis, alpha=0.6, zorder=2)
                 if not novel_flag:
                     axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
-                    axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
-        
-        
-            ## If correction_flag is enabled, plot tide and iono separately
-            if correction_flag:
-                if tide is not None:
-                    tide_ref_value = np.nanmean(tide[:, refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
-                    tide_adjusted = tide[:, ii, jj]
-                    # Plot adjusted tide correction
-                    axts.scatter(imdates_dt, tide_adjusted, label=label_tide, c='#FFA500', alpha=0.8, zorder=4, marker="o")  # Orange
-                    axts.plot(imdates_dt, tide_adjusted, color='#FFA500', alpha=0.8, linestyle='-', zorder=4)  # Orange line
-                    
-                if iono is not None:
-                    iono_ref_value = np.nanmean(iono[:, refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
-                    # Adjust iono correction by subtracting the reference value
-                    iono_adjusted = iono[:, ii, jj] 
-                    # Plot adjusted iono correction
-                    axts.scatter(imdates_dt, iono_adjusted, label=label_iono, c='#800080', alpha=0.8, zorder=4, marker="^")  # Purple
-                    axts.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line
-                    
-                #Add legend
-                axts.legend()
-                
+                    axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr, vel(cor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, vel_corr, jj, ii), fontsize=10)
+            
             ## gap
             if gap:
                 gap1p = (gap[:, ii, jj]==1) # n_im-1, bool
@@ -1134,8 +1164,9 @@ if __name__ == "__main__":
 
             ### Legend
             axts.legend()
-
-            pts.canvas.draw()
+            axts_corr.legend()
+            
+            fig.canvas.draw()
 
 
 
@@ -1154,7 +1185,7 @@ if __name__ == "__main__":
     #%%
     if ts_pngfile:
         print('\nCreate {} for time seires plot\n'.format(ts_pngfile))
-        pts.savefig(ts_pngfile)
+        fig.savefig(ts_pngfile)
         sys.exit(0)
 
 
