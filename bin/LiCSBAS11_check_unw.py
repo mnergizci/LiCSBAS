@@ -169,8 +169,7 @@ def main(argv=None):
         print("  "+str(err.msg), file=sys.stderr)
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
-    if sbovl:
-        coh_thre=0.8
+    
         
     print("\ncoh_thre     : {}".format(coh_thre), flush=True)
     print("unw_cov_thre : {}".format(unw_cov_thre), flush=True)

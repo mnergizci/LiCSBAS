@@ -395,7 +395,7 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
       echo "LiCSBAS120_choose_reference.py $dirset "$extra
     else
       LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
-      if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+      if [ ${PIPESTATUS[0]} -ne 0 ];then echo "WARNING, LiCSBAS120 failed. Reverting to original LiCSBAS ref selection"; fi; #exit 1; fi # this often fails, so only warning message
     fi
   fi
 
@@ -434,7 +434,8 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
           echo "LiCSBAS120_choose_reference.py $dirset "$extra
         else
           LiCSBAS120_choose_reference.py $dirset $extra 2>&1 | tee -a $log
-          if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+          if [ ${PIPESTATUS[0]} -ne 0 ];then echo "WARNING, LiCSBAS120 failed. Reverting to original LiCSBAS ref selection"; fi; #
+          # if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
         fi
       #fi
       fi
@@ -573,7 +574,7 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z "$p16_ex_range" ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
   if [ ! -z "$p16_ex_range_geo" ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
   if [ "$p16_interpolate_nans" == "y" ] && [ "$p16_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
-  if [ "$p16_sbovl" == "y" ];then p16_op="$p16_op --sbovl"; fi
+  if [ "$p16_sbovl" == "y" ];then p16_op="$p16_op --sbovl --nofilter"; fi
   if [ "$p16_skippngs" == "y" ];then p16_op="$p16_op --nopngs"; fi
 
   if [ "$eqoffs" == "y" ]; then

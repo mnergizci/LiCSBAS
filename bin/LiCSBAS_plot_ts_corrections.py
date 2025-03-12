@@ -359,24 +359,28 @@ if __name__ == "__main__":
         aspect = 1
         print('No latlon field found in {}. Skip.'.format(cumfile))
 
-    ###add the corrections
+    ### Add the corrections
     if correction_flag:
-        #tide
+        # tide correction
         try:
-            tide = cumh5['tide']
+            tide = cumh5['tide'][:]
             label_tide = 'SET correction'
-        except:
-            tide = []
+            print('Tide correction found.')
+        except KeyError:
+            tide = None
             print('No tide correction found in {}. Skip.'.format(cumfile))
-        #iono
+
+        # iono correction
         try:
-            iono = cumh5['iono']
-            label_iono = 'iono correction'
-        except:
-            iono = []
+            iono = cumh5['iono'][:]
+            label_iono = 'Iono correction'
+            print('Ionospheric correction found.')
+        except KeyError:
+            iono = None
             print('No iono correction found in {}. Skip.'.format(cumfile))
+
    
-    sys.exit()
+
     
     ### Set initial ref area
     if refarea:
@@ -890,10 +894,11 @@ if __name__ == "__main__":
         xvalues_dt = np.arange(imdates_dt[0], imdates_dt[-1], td10day)
         for model, vis in enumerate(visibilities):
             yvalues = calc_model(dph, imdates_ordinal, xvalues, model)
-            lines1[model], = axts.plot(xvalues_dt, yvalues, 'b-', visible=vis, alpha=0.6, zorder=3)
-
-        axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
-        axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
+            if not novel_flag:
+                lines1[model], = axts.plot(xvalues_dt, yvalues, 'b-', visible=vis, alpha=0.6, zorder=3)
+        if not novel_flag:
+            axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
+            axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
 
         ### cumfile2
         if cumfile2:
@@ -909,11 +914,60 @@ if __name__ == "__main__":
             lines2 = [0, 0, 0, 0]
             for model, vis in enumerate(visibilities):
                 yvalues = calc_model(dphf, imdates_ordinal, xvalues, model)
-                lines2[model], = axts.plot(xvalues_dt, yvalues, 'r-', visible=vis, alpha=0.6, zorder=2)
+                if not novel_flag:
+                    lines2[model], = axts.plot(xvalues_dt, yvalues, 'r-', visible=vis, alpha=0.6, zorder=2)
+            if not novel_flag:
+                axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
+                axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+       
+       
+        ## If correction_flag is enabled, plot tide and iono separately
+        if correction_flag:
+            if tide is not None:
+                tide_ref_value = np.nanmean(tide[:, refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                tide_adjusted = tide[:, ii, jj] - tide_ref_value
+                # Plot adjusted tide correction
+                axts.scatter(imdates_dt, tide_adjusted, label=label_tide, c='#FFA500', alpha=0.8, zorder=4, marker="o")  # Orange
+                axts.plot(imdates_dt, tide_adjusted, color='#FFA500', alpha=0.8, linestyle='-', zorder=4)  # Orange line
+                  
+            if iono is not None:
+                iono_ref_value = np.nanmean(iono[:, refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                # Adjust iono correction by subtracting the reference value
+                iono_adjusted = iono[:, ii, jj] - iono_ref_value  
+                # Plot adjusted iono correction
+                axts.scatter(imdates_dt, iono_adjusted, label=label_iono, c='#800080', alpha=0.8, zorder=4, marker="^")  # Purple
+                axts.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line
+            
+            # # Apply corrections to dph
+            # dph_corr = dph.copy()  # Keep original dph
+            # if tide is not None:
+            #     dph_corr -= tide_adjusted
+            # if iono is not None:
+            #     dph_corr -= iono_adjusted
 
-            axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
-            axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+            # #Compute corrected velocity (vel_corr)
+            # vel_corr = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_corr, 1)[0] * 365.25  # Convert to mm/yr
 
+            # ## Fit function for corrected displacement
+            # lines_corr = [0, 0, 0, 0]
+            # xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
+            # td10day = dt.timedelta(days=10)
+            # xvalues_dt = np.arange(imdates_dt[0], imdates_dt[-1], td10day)
+
+            # for model, vis in enumerate(visibilities):
+            #     yvalues_corr = calc_model(dph_corr, imdates_ordinal, xvalues, model)
+            #     if not novel_flag:
+            #         lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, 'c-', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
+
+            # #Plot corrected displacement
+            # axts.scatter(imdates_dt, dph_corr, label='Corrected Displacement', c='c', alpha=0.8, zorder=5, marker="s")  # Cyan markers
+
+            # #Set title with corrected velocity
+            # axts.set_title('vel(1) = {:.1f} mm/yr, vel(2),corr = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_corr, jj, ii), fontsize=10)
+
+            #Add legend
+            axts.legend()
+            
         ## gap
         if gap:
             gap1p = (gap[:, ii, jj]==1) # n_im-1, bool

@@ -727,8 +727,7 @@ def main(argv=None):
                 for i in nanserror:
                     print('{}'.format(i), file=f)
             return 1
-    else:
-        print('SBOVL: no reference phase set up??')
+
     #%% Open cum.h5 for output
     ### Decide here what to do re. cumh5file and reloading patches. Need to check that stored cumh5 file is the right size etc
     print('store_patches:', store_patches)
@@ -825,6 +824,7 @@ def main(argv=None):
             print("  Reading {0} ifg's unw data...".format(n_ifg), flush=True)
             countf = width*rows[0]
             countl = width*lengththis
+            printed_sbovl_warning = False ##This helps to print the warning only once
             for i, ifgd in enumerate(ifgdates):
                 if sbovl:
                     unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
@@ -838,8 +838,9 @@ def main(argv=None):
                 unw[unw == 0] = np.nan # Fill 0 with nan
                 if not sbovl:
                     unw = unw - ref_unw[i]
-                else:
+                elif not printed_sbovl_warning:
                     print('SBOVL: no reference removal set up??')
+                    printed_sbovl_warning = True  ##This helps to print the warning only once
                 unwpatch[i] = unw
                 f.close()
 
@@ -1220,7 +1221,7 @@ def main(argv=None):
         vel = vel - vel[refy1s, refx1s]
         vconst = vconst - vconst[refy1s, refx1s]
     else:
-        print('  Skip rerferencing cumulative displacement and velocity for sbovl data.', flush=True)
+        print('  Skip referencing cumulative displacement and velocity for sbovl data.', flush=True)
         
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '13rms_cum_wrt_med')
@@ -1460,8 +1461,8 @@ def inc_png_wrapper(imx, sbovl=False):
         ix_ifg = ifgdates.index(ifgd)
         if not sbovl:
             unw = unw - ref_unw[ix_ifg]
-        else:
-            print('  Skip subtracting reference for sbovl data.', flush=True)
+        # else:
+        #     print('  Skip subtracting reference for sbovl data.', flush=True) ##to get rid of texting scrreen
     except:
         unw = np.zeros((length, width), dtype=np.float32)*np.nan
 

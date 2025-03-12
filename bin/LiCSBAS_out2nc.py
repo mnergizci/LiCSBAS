@@ -156,6 +156,27 @@ def loadall2cube(cumfile, extracols=['loop_ph_avg_abs']):
     cube = xr.Dataset()
     cube['cum'] = cumxr
     cube['vel'] = velxr
+    
+    # Load Ionospheric correction (iono) from cum.h5 if it exists
+    if 'iono' in cum:
+        ionoxr = xr.DataArray(cum.iono.values.reshape(cum.cum.shape), 
+                              coords=[time, lat, lon], dims=["time", "lat", "lon"])
+        ionoxr = ionoxr.where(ionoxr != 0)  # Replace zeros with NaNs
+        ionoxr.attrs['unit'] = 'mm'
+        cube['iono'] = ionoxr
+    else:
+        print('No iono data found in cum.h5, skipping')
+
+    # Load Solid Earth Tides correction (tide) from cum.h5 if it exists
+    if 'tide' in cum:
+        tidexr = xr.DataArray(cum.tide.values.reshape(cum.cum.shape), 
+                              coords=[time, lat, lon], dims=["time", "lat", "lon"])
+        tidexr = tidexr.where(tidexr != 0)  # Replace zeros with NaNs
+        tidexr.attrs['unit'] = 'mm'
+        cube['tide'] = tidexr
+    else:
+        print('No tide data found in cum.h5, skipping')
+    
     #cube['vintercept'] = vinterceptxr
     try:
         cube['bperp'] = xr.DataArray(cum.bperp.values, coords=[time], dims=["time"])
@@ -573,7 +594,6 @@ def main(argv=None):
     ver=1.1; date=20241011; author="M.Lazecky"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
-
 
     #%% Set default
     cumfile = 'cum.h5'
