@@ -196,13 +196,15 @@ if __name__ == "__main__":
     cmap_name = "cmc.roma_r"
     auto_crange = 99.0
     sbovl_flag = False
+    correction_flag = False
+    novel_flag = False
 
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "sbovl"])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "sbovl", "corrections", "novelocity"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -247,6 +249,10 @@ if __name__ == "__main__":
                 ts_pngfile = a
             elif o == '--sbovl':
                 sbovl_flag = True
+            elif o == '--corrections':
+                correction_flag = True
+            elif o == '--novelocity':
+                novel_flag = True
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -353,6 +359,29 @@ if __name__ == "__main__":
         aspect = 1
         print('No latlon field found in {}. Skip.'.format(cumfile))
 
+    ### Add the corrections
+    if correction_flag:
+        # tide correction
+        try:
+            tide = cumh5['tide'][:]
+            label_tide = 'SET correction'
+            print('Tide correction found.')
+        except KeyError:
+            tide = None
+            print('No tide correction found in {}. Skip.'.format(cumfile))
+
+        # iono correction
+        try:
+            iono = cumh5['iono'][:]
+            label_iono = 'Iono correction'
+            print('Ionospheric correction found.')
+        except KeyError:
+            iono = None
+            print('No iono correction found in {}. Skip.'.format(cumfile))
+
+   
+
+    
     ### Set initial ref area
     if refarea:
         if not tools_lib.read_range(refarea, width, length):
@@ -372,7 +401,7 @@ if __name__ == "__main__":
             refarea = refarea.decode('utf-8')
         refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
 
-
+    print(refarea)
     refx1h = refx1-0.5; refx2h = refx2-0.5 ## Shift half for plot
     refy1h = refy1-0.5; refy2h = refy2-0.5
 
@@ -427,7 +456,11 @@ if __name__ == "__main__":
         ix_m = imdates.index(mdate)
 
     cum_ref = cum[ix_m, :, :]
-
+    if correction_flag:
+        if tide is not None:
+            tide_ref = tide[ix_m, :, :]
+        if iono is not None:
+            iono_ref = iono[ix_m, :, :]
     ### cumfile2
     if cumfile2:
         print('Reading {} as 2nd'.format(os.path.relpath(cumfile2)))
@@ -543,10 +576,10 @@ if __name__ == "__main__":
     ### First show
     rax, = axv.plot([refx1h, refx2h, refx2h, refx1h, refx1h],
                     [refy1h, refy1h, refy2h, refy2h, refy1h], '--k', alpha=0.8)
-    if not sbovl_flag:
-        data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
-    else:
-        data = vel*mask
+    # if not sbovl_flag:
+    data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
+    # else:
+    #     data = vel*mask
     cax = axv.imshow(data, clim=[vmin, vmax], cmap=cmap, aspect=aspect, interpolation='nearest')
 
     axv.set_title('vel')
@@ -642,7 +675,7 @@ if __name__ == "__main__":
 
     mapdict_vel.update(mapdict_data)
     mapdict_data = mapdict_vel  ## To move vel to top
-    axrad_vel = pv.add_axes([0.01, 0.3, 0.13, len(mapdict_data)*0.025+0.04])
+    axrad_vel = pv.add_axes([0.01, 0.3, 0.11, len(mapdict_data)*0.025+0.04])
 
     ### Radio buttons
     radio_vel = RadioButtons(axrad_vel, tuple(mapdict_data.keys()))
@@ -655,8 +688,8 @@ if __name__ == "__main__":
 
         if 'vel' in val_ind:  ## Velocity
             data = mapdict_data[val_ind]*mask
-            if not sbovl_flag:
-                data = data-np.nanmean(data[refy1:refy2, refx1:refx2])
+            # if not sbovl_flag:
+            data = data-np.nanmean(data[refy1:refy2, refx1:refx2])
             if vlimauto: ## auto
                 vmin = np.nanpercentile(data*mask, 100-auto_crange)
                 vmax = np.nanpercentile(data*mask, auto_crange)
@@ -718,8 +751,8 @@ if __name__ == "__main__":
 #        axv.set_title('Time = %s'%(dstr))
         axv.set_title('%s (Ref: %s)'%(dstr, dstr_ref))
         newv = (cum[timenearest, :, :]-cum_ref)*mask
-        if not sbovl_flag:
-            newv = newv-np.nanmean(newv[refy1:refy2, refx1:refx2])
+        # if not sbovl_flag:
+        newv = newv-np.nanmean(newv[refy1:refy2, refx1:refx2])
 
         cax.set_data(newv)
         cax.set_cmap(cmap)
@@ -733,111 +766,20 @@ if __name__ == "__main__":
     tslider.on_changed(tim_slidupdate)
 
 
-    #%% Plot figure of time series at a point
-    pts = plt.figure('Time-series')
-    axts = pts.add_axes([0.12, 0.14, 0.7,0.8])
+    
+    if not correction_flag:
+        #%% Plot figure of time series at a point
+        pts = plt.figure('Time-series')
+        axts = pts.add_axes([0.12, 0.14, 0.7,0.8])
 
-    axts.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
-    axts.grid()
+        axts.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
+        axts.grid()
 
-    axts.set_xlabel('Time')
-    axts.set_ylabel('Displacement (mm)')
-
-    loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
-    try:  # Only support from Matplotlib 3.1
-        axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
-    except:
-        axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
-        for label in axts.get_xticklabels():
-            label.set_rotation(20)
-            label.set_horizontalalignment('right')
-
-    ### Ref info at side
-    axtref = pts.text(0.83, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
-
-
-    ### Fit function for time series
-    fitbox = pts.add_axes([0.83, 0.10, 0.16, 0.25])
-    models = ['Linear', 'Annual+L', 'Quad', 'Annual+Q']
-    visibilities = [True, True, False, False]
-    fitcheck = CheckButtons(fitbox, models, visibilities)
-
-    def fitfunc(label):
-        index = models.index(label)
-        visibilities[index] = not visibilities[index]
-        lines1[index].set_visible(not lines1[index].get_visible())
-        if cumfile2:
-            lines2[index].set_visible(not lines2[index].get_visible())
-
-        pts.canvas.draw()
-
-    fitcheck.on_clicked(fitfunc)
-
-    ### First show of selected point in image window
-    pax, = axv.plot([point_y], [point_x], 'k', linewidth=3)
-    pax2, = axv.plot([point_y], [point_x], 'Pk')
-
-    ### Plot time series at clicked point
-    lastevent = []
-    def printcoords(event):
-        global dph, lines1, lines2, lastevent
-        #outputting x and y coords to console
-        if event.inaxes != axv:
-            return
-        elif event.button != 1: ## Only left click
-            return
-        elif not event.dblclick: ## Only double click
-            return
-        else:
-            lastevent = event  ## Update last event
-
-        ii = int(np.round(event.ydata))
-        jj = int(np.round(event.xdata))
-
-        ### Plot on image window
-        ii1h = ii-0.5; ii2h = ii+1-0.5 ## Shift half for plot
-        jj1h = jj-0.5; jj2h = jj+1-0.5
-        pax.set_data([jj1h, jj2h, jj2h, jj1h, jj1h], [ii1h, ii1h, ii2h, ii2h, ii1h])
-        pax2.set_data(jj, ii)
-        pv.canvas.draw()
-
-        axts.cla()
-        axts.grid(zorder=0)
-        axts.set_axisbelow(True)
         axts.set_xlabel('Time')
         axts.set_ylabel('Displacement (mm)')
 
-        ### Get values of noise indices and incidence angle
-        noisetxt = ''
-        for key in mapdict_data:
-            val = mapdict_data[key][ii, jj]
-            unit = mapdict_unit[key]
-            if key.startswith('vel'): ## Not plot here
-                continue
-            elif key.startswith('n_') or key=='mask':
-                val = 'nan' if np.isnan(val) else int(val)
-                noisetxt = noisetxt+'{}: {} {}\n'.format(key, val, unit)
-            else:
-                noisetxt = noisetxt+'{}: {:.2f} {}\n'.format(key, val, unit)
-
-        if LOSuflag:
-            noisetxt = noisetxt+'Inc_agl: {:.1f} deg\n'.format(inc_agl_deg[ii, jj])
-            noisetxt = noisetxt+'LOS u: {:.3f}\n'.format(LOSu[ii, jj])
-
-        ### Get lat lon and show Ref info at side
-        if geocod_flag:
-            lat, lon = tools_lib.xy2bl(jj, ii, lat1, dlat, lon1, dlon)
-            axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
-        else:
-            axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
-
-        ### If masked
-        if np.isnan(mask[ii, jj]):
-            axts.set_title('NaN @({}, {})'.format(jj, ii), fontsize=10)
-            pts.canvas.draw()
-            return
-
-        try: # Only support from Matplotlib 3.1!
+        loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
+        try:  # Only support from Matplotlib 3.1
             axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
         except:
             axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
@@ -845,67 +787,395 @@ if __name__ == "__main__":
                 label.set_rotation(20)
                 label.set_horizontalalignment('right')
 
+        ### Ref info at side
+        axtref = pts.text(0.91, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
 
-        ### If not masked
-        ### cumfile
-        if not sbovl_flag:
+
+        ### Fit function for time series
+        fitbox = pts.add_axes([0.91, 0.10, 0.11, 0.25])
+        models = ['Linear', 'Annual+L', 'Quad', 'Annual+Q']
+        visibilities = [True, True, False, False]
+        fitcheck = CheckButtons(fitbox, models, visibilities)
+        
+        def fitfunc(label):
+            index = models.index(label)
+            visibilities[index] = not visibilities[index]
+            lines1[index].set_visible(not lines1[index].get_visible())
+            if cumfile2:
+                lines2[index].set_visible(not lines2[index].get_visible())
+
+            pts.canvas.draw()
+
+        fitcheck.on_clicked(fitfunc)
+
+        ### First show of selected point in image window
+        pax, = axv.plot([point_y], [point_x], 'k', linewidth=3)
+        pax2, = axv.plot([point_y], [point_x], 'Pk')
+
+        ### Plot time series at clicked point
+        lastevent = []
+        def printcoords(event):
+            global dph, lines1, lines2, lastevent
+            #outputting x and y coords to console
+            if event.inaxes != axv:
+                return
+            elif event.button != 1: ## Only left click
+                return
+            elif not event.dblclick: ## Only double click
+                return
+            else:
+                lastevent = event  ## Update last event
+
+            ii = int(np.round(event.ydata))
+            jj = int(np.round(event.xdata))
+
+            ### Plot on image window
+            ii1h = ii-0.5; ii2h = ii+1-0.5 ## Shift half for plot
+            jj1h = jj-0.5; jj2h = jj+1-0.5
+            pax.set_data([jj1h, jj2h, jj2h, jj1h, jj1h], [ii1h, ii1h, ii2h, ii2h, ii1h])
+            pax2.set_data(jj, ii)
+            pv.canvas.draw()
+
+            axts.cla()
+            axts.grid(zorder=0)
+            axts.set_axisbelow(True)
+            axts.set_xlabel('Time')
+            axts.set_ylabel('Displacement (mm)')
+
+            ### Get values of noise indices and incidence angle
+            noisetxt = ''
+            for key in mapdict_data:
+                val = mapdict_data[key][ii, jj]
+                unit = mapdict_unit[key]
+                if key.startswith('vel'): ## Not plot here
+                    continue
+                elif key.startswith('n_') or key=='mask':
+                    val = 'nan' if np.isnan(val) else int(val)
+                    noisetxt = noisetxt+'{}: {} {}\n'.format(key, val, unit)
+                else:
+                    noisetxt = noisetxt+'{}: {:.2f} {}\n'.format(key, val, unit)
+
+            if LOSuflag:
+                noisetxt = noisetxt+'Inc_agl: {:.1f} deg\n'.format(inc_agl_deg[ii, jj])
+                noisetxt = noisetxt+'LOS u: {:.3f}\n'.format(LOSu[ii, jj])
+
+            ### Get lat lon and show Ref info at side
+            if geocod_flag:
+                lat, lon = tools_lib.xy2bl(jj, ii, lat1, dlat, lon1, dlon)
+                axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+            else:
+                axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+
+            ### If masked
+            if np.isnan(mask[ii, jj]):
+                axts.set_title('NaN @({}, {})'.format(jj, ii), fontsize=10)
+                pts.canvas.draw()
+                return
+
+            try: # Only support from Matplotlib 3.1!
+                axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
+            except:
+                axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
+                for label in axts.get_xticklabels():
+                    label.set_rotation(20)
+                    label.set_horizontalalignment('right')
+
+
+            ### If not masked
+            ### cumfile
+            # if not sbovl_flag:
+            vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
+
+            dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+            #dcum_ref = 0
+            dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
+            # else:
+            #     vel1p = vel[ii, jj]
+            #     dcum_ref = cum_ref[ii, jj]
+            #     dph = cum[:, ii, jj]
+            ## fit function
+            lines1 = [0, 0, 0, 0]
+            xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
+            td10day = dt.timedelta(days=10)
+            xvalues_dt = np.arange(imdates_dt[0], imdates_dt[-1], td10day)
+            for model, vis in enumerate(visibilities):
+                yvalues = calc_model(dph, imdates_ordinal, xvalues, model)
+                if not novel_flag:
+                    lines1[model], = axts.plot(xvalues_dt, yvalues, 'b-', visible=vis, alpha=0.6, zorder=3)
+            if not novel_flag:
+                axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
+                axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
+
+            ### cumfile2
+            if cumfile2:
+                # if not sbovl_flag:
+                vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
+                dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
+                # else:
+                #     vel2p = vel2[ii, jj]
+                #     dcum2_ref = cum2_ref[ii, jj]
+                #     dphf = cum2[:, ii, jj]
+                ## fit function
+                lines2 = [0, 0, 0, 0]
+                for model, vis in enumerate(visibilities):
+                    yvalues = calc_model(dphf, imdates_ordinal, xvalues, model)
+                    if not novel_flag:
+                        lines2[model], = axts.plot(xvalues_dt, yvalues, 'r-', visible=vis, alpha=0.6, zorder=2)
+                if not novel_flag:
+                    axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
+                    axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+                    
+            ## gap
+            if gap:
+                gap1p = (gap[:, ii, jj]==1) # n_im-1, bool
+                if not np.all(~gap1p): ## Not plot if no gap
+                    gap_dates_dt = imdates_dt[0:-1][gap1p]-imdates_dt[1:][gap1p]
+                    gap_dt = imdates_dt[1:][gap1p]+gap_dates_dt/2
+                    axts.vlines(gap_dt, 0, 1, transform=axts.get_xaxis_transform(), zorder=1, label=label_gap, alpha=0.6, colors='k')
+
+            ### Y axis
+            if ylen:
+                vlim = [np.nanmedian(dph)-ylen/2, np.nanmedian(dph)+ylen/2]
+                axts.set_ylim(vlim)
+
+            ### Legend
+            axts.legend()
+
+            pts.canvas.draw()
+
+    if correction_flag:
+        #%% Plot figure of time series at a point
+        # Create a figure with 2 rows and 1 column
+        fig, axs = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+        # fig.suptitle('Time-Series and Corrections', fontsize=14)
+        axts_corr = axs[0]
+        axts = axs[1]
+        axts.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
+        axts_corr.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
+                
+        loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
+        try:  # Only support from Matplotlib 3.1
+            axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
+        except:
+            axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
+            for label in axts.get_xticklabels():
+                label.set_rotation(20)
+                label.set_horizontalalignment('right')
+
+        ### Ref info at side
+        # if sbovl_flag:
+        #     axtref = fig.text(0.91, 0.95, 'Ref date:\n {}'.format(imdates[ix_m]), fontsize=8, va='top')
+        # else:
+        axtref = fig.text(0.91, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
+
+
+        ### Fit function for time series
+        fitbox = fig.add_axes([0.91, 0.10, 0.11, 0.25])
+        models = ['Linear', 'Annual+L', 'Quad', 'Annual+Q']
+        visibilities = [True, True, False, False]
+        fitcheck = CheckButtons(fitbox, models, visibilities)
+
+        def fitfunc(label):
+            index = models.index(label)
+            visibilities[index] = not visibilities[index]
+            lines1[index].set_visible(not lines1[index].get_visible())
+            if cumfile2:
+                lines2[index].set_visible(not lines2[index].get_visible())
+
+            fig.canvas.draw()
+
+        fitcheck.on_clicked(fitfunc)
+
+        ### First show of selected point in image window
+        pax, = axv.plot([point_y], [point_x], 'k', linewidth=3)
+        pax2, = axv.plot([point_y], [point_x], 'Pk')
+
+        ### Plot time series at clicked point
+        lastevent = []
+        def printcoords(event):
+            global dph, dphf, iono_adjusted, tide_adjusted, lines1, lines2, lastevent
+            #outputting x and y coords to console
+            if event.inaxes != axv:
+                return
+            elif event.button != 1: ## Only left click
+                return
+            elif not event.dblclick: ## Only double click
+                return
+            else:
+                lastevent = event  ## Update last event
+
+            ii = int(np.round(event.ydata))
+            jj = int(np.round(event.xdata))
+
+            ### Plot on image window
+            ii1h = ii-0.5; ii2h = ii+1-0.5 ## Shift half for plot
+            jj1h = jj-0.5; jj2h = jj+1-0.5
+            pax.set_data([jj1h, jj2h, jj2h, jj1h, jj1h], [ii1h, ii1h, ii2h, ii2h, ii1h])
+            pax2.set_data(jj, ii)
+            pv.canvas.draw()
+
+            # First subplot: Plot corrections (tide and iono)
+            axts_corr.cla()
+            axts_corr.set_ylabel('Correction (mm)')
+            axts_corr.grid(zorder=0)
+            axts_corr.set_axisbelow(True)
+            axts_corr.set_title('Tide and Ionospheric Corrections')
+
+            # Second subplot: Plot cumulative displacement
+            axts.cla()
+            axts.set_xlabel('Time')
+            axts.set_ylabel('Displacement (mm)')
+            axts.grid(zorder=0)
+            axts.set_axisbelow(True)
+            axts.set_title('Cumulative Displacement and Corrected Displacement')
+
+            ### Get values of noise indices and incidence angle
+            noisetxt = ''
+            for key in mapdict_data:
+                val = mapdict_data[key][ii, jj]
+                unit = mapdict_unit[key]
+                if key.startswith('vel'): ## Not plot here
+                    continue
+                elif key.startswith('n_') or key=='mask':
+                    val = 'nan' if np.isnan(val) else int(val)
+                    noisetxt = noisetxt+'{}: {} {}\n'.format(key, val, unit)
+                else:
+                    noisetxt = noisetxt+'{}: {:.2f} {}\n'.format(key, val, unit)
+
+            if LOSuflag:
+                noisetxt = noisetxt+'Inc_agl: {:.1f} deg\n'.format(inc_agl_deg[ii, jj])
+                noisetxt = noisetxt+'LOS u: {:.3f}\n'.format(LOSu[ii, jj])
+
+            ### Get lat lon and show Ref info at side
+            if geocod_flag:
+                lat, lon = tools_lib.xy2bl(jj, ii, lat1, dlat, lon1, dlon)
+                # if not sbovl_flag:
+                axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                # if sbovl_flag:
+                #     axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef date:\n {}\n\n{}'.format(lat, lon, imdates[ix_m], noisetxt))
+            else:
+                # if not sbovl_flag:
+                axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                # if sbovl_flag:
+                #     axtref.set_text('Ref date:\n {}\n\n{}'.format(imdates[ix_m], noisetxt))
+            ### If masked
+            if np.isnan(mask[ii, jj]):
+                axts.set_title('NaN @({}, {})'.format(jj, ii), fontsize=10)
+                fig.canvas.draw()
+                return
+
+            try: # Only support from Matplotlib 3.1!
+                axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
+            except:
+                axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
+                for label in axts.get_xticklabels():
+                    label.set_rotation(20)
+                    label.set_horizontalalignment('right')
+
+
+            ##plot tide and iono separately in the top panel
+            if tide is not None:
+                tide_ref_value = tide_ref[ii, jj]-np.nanmean(tide_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                tide_adjusted = tide[:, ii, jj]-np.nanmean(tide[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - tide_ref_value
+                # Plot adjusted tide correction
+                axts_corr.scatter(imdates_dt, tide_adjusted, label=label_tide, c='#FFA500', alpha=0.8, zorder=4, marker="o")  # Orange
+                axts_corr.plot(imdates_dt, tide_adjusted, color='#FFA500', alpha=0.8, linestyle='-', zorder=4)  # Orange line
+                
+            if iono is not None:
+                # Adjust iono correction by subtracting the reference value
+                iono_ref_value = iono_ref[ii, jj]-np.nanmean(iono_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                iono_adjusted = iono[:, ii, jj]-np.nanmean(iono[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - iono_ref_value
+                # Plot adjusted iono correction
+                axts_corr.scatter(imdates_dt, iono_adjusted, label=label_iono, c='#800080', alpha=0.8, zorder=4, marker="^")  # Purple
+                axts_corr.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line      
+            
+            ##plot cum and cum_corr in the bottom panel
+            ### cumfile
+            # if not sbovl_flag:
             vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
 
             dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
 #           dcum_ref = 0
             dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
-        else:
-            vel1p = vel[ii, jj]
-            dcum_ref = cum_ref[ii, jj]
-            dph = cum[:, ii, jj]
-        ## fit function
-        lines1 = [0, 0, 0, 0]
-        xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
-        td10day = dt.timedelta(days=10)
-        xvalues_dt = np.arange(imdates_dt[0], imdates_dt[-1], td10day)
-        for model, vis in enumerate(visibilities):
-            yvalues = calc_model(dph, imdates_ordinal, xvalues, model)
-            lines1[model], = axts.plot(xvalues_dt, yvalues, 'b-', visible=vis, alpha=0.6, zorder=3)
-
-        axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
-        axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
-
-        ### cumfile2
-        if cumfile2:
-            if not sbovl_flag:
+            # else:
+            #     vel1p = vel[ii, jj]
+            #     dcum_ref = cum_ref[ii, jj]
+            #     dph = cum[:, ii, jj]
+            ## fit function
+            lines1 = [0, 0, 0, 0]
+            xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
+            td10day = dt.timedelta(days=10)
+            xvalues_dt = np.arange(imdates_dt[0], imdates_dt[-1], td10day)
+            for model, vis in enumerate(visibilities):
+                yvalues = calc_model(dph, imdates_ordinal, xvalues, model)
+                if not novel_flag:
+                    lines1[model], = axts.plot(xvalues_dt, yvalues, 'b-', visible=vis, alpha=0.6, zorder=3)
+            if not novel_flag:
+                axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
+                axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
+            
+            ##cum_corrected
+            # if not cumfile2: ## I assumed the cumfile2 also include the correction, therefore I skip that to avoid dublication ## I dublicate right now to make sure cum_filt.h5 is correct.
+            dph_corr = dph.copy()
+            if tide is not None:
+                dph_corr -= tide_adjusted
+            if iono is not None:
+                dph_corr -= iono_adjusted
+                
+            #Compute corrected velocity (vel_corr)
+            vel_corr = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_corr, 1)[0] * 365.25  # Convert to mm/yr
+            
+            #Fit function for corrected disp
+            lines_corr = [0, 0, 0, 0]
+            for model, vis in enumerate(visibilities):
+                yvalues_corr = calc_model(dph_corr, imdates_ordinal, xvalues, model)
+                if not novel_flag:
+                    lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, '#00CC00', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
+                
+            axts.scatter(imdates_dt, dph_corr, label='corrected_cum', c='#00CC00', alpha=0.8, zorder=5, marker="s")  # Cyan markers
+            axts.set_title('vel(1) = {:.1f} mm/yr, vel(cor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_corr, jj, ii), fontsize=10)
+            
+            ### cumfile2
+            if cumfile2:
+                # if not sbovl_flag:
                 vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
                 dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
                 dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
-            else:
-                vel2p = vel2[ii, jj]
-                dcum2_ref = cum2_ref[ii, jj]
-                dphf = cum2[:, ii, jj]
-            ## fit function
-            lines2 = [0, 0, 0, 0]
-            for model, vis in enumerate(visibilities):
-                yvalues = calc_model(dphf, imdates_ordinal, xvalues, model)
-                lines2[model], = axts.plot(xvalues_dt, yvalues, 'r-', visible=vis, alpha=0.6, zorder=2)
+                # else:
+                #     vel2p = vel2[ii, jj]
+                #     dcum2_ref = cum2_ref[ii, jj]
+                #     dphf = cum2[:, ii, jj]
+                ## fit function
+                lines2 = [0, 0, 0, 0]
+                for model, vis in enumerate(visibilities):
+                    yvalues = calc_model(dphf, imdates_ordinal, xvalues, model)
+                    if not novel_flag:
+                        lines2[model], = axts.plot(xvalues_dt, yvalues, 'r-', visible=vis, alpha=0.6, zorder=2)
+                if not novel_flag:
+                    axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
+                    axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+            
+            ## gap
+            if gap:
+                gap1p = (gap[:, ii, jj]==1) # n_im-1, bool
+                if not np.all(~gap1p): ## Not plot if no gap
+                    gap_dates_dt = imdates_dt[0:-1][gap1p]-imdates_dt[1:][gap1p]
+                    gap_dt = imdates_dt[1:][gap1p]+gap_dates_dt/2
+                    axts.vlines(gap_dt, 0, 1, transform=axts.get_xaxis_transform(), zorder=1, label=label_gap, alpha=0.6, colors='k')
 
-            axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
-            axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+            ### Y axis
+            if ylen:
+                vlim = [np.nanmedian(dph)-ylen/2, np.nanmedian(dph)+ylen/2]
+                axts.set_ylim(vlim)
 
-        ## gap
-        if gap:
-            gap1p = (gap[:, ii, jj]==1) # n_im-1, bool
-            if not np.all(~gap1p): ## Not plot if no gap
-                gap_dates_dt = imdates_dt[0:-1][gap1p]-imdates_dt[1:][gap1p]
-                gap_dt = imdates_dt[1:][gap1p]+gap_dates_dt/2
-                axts.vlines(gap_dt, 0, 1, transform=axts.get_xaxis_transform(), zorder=1, label=label_gap, alpha=0.6, colors='k')
+            ### Legend
+            axts.legend()
+            axts_corr.legend()
+            
+            fig.canvas.draw()
 
-        ### Y axis
-        if ylen:
-            vlim = [np.nanmedian(dph)-ylen/2, np.nanmedian(dph)+ylen/2]
-            axts.set_ylim(vlim)
 
-        ### Legend
-        axts.legend()
-
-        pts.canvas.draw()
 
 
     #%% First show of time series window
@@ -922,7 +1192,7 @@ if __name__ == "__main__":
     #%%
     if ts_pngfile:
         print('\nCreate {} for time seires plot\n'.format(ts_pngfile))
-        pts.savefig(ts_pngfile)
+        fig.savefig(ts_pngfile)
         sys.exit(0)
 
 
