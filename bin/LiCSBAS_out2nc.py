@@ -29,6 +29,8 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
 """
 #%% Change log
 '''
+v1.1 20250201+ MN
+ - adding tide and iono to the cube if exists.
 v1.1 20241012+ ML
  - allowing extras for AlignSAR cube
 v1.05 20240420 ML

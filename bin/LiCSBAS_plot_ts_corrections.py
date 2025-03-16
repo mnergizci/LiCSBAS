@@ -401,7 +401,7 @@ if __name__ == "__main__":
             refarea = refarea.decode('utf-8')
         refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
 
-
+    print(refarea)
     refx1h = refx1-0.5; refx2h = refx2-0.5 ## Shift half for plot
     refy1h = refy1-0.5; refy2h = refy2-0.5
 
@@ -456,7 +456,11 @@ if __name__ == "__main__":
         ix_m = imdates.index(mdate)
 
     cum_ref = cum[ix_m, :, :]
-
+    if correction_flag:
+        if tide is not None:
+            tide_ref = tide[ix_m, :, :]
+        if iono is not None:
+            iono_ref = iono[ix_m, :, :]
     ### cumfile2
     if cumfile2:
         print('Reading {} as 2nd'.format(os.path.relpath(cumfile2)))
@@ -572,10 +576,10 @@ if __name__ == "__main__":
     ### First show
     rax, = axv.plot([refx1h, refx2h, refx2h, refx1h, refx1h],
                     [refy1h, refy1h, refy2h, refy2h, refy1h], '--k', alpha=0.8)
-    if not sbovl_flag:
-        data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
-    else:
-        data = vel*mask
+    # if not sbovl_flag:
+    data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
+    # else:
+    #     data = vel*mask
     cax = axv.imshow(data, clim=[vmin, vmax], cmap=cmap, aspect=aspect, interpolation='nearest')
 
     axv.set_title('vel')
@@ -671,7 +675,7 @@ if __name__ == "__main__":
 
     mapdict_vel.update(mapdict_data)
     mapdict_data = mapdict_vel  ## To move vel to top
-    axrad_vel = pv.add_axes([0.01, 0.3, 0.13, len(mapdict_data)*0.025+0.04])
+    axrad_vel = pv.add_axes([0.01, 0.3, 0.11, len(mapdict_data)*0.025+0.04])
 
     ### Radio buttons
     radio_vel = RadioButtons(axrad_vel, tuple(mapdict_data.keys()))
@@ -684,8 +688,8 @@ if __name__ == "__main__":
 
         if 'vel' in val_ind:  ## Velocity
             data = mapdict_data[val_ind]*mask
-            if not sbovl_flag:
-                data = data-np.nanmean(data[refy1:refy2, refx1:refx2])
+            # if not sbovl_flag:
+            data = data-np.nanmean(data[refy1:refy2, refx1:refx2])
             if vlimauto: ## auto
                 vmin = np.nanpercentile(data*mask, 100-auto_crange)
                 vmax = np.nanpercentile(data*mask, auto_crange)
@@ -747,8 +751,8 @@ if __name__ == "__main__":
 #        axv.set_title('Time = %s'%(dstr))
         axv.set_title('%s (Ref: %s)'%(dstr, dstr_ref))
         newv = (cum[timenearest, :, :]-cum_ref)*mask
-        if not sbovl_flag:
-            newv = newv-np.nanmean(newv[refy1:refy2, refx1:refx2])
+        # if not sbovl_flag:
+        newv = newv-np.nanmean(newv[refy1:refy2, refx1:refx2])
 
         cax.set_data(newv)
         cax.set_cmap(cmap)
@@ -762,6 +766,7 @@ if __name__ == "__main__":
     tslider.on_changed(tim_slidupdate)
 
 
+    
     if not correction_flag:
         #%% Plot figure of time series at a point
         pts = plt.figure('Time-series')
@@ -783,15 +788,15 @@ if __name__ == "__main__":
                 label.set_horizontalalignment('right')
 
         ### Ref info at side
-        axtref = pts.text(0.92, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
+        axtref = pts.text(0.91, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
 
 
         ### Fit function for time series
-        fitbox = pts.add_axes([0.92, 0.10, 0.13, 0.25])
+        fitbox = pts.add_axes([0.91, 0.10, 0.11, 0.25])
         models = ['Linear', 'Annual+L', 'Quad', 'Annual+Q']
         visibilities = [True, True, False, False]
         fitcheck = CheckButtons(fitbox, models, visibilities)
-
+        
         def fitfunc(label):
             index = models.index(label)
             visibilities[index] = not visibilities[index]
@@ -878,16 +883,16 @@ if __name__ == "__main__":
 
             ### If not masked
             ### cumfile
-            if not sbovl_flag:
-                vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
+            # if not sbovl_flag:
+            vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
 
-                dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-                #dcum_ref = 0
-                dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
-            else:
-                vel1p = vel[ii, jj]
-                dcum_ref = cum_ref[ii, jj]
-                dph = cum[:, ii, jj]
+            dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+            #dcum_ref = 0
+            dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
+            # else:
+            #     vel1p = vel[ii, jj]
+            #     dcum_ref = cum_ref[ii, jj]
+            #     dph = cum[:, ii, jj]
             ## fit function
             lines1 = [0, 0, 0, 0]
             xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
@@ -903,14 +908,14 @@ if __name__ == "__main__":
 
             ### cumfile2
             if cumfile2:
-                if not sbovl_flag:
-                    vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
-                    dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-                    dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
-                else:
-                    vel2p = vel2[ii, jj]
-                    dcum2_ref = cum2_ref[ii, jj]
-                    dphf = cum2[:, ii, jj]
+                # if not sbovl_flag:
+                vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
+                dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
+                # else:
+                #     vel2p = vel2[ii, jj]
+                #     dcum2_ref = cum2_ref[ii, jj]
+                #     dphf = cum2[:, ii, jj]
                 ## fit function
                 lines2 = [0, 0, 0, 0]
                 for model, vis in enumerate(visibilities):
@@ -948,7 +953,7 @@ if __name__ == "__main__":
         axts = axs[1]
         axts.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
         axts_corr.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
-
+                
         loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
         try:  # Only support from Matplotlib 3.1
             axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
@@ -959,14 +964,14 @@ if __name__ == "__main__":
                 label.set_horizontalalignment('right')
 
         ### Ref info at side
-        if sbovl_flag:
-            axtref = fig.text(0.92, 0.95, 'Ref date:\n {}'.format(imdates[ix_m]), fontsize=8, va='top')
-        else:
-            axtref = fig.text(0.92, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
+        # if sbovl_flag:
+        #     axtref = fig.text(0.91, 0.95, 'Ref date:\n {}'.format(imdates[ix_m]), fontsize=8, va='top')
+        # else:
+        axtref = fig.text(0.91, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
 
 
         ### Fit function for time series
-        fitbox = fig.add_axes([0.92, 0.10, 0.13, 0.25])
+        fitbox = fig.add_axes([0.91, 0.10, 0.11, 0.25])
         models = ['Linear', 'Annual+L', 'Quad', 'Annual+Q']
         visibilities = [True, True, False, False]
         fitcheck = CheckButtons(fitbox, models, visibilities)
@@ -989,7 +994,7 @@ if __name__ == "__main__":
         ### Plot time series at clicked point
         lastevent = []
         def printcoords(event):
-            global dph, lines1, lines2, lastevent
+            global dph, dphf, iono_adjusted, tide_adjusted, lines1, lines2, lastevent
             #outputting x and y coords to console
             if event.inaxes != axv:
                 return
@@ -1045,15 +1050,15 @@ if __name__ == "__main__":
             ### Get lat lon and show Ref info at side
             if geocod_flag:
                 lat, lon = tools_lib.xy2bl(jj, ii, lat1, dlat, lon1, dlon)
-                if not sbovl_flag:
-                    axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
-                if sbovl_flag:
-                    axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef date:\n {}\n\n{}'.format(lat, lon, imdates[ix_m], noisetxt))
+                # if not sbovl_flag:
+                axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                # if sbovl_flag:
+                #     axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef date:\n {}\n\n{}'.format(lat, lon, imdates[ix_m], noisetxt))
             else:
-                if not sbovl_flag:
-                    axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
-                if sbovl_flag:
-                    axtref.set_text('Ref date:\n {}\n\n{}'.format(imdates[ix_m], noisetxt))
+                # if not sbovl_flag:
+                axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                # if sbovl_flag:
+                #     axtref.set_text('Ref date:\n {}\n\n{}'.format(imdates[ix_m], noisetxt))
             ### If masked
             if np.isnan(mask[ii, jj]):
                 axts.set_title('NaN @({}, {})'.format(jj, ii), fontsize=10)
@@ -1071,30 +1076,32 @@ if __name__ == "__main__":
 
             ##plot tide and iono separately in the top panel
             if tide is not None:
-                tide_adjusted = tide[:, ii, jj]
+                tide_ref_value = tide_ref[ii, jj]-np.nanmean(tide_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                tide_adjusted = tide[:, ii, jj]-np.nanmean(tide[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - tide_ref_value
                 # Plot adjusted tide correction
                 axts_corr.scatter(imdates_dt, tide_adjusted, label=label_tide, c='#FFA500', alpha=0.8, zorder=4, marker="o")  # Orange
                 axts_corr.plot(imdates_dt, tide_adjusted, color='#FFA500', alpha=0.8, linestyle='-', zorder=4)  # Orange line
                 
             if iono is not None:
                 # Adjust iono correction by subtracting the reference value
-                iono_adjusted = iono[:, ii, jj] 
+                iono_ref_value = iono_ref[ii, jj]-np.nanmean(iono_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                iono_adjusted = iono[:, ii, jj]-np.nanmean(iono[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - iono_ref_value
                 # Plot adjusted iono correction
                 axts_corr.scatter(imdates_dt, iono_adjusted, label=label_iono, c='#800080', alpha=0.8, zorder=4, marker="^")  # Purple
                 axts_corr.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line      
             
             ##plot cum and cum_corr in the bottom panel
             ### cumfile
-            if not sbovl_flag:
-                vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
+            # if not sbovl_flag:
+            vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
 
-                dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-    #           dcum_ref = 0
-                dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
-            else:
-                vel1p = vel[ii, jj]
-                dcum_ref = cum_ref[ii, jj]
-                dph = cum[:, ii, jj]
+            dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+#           dcum_ref = 0
+            dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
+            # else:
+            #     vel1p = vel[ii, jj]
+            #     dcum_ref = cum_ref[ii, jj]
+            #     dph = cum[:, ii, jj]
             ## fit function
             lines1 = [0, 0, 0, 0]
             xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
@@ -1124,21 +1131,21 @@ if __name__ == "__main__":
             for model, vis in enumerate(visibilities):
                 yvalues_corr = calc_model(dph_corr, imdates_ordinal, xvalues, model)
                 if not novel_flag:
-                    lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, 'pink', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
+                    lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, '#00CC00', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
                 
-            axts.scatter(imdates_dt, dph_corr, label='corrected_cum', c='pink', alpha=0.8, zorder=5, marker="s")  # Cyan markers
+            axts.scatter(imdates_dt, dph_corr, label='corrected_cum', c='#00CC00', alpha=0.8, zorder=5, marker="s")  # Cyan markers
             axts.set_title('vel(1) = {:.1f} mm/yr, vel(cor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_corr, jj, ii), fontsize=10)
             
             ### cumfile2
             if cumfile2:
-                if not sbovl_flag:
-                    vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
-                    dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-                    dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
-                else:
-                    vel2p = vel2[ii, jj]
-                    dcum2_ref = cum2_ref[ii, jj]
-                    dphf = cum2[:, ii, jj]
+                # if not sbovl_flag:
+                vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
+                dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
+                # else:
+                #     vel2p = vel2[ii, jj]
+                #     dcum2_ref = cum2_ref[ii, jj]
+                #     dphf = cum2[:, ii, jj]
                 ## fit function
                 lines2 = [0, 0, 0, 0]
                 for model, vis in enumerate(visibilities):
@@ -1147,7 +1154,7 @@ if __name__ == "__main__":
                         lines2[model], = axts.plot(xvalues_dt, yvalues, 'r-', visible=vis, alpha=0.6, zorder=2)
                 if not novel_flag:
                     axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
-                    axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr, vel(cor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, vel_corr, jj, ii), fontsize=10)
+                    axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
             
             ## gap
             if gap:

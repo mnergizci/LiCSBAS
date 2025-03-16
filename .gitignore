@@ -114,7 +114,5 @@ venv.bak/
 *tif
 *ipynb
 .vscode/
-bin/LiCSBAS_plot_ts_diff*
+bin/LiCSBAS_plot_ts_differences.py
 bin/LiCSBAS_correction_comparison.py
-bin/LiCSBAS_plot_ts_corrections.py
-bin/LiCSBAS_plot_ts_corrections.py
