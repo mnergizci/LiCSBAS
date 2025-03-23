@@ -288,7 +288,8 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         #cube = xr.open_dataset(ncfile)
         var = cube['cum'] # will do 3D set
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
-        cube = cube.assign({'amplitude': new_var})
+        cube = cube.assign({'amplitude': new_var.copy(deep=True)})
+        new_var = None
         print('Importing amplitudes')
         cube = import_tifs2cube_simple(mlidir, cube, searchstring='/*geo.mli.tif', varname='amplitude', thirddim='time',
                                 apply_func=np.sqrt)
@@ -305,7 +306,8 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         var = cube['cum'] # will do 3D set
         if coh_in_4d:
             new_var = var.expand_dims({'btemp':btemps}).astype(np.float32) * np.nan
-            cube = cube.assign({'spatial_coherence': new_var})
+            cube = cube.assign({'spatial_coherence': new_var.copy(deep=True)})
+            new_var = None
         else:
             new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
             for btemp in btemps:
@@ -367,6 +369,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
             varname = 'atmosphere_external'
             cube = cube.assign({varname: new_var.copy(deep=True)})
+            new_var =None
             print('Importing GACOS as atmosphere based on external model')
             cube = import_tifs2cube_simple(gacosdir, cube, searchstring='/*.sltd.geo.tif', varname=varname, thirddim='time',
                                     apply_func=rad2mm)
@@ -381,6 +384,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         var = cube['cum'] # will do 3D set
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
         cube = cube.assign({varname: new_var.copy(deep=True)})
+        new_var = None
         cube[varname].values = cube['cum'].values - cumnf.cum.values
         #for i in range(len(cube.time)):
         #    cube[varname].isel(time=i)[:] = cube['cum'][i].values - cumnf.cum[i].values #np.flipud(cumnf.cum[i].values) # filt minus not filt
