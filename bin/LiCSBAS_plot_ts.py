@@ -195,7 +195,7 @@ if __name__ == "__main__":
     vmax = None
     cmap_name = "cmc.roma_r"
     auto_crange = 99.0
-    sbovl_flag = False
+    absolute= False
     correction_flag = False
     novel_flag = False
 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "sbovl", "corrections", "novelocity"])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -247,8 +247,8 @@ if __name__ == "__main__":
                 ylen = float(a)
             elif o == '--ts_png':
                 ts_pngfile = a
-            elif o == '--sbovl':
-                sbovl_flag = True
+            elif o == '--abs':
+                absolute = True
             elif o == '--corrections':
                 correction_flag = True
             elif o == '--novelocity':
@@ -379,9 +379,15 @@ if __name__ == "__main__":
             iono = None
             print('No iono correction found in {}. Skip.'.format(cumfile))
 
+    if absolute:
+        try:
+            cum_abs = cumh5['cum_abs']
+            label_abs = 'Absolute displacement'
+            print('Absolute displacement found.')
+        except KeyError:
+            cum_abs = None
+            print('No absolute displacement found in {}. Skip.'.format(cumfile))
    
-
-    
     ### Set initial ref area
     if refarea:
         if not tools_lib.read_range(refarea, width, length):
@@ -461,6 +467,10 @@ if __name__ == "__main__":
             tide_ref = tide[ix_m, :, :]
         if iono is not None:
             iono_ref = iono[ix_m, :, :]
+    if absolute:
+        if cum_abs is not None:
+            cum_abs_ref = cum_abs[ix_m, :, :]
+            
     ### cumfile2
     if cumfile2:
         print('Reading {} as 2nd'.format(os.path.relpath(cumfile2)))
@@ -576,10 +586,10 @@ if __name__ == "__main__":
     ### First show
     rax, = axv.plot([refx1h, refx2h, refx2h, refx1h, refx1h],
                     [refy1h, refy1h, refy2h, refy2h, refy1h], '--k', alpha=0.8)
-    # if not sbovl_flag:
-    data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
-    # else:
-    #     data = vel*mask
+    if not absolute:
+        data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
+    else:
+        data = vel*mask
     cax = axv.imshow(data, clim=[vmin, vmax], cmap=cmap, aspect=aspect, interpolation='nearest')
 
     axv.set_title('vel')
@@ -688,8 +698,8 @@ if __name__ == "__main__":
 
         if 'vel' in val_ind:  ## Velocity
             data = mapdict_data[val_ind]*mask
-            # if not sbovl_flag:
-            data = data-np.nanmean(data[refy1:refy2, refx1:refx2])
+            if not absolute:
+                data = data-np.nanmean(data[refy1:refy2, refx1:refx2])
             if vlimauto: ## auto
                 vmin = np.nanpercentile(data*mask, 100-auto_crange)
                 vmax = np.nanpercentile(data*mask, auto_crange)
@@ -751,8 +761,8 @@ if __name__ == "__main__":
 #        axv.set_title('Time = %s'%(dstr))
         axv.set_title('%s (Ref: %s)'%(dstr, dstr_ref))
         newv = (cum[timenearest, :, :]-cum_ref)*mask
-        # if not sbovl_flag:
-        newv = newv-np.nanmean(newv[refy1:refy2, refx1:refx2])
+        if not absolute:
+            newv = newv-np.nanmean(newv[refy1:refy2, refx1:refx2])
 
         cax.set_data(newv)
         cax.set_cmap(cmap)
@@ -883,16 +893,15 @@ if __name__ == "__main__":
 
             ### If not masked
             ### cumfile
-            # if not sbovl_flag:
-            vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
+            if not absolute:
+                vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
 
-            dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-            #dcum_ref = 0
-            dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
-            # else:
-            #     vel1p = vel[ii, jj]
-            #     dcum_ref = cum_ref[ii, jj]
-            #     dph = cum[:, ii, jj]
+                dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                #dcum_ref = 0
+                dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
+            else:
+                vel1p = vel[ii, jj]
+                dph = cum_abs[:, ii, jj] - cum_abs_ref[ii, jj]
             ## fit function
             lines1 = [0, 0, 0, 0]
             xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
@@ -908,14 +917,14 @@ if __name__ == "__main__":
 
             ### cumfile2
             if cumfile2:
-                # if not sbovl_flag:
-                vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
-                dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-                dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
-                # else:
-                #     vel2p = vel2[ii, jj]
-                #     dcum2_ref = cum2_ref[ii, jj]
-                #     dphf = cum2[:, ii, jj]
+                if not absolute:
+                    vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
+                    dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                    dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
+                else:
+                    vel2p = vel2[ii, jj]
+                    dcum2_ref = cum2_ref[ii, jj]
+                    dphf = cum2[:, ii, jj] - dcum2_ref
                 ## fit function
                 lines2 = [0, 0, 0, 0]
                 for model, vis in enumerate(visibilities):
@@ -964,10 +973,10 @@ if __name__ == "__main__":
                 label.set_horizontalalignment('right')
 
         ### Ref info at side
-        # if sbovl_flag:
-        #     axtref = fig.text(0.91, 0.95, 'Ref date:\n {}'.format(imdates[ix_m]), fontsize=8, va='top')
-        # else:
-        axtref = fig.text(0.91, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
+        if absolute:
+            axtref = fig.text(0.91, 0.95, 'Ref date:\n {}'.format(imdates[ix_m]), fontsize=8, va='top')
+        else:
+            axtref = fig.text(0.91, 0.95, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}'.format(refx1, refx2, refy1, refy2, imdates[ix_m]), fontsize=8, va='top')
 
 
         ### Fit function for time series
@@ -1050,15 +1059,15 @@ if __name__ == "__main__":
             ### Get lat lon and show Ref info at side
             if geocod_flag:
                 lat, lon = tools_lib.xy2bl(jj, ii, lat1, dlat, lon1, dlon)
-                # if not sbovl_flag:
-                axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
-                # if sbovl_flag:
-                #     axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef date:\n {}\n\n{}'.format(lat, lon, imdates[ix_m], noisetxt))
+                if not absolute:
+                    axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(lat, lon, refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                if absolute:
+                    axtref.set_text('Lat:{:.5f}\nLon:{:.5f}\n\nRef date:\n {}\n\n{}'.format(lat, lon, imdates[ix_m], noisetxt))
             else:
-                # if not sbovl_flag:
-                axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
-                # if sbovl_flag:
-                #     axtref.set_text('Ref date:\n {}\n\n{}'.format(imdates[ix_m], noisetxt))
+                if not absolute:
+                    axtref.set_text('Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)\nRef date:\n {}\n\n{}'.format(refx1, refx2, refy1, refy2, imdates[ix_m], noisetxt))
+                if absolute:
+                    axtref.set_text('Ref date:\n {}\n\n{}'.format(imdates[ix_m], noisetxt))
             ### If masked
             if np.isnan(mask[ii, jj]):
                 axts.set_title('NaN @({}, {})'.format(jj, ii), fontsize=10)
@@ -1076,32 +1085,38 @@ if __name__ == "__main__":
 
             ##plot tide and iono separately in the top panel
             if tide is not None:
-                tide_ref_value = tide_ref[ii, jj]-np.nanmean(tide_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
-                tide_adjusted = tide[:, ii, jj]-np.nanmean(tide[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - tide_ref_value
+                if not absolute:
+                    tide_ref_value = tide_ref[ii, jj]-np.nanmean(tide_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                    tide_adjusted = tide[:, ii, jj]-np.nanmean(tide[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - tide_ref_value
+                else:
+                    tide_adjusted = tide[:, ii, jj]-tide_ref[ii, jj]
+                    
                 # Plot adjusted tide correction
                 axts_corr.scatter(imdates_dt, tide_adjusted, label=label_tide, c='#FFA500', alpha=0.8, zorder=4, marker="o")  # Orange
                 axts_corr.plot(imdates_dt, tide_adjusted, color='#FFA500', alpha=0.8, linestyle='-', zorder=4)  # Orange line
                 
             if iono is not None:
                 # Adjust iono correction by subtracting the reference value
-                iono_ref_value = iono_ref[ii, jj]-np.nanmean(iono_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
-                iono_adjusted = iono[:, ii, jj]-np.nanmean(iono[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - iono_ref_value
+                if not absolute:
+                    iono_ref_value = iono_ref[ii, jj]-np.nanmean(iono_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                    iono_adjusted = iono[:, ii, jj]-np.nanmean(iono[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - iono_ref_value
+                else:
+                    iono_adjusted = iono[:, ii, jj]-iono_ref[ii, jj]
                 # Plot adjusted iono correction
                 axts_corr.scatter(imdates_dt, iono_adjusted, label=label_iono, c='#800080', alpha=0.8, zorder=4, marker="^")  # Purple
                 axts_corr.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line      
             
             ##plot cum and cum_corr in the bottom panel
             ### cumfile
-            # if not sbovl_flag:
-            vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
+            if not absolute:
+                vel1p = vel[ii, jj]-np.nanmean((vel*mask)[refy1:refy2, refx1:refx2])
 
-            dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-#           dcum_ref = 0
-            dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
-            # else:
-            #     vel1p = vel[ii, jj]
-            #     dcum_ref = cum_ref[ii, jj]
-            #     dph = cum[:, ii, jj]
+                dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+    #           dcum_ref = 0
+                dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
+            else:
+                vel1p = vel[ii, jj]
+                dph = cum_abs[:, ii, jj] - cum_abs_ref[ii, jj]
             ## fit function
             lines1 = [0, 0, 0, 0]
             xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
@@ -1138,14 +1153,14 @@ if __name__ == "__main__":
             
             ### cumfile2
             if cumfile2:
-                # if not sbovl_flag:
-                vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
-                dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-                dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
-                # else:
-                #     vel2p = vel2[ii, jj]
-                #     dcum2_ref = cum2_ref[ii, jj]
-                #     dphf = cum2[:, ii, jj]
+                if not absolute:
+                    vel2p = vel2[ii, jj]-np.nanmean((vel2*mask)[refy1:refy2, refx1:refx2])
+                    dcum2_ref = cum2_ref[ii, jj]-np.nanmean(cum2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                    dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
+                else:
+                    vel2p = vel2[ii, jj]
+                    dcum2_ref = cum2_ref[ii, jj]
+                    dphf = cum2[:, ii, jj]-dcum2_ref
                 ## fit function
                 lines2 = [0, 0, 0, 0]
                 for model, vis in enumerate(visibilities):

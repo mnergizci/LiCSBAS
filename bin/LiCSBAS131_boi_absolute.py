@@ -118,41 +118,32 @@ def main(argv=None):
             return 2
         
     #%%Load cumulative time-series cube
-    cube = loadall2cube(cumfile)
-    first_date = cube.time.isel(time=0).values.astype(str).split('T')[0]
-    cube['cum'] = cube['cum'] - cube['cum'].sel(time=first_date)
+    print(f"Reading cum.h5 from: {cumfile}")
 
-    # Create DataFrame from cube time steps
-    df_cube = pd.DataFrame({'epoch': pd.to_datetime(cube['time'].values)})
+    with h5.File(cumfile, 'r') as f:
+        cum = f['cum'][()]
+        imdates = f['imdates'][()].astype(str)
+        
+    cum = cum - cum[0]  # reference to first epoch
 
-    # Load azimuth ionospheric delay (daz) from frame 
+    # Get daz values
     dazes = dl.get_daz_frame(frame)[['epoch', 'daz']]
     dazes['epoch'] = pd.to_datetime(dazes['epoch'])
-    dazes['daz'] = dazes['daz'] * 14000 ## convert mm
+    dazes['daz'] = dazes['daz'] * 14000  # convert to mm
 
-    # Merge and interpolate 
-    df_merged = pd.merge(df_cube, dazes, on='epoch', how='left')       # Keep all epochs from cube
-    df_merged = df_merged.sort_values(by='epoch')                      # Ensure order
-    df_merged['daz'] = df_merged['daz'].interpolate(method='nearest', limit_direction='both')                      # Fill nan daz values
+    df_daz = pd.DataFrame({'epoch': pd.to_datetime(imdates)})
+    df_daz = df_daz.merge(dazes, on='epoch', how='left').sort_values('epoch')
+    df_daz['daz'] = df_daz['daz'].interpolate(method='nearest', limit_direction='both')
+    daz = df_daz['daz'].to_numpy() - df_daz['daz'].iloc[0]  # align to first epoch
 
-    # Convert merged DataFrame to xarray format
-    df_merged_xr = df_merged.set_index("epoch").to_xarray()
+    # Apply correction
+    cum_abs = cum + daz[:, None, None]
 
-    # Align the daz column with the cube dataset based on the 'time' dimension
-    cube = cube.assign(
-        daz=("time", df_merged_xr.daz.reindex(time=cube["time"], method="nearest").data)
-    )
-    # Display the updated cube dataset
-    cube['daz'] = cube['daz'] - cube['daz'].sel(time=first_date)
-    cube['cum_absolute']=cube['cum']+cube['daz']
-    
-    #%% Save corrected datasets into cum.h5
-    print(f"\nSaving 'cum_absolute' and 'daz' to {cumfile} ...")
-    with h5.File(cumfile, 'r+') as hf:
-        for key, data in {'cum_abs': cube['cum_absolute'].values, 'daz': cube['daz'].values}.items():
-            if key in hf:
-                del hf[key]
-            hf.create_dataset(key, data=data)
+    print(f"Writing cum_abs to {cumfile} ...")
+    with h5.File(cumfile, 'r+') as f:
+        if 'cum_abs' in f:
+            del f['cum_abs']
+        f.create_dataset('cum_abs', data=cum_abs.astype('float32'), compression='gzip')
 
     print("absolute BOI's saved successfully.")
 #%% main
