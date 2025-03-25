@@ -392,11 +392,11 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
         cube = cube.assign({varname: new_var.copy(deep=True)})
         new_var = None
-        cube[varname].values = (cumnf['cum']-cumnf['cum'].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')).values - cube['cum'].values
+        cube[varname].values = cumnf['cum'].values - cube['cum'].values
         #for i in range(len(cube.time)):
         #    cube[varname].isel(time=i)[:] = cube['cum'][i].values - cumnf.cum[i].values #np.flipud(cumnf.cum[i].values) # filt minus not filt
         # to same ref point (might have changed)
-        #cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
+        cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
         # 2024-10-14: after AlignSAR meeting: we should actually keep cum being unfiltered... thus changing here (lazy):
         cube['cum'] = cube['cum'] + cube[varname]
         # 2025-03: let's remove also GACOS corrections (?) -- but then we should store velocity etc. of such non-corrected data!
