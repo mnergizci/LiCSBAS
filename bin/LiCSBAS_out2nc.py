@@ -29,6 +29,8 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
 """
 #%% Change log
 '''
+v1.2 2025+ ML
+ - some fixes towards AlignSAR cube
 v1.1 20241012+ ML
  - allowing extras for AlignSAR cube
 v1.05 20240420 ML
@@ -379,6 +381,9 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             # w.r.t. ref point 
             cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
             cube[varname] = cube[varname] - cube[varname][0]  # must be referred to the reference epoch (first epoch)
+            # change sign as sltd was radians of delay where POSITIVE means BIGGER DELAY (opposite to SLC phase)
+            # and after inversion, the increments [mm] are NEGATIVE for BIGGER DELAY (e.g. subsidence)
+            cube[varname] = cube[varname]*(-1)
         print('Getting residuals from filtering assuming atmo-correction')
         cumfile = os.path.join(tsdir, 'cum.h5')
         cumnf = xr.open_dataset(cumfile)
@@ -387,13 +392,13 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
         cube = cube.assign({varname: new_var.copy(deep=True)})
         new_var = None
-        cube[varname].values = cube['cum'].values - cumnf.cum.values
+        cube[varname].values = (cumnf['cum']-cumnf['cum'].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')).values - cube['cum'].values
         #for i in range(len(cube.time)):
         #    cube[varname].isel(time=i)[:] = cube['cum'][i].values - cumnf.cum[i].values #np.flipud(cumnf.cum[i].values) # filt minus not filt
         # to same ref point (might have changed)
-        cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
+        #cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
         # 2024-10-14: after AlignSAR meeting: we should actually keep cum being unfiltered... thus changing here (lazy):
-        cube['cum'] = cube['cum'] - cube[varname]
+        cube['cum'] = cube['cum'] + cube[varname]
         # 2025-03: let's remove also GACOS corrections (?) -- but then we should store velocity etc. of such non-corrected data!
         if gacosremove:
             if 'atmosphere_external' in cube:
@@ -691,7 +696,7 @@ def main(argv=None):
     #reference it
     if refarea_geo:
         #ref = cube.rio.clip_box(minrefx, minrefy, maxrefx, maxrefy)
-        ref = cube.sel(lon=slice(minrefx, maxrefx), lat=slice(minrefy, maxrefy))
+        ref = cube.sel(lon=slice(minrefx, maxrefx), lat=slice(maxrefy,minrefy))
         if len(ref.vel) == 0:
             print('warning, no points in the reference area - will export without referencing')
         else:
@@ -727,7 +732,7 @@ def main(argv=None):
     
     #only now will clip - this way the reference area can be outside the clip, if needed
     if cliparea_geo:
-        cube = cube.sel(lon=slice(minclipx, maxclipx), lat=slice(minclipy, maxclipy))
+        cube = cube.sel(lon=slice(minclipx, maxclipx), lat=slice(maxclipy, minclipy))
     
     if postfilter:
         #do filtered (it is nice)
