@@ -233,7 +233,7 @@ def loadall2cube(cumfile, extracols=['loop_ph_avg_abs']):
     #cube[]
     cube.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
     cube.rio.write_crs("EPSG:4326", inplace=True)
-    cube = cube.sortby(['time','lon','lat'])
+    #cube = cube.sortby(['time','lon','lat']) # 2025/03: not really right as lat should be opposite-signed..
     return cube
 
 #not in use now
@@ -251,12 +251,13 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
     docoh = True
     coh_in_4d = False
     doatmo = True
+    gacosremove = False
     # first fix vel as we load it from cum_filt!
     try:
         velfile = os.path.join(tsdir, 'results', 'vel')
         vel = np.fromfile(velfile, np.float32)
         vel = vel.reshape(cube.vel.shape)
-        vel = np.flipud(vel)
+        #vel = np.flipud(vel)
         cube.vel.values = vel
     except:
         print('some error loading vel')
@@ -287,7 +288,8 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         #cube = xr.open_dataset(ncfile)
         var = cube['cum'] # will do 3D set
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
-        cube = cube.assign({'amplitude': new_var})
+        cube = cube.assign({'amplitude': new_var.copy(deep=True)})
+        new_var = None
         print('Importing amplitudes')
         cube = import_tifs2cube_simple(mlidir, cube, searchstring='/*geo.mli.tif', varname='amplitude', thirddim='time',
                                 apply_func=np.sqrt)
@@ -304,12 +306,14 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         var = cube['cum'] # will do 3D set
         if coh_in_4d:
             new_var = var.expand_dims({'btemp':btemps}).astype(np.float32) * np.nan
-            cube = cube.assign({'spatial_coherence': new_var})
+            cube = cube.assign({'spatial_coherence': new_var.copy(deep=True)})
+            new_var = None
         else:
             new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
             for btemp in btemps:
-                cube = cube.assign({'spatial_coherence_'+str(btemp): new_var})
+                cube = cube.assign({'spatial_coherence_'+str(btemp): new_var.copy(deep=True)})
                 cube['spatial_coherence_'+str(btemp)].attrs['description']='Spatial coherence of Btemp = '+str(btemp)+' days estimated per epoch.'
+            new_var = None
         #
         t=cube.indexes['time']
         searchstring='/*/*.cc'
@@ -332,7 +336,8 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             # at least one epoch is within the cc here, loading
             coh = np.fromfile(cc, np.uint8)
             coh = coh.reshape(cube.vel.shape)
-            coh = (np.flipud(coh) / 255).astype(np.float32)
+            #coh = (np.flipud(coh) / 255).astype(np.float32)
+            coh = (coh / 255).astype(np.float32)
             coh[coh == 0] = np.nan
             for epochstr in pair.split('_'):
                 #epochdt = pd.Timestamp(pair.split('_')[1])
@@ -363,7 +368,8 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             var = cube['cum'] # will do 3D set
             new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
             varname = 'atmosphere_external'
-            cube = cube.assign({varname: new_var})
+            cube = cube.assign({varname: new_var.copy(deep=True)})
+            new_var =None
             print('Importing GACOS as atmosphere based on external model')
             cube = import_tifs2cube_simple(gacosdir, cube, searchstring='/*.sltd.geo.tif', varname=varname, thirddim='time',
                                     apply_func=rad2mm)
@@ -377,21 +383,26 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         varname = 'atmosphere_resid_filter'
         var = cube['cum'] # will do 3D set
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
-        cube = cube.assign({varname: new_var})
-        for i in range(len(cube.time)):
-            cube[varname].isel(time=i)[:] = np.flipud(cumnf.cum[i].values) - cube['cum'][i].values
+        cube = cube.assign({varname: new_var.copy(deep=True)})
+        new_var = None
+        cube[varname].values = cube['cum'].values - cumnf.cum.values
+        #for i in range(len(cube.time)):
+        #    cube[varname].isel(time=i)[:] = cube['cum'][i].values - cumnf.cum[i].values #np.flipud(cumnf.cum[i].values) # filt minus not filt
         # to same ref point (might have changed)
         cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
         # 2024-10-14: after AlignSAR meeting: we should actually keep cum being unfiltered... thus changing here (lazy):
-        cube['cum'] = cube['cum'] + cube[varname]
-        #if 'atmosphere_external' in cube:
+        cube['cum'] = cube['cum'] - cube[varname]
+        # 2025-03: let's remove also GACOS corrections (?) -- but then we should store velocity etc. of such non-corrected data!
+        if gacosremove:
+            if 'atmosphere_external' in cube:
+                cube['cum'] = cube['cum'] - cube['atmosphere_external']
         #    cube['atmosphere']=cube['atmosphere_external']+cube['filter_APS']
         #    cube=cube.drop_vars('atmosphere_external')
         #else:
         #    cube=cube.rename({'filter_APS':'atmosphere'})
         # also adding height
         cube['DEM'] = cube.vel.copy()
-        cube['DEM'].values = np.flipud(cumnf.hgt.values)
+        cube['DEM'].values = cumnf.hgt.values #np.flipud(cumnf.hgt.values)
         cube['DEM'].attrs['unit']='m'
         cube['DEM']=cube['DEM'].where(cube['DEM'] != 0)
     #
@@ -555,7 +566,7 @@ def import_tifs2cube_simple(tifspath, cube, searchstring='/*geo.mli.tif', varnam
             data = data.interp_like(cube.vel, method='linear') # WARNING: method linear is ok for all but not phase!
             data = data.values
         else:
-            data = np.flipud(data.values) # to np array..
+            data = data.values #np.flipud(data.values) # to np array..
         if apply_func:
             data = apply_func(data)
         cube[varname].isel(time=i)[:] = data
