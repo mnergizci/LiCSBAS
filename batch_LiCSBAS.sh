@@ -87,6 +87,8 @@ p13_singular="" # y/n. n by default
 p13_singular_gauss="" # y/n. n by default
 p13_skippngs="" # y/n. n by default
 p13_sbovl="n"
+p131_sbovl_abs="n" ## adding ICC+ESD offfset and apply SET and Iono correction to sbovl time series
+p14_sbovl="n"
 p15_coh_thre=""	# default: 0.05
 p15_n_unw_r_thre=""	# default: 1.5
 p15_vstd_thre=""	# default: 100 mm/yr
@@ -506,10 +508,25 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
 fi
 
 if [ $start_step -le 14 -a $end_step -ge 14 ];then
+  
+  if [ "$p13_sbovl" == "y" ]; then
+    p131_sbovl_abs='y'
+  fi
+  
+  if [ "$p131_sbovl_abs" == "y" ]; then
+    extra='-t '$TSdir
+    if [ "$check_only" == "y" ];then
+      echo "LiCSBAS131_boi_absolute.py $extra"
+    else
+      LiCSBAS131_boi_absolute.py $extra
+    fi
+  fi
+  
   p14_op=""
   if [ ! -z $p14_TSdir ];then p14_op="$p14_op -t $p14_TSdir";
     else p14_op="$p14_op -t $TSdir"; fi
   if [ ! -z $p14_mem_size ];then p14_op="$p14_op --mem_size $p14_mem_size"; fi
+  if [ "$p14_sbovl" == "y" ];then p14_op="$p14_op --sbovl --ransac"; fi
   if [ $gpu == "y" ];then p14_op="$p14_op --gpu"; fi
   if [ "$eqoffs" == "y" ]; then
     # we then do not want to regenerate vstd

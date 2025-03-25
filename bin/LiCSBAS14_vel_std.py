@@ -21,7 +21,7 @@ Outputs in TS_GEOCml*/results/ :
 =====
 Usage
 =====
-LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac] [--skipexisting]
+LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac] [--skipexisting] [--sbovl]
 
  -t  Path to the TS_GEOCml* dir.
  -i  Path to cum file (Default: cum.h5)
@@ -29,9 +29,13 @@ LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac
  --gpu        Use GPU (Need cupy module)
  --ransac     Recalculate velocity free from outliers (use RANSAC algorithm)
  --skipexisting  Skip if exists
+ --sbovl      sbovl option for recalculate the absolute velocity via RANSAC? #TODO ask supervisors for normal linear or Huber loss function rather than RANSAC.
 """
 #%% Change log
 '''
+
+20250324 Muhammet Nergizci, Uni of Leeds
+ - sbovl flag adding, ransac small debug
 20241115 ML, UoL
  - Adding some additional layers (n_gap_merged)
 v1.3 20221115 Milan Lazecky, Uni of Leeds
@@ -85,12 +89,13 @@ def main(argv=None):
     cmap_noise_r = 'viridis_r'
     cumfile = False
     skipexisting = False
+    sbovl = False
     
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "ht:i:",
-                                       ["help", "mem_size=", "gpu", "ransac", "skipexisting"])
+                                       ["help", "mem_size=", "gpu", "ransac", "skipexisting", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -109,6 +114,8 @@ def main(argv=None):
                 ransac = True
             elif o == '--skipexisting':
                 skipexisting = True
+            elif o == '--sbovl':
+                sbovl = True
 
 
         if not tsadir:
@@ -135,7 +142,7 @@ def main(argv=None):
     if not cumfile:
         cumfile=os.path.join(tsadir,'cum.h5')
         if ransac:
-            print('WARNING, using unmasked result (cum.h5) with RANSAC iterations - might take long (not parallel yet)')
+            print('WARNING, using unmasked result (cum.h5) with RANSAC iterations - might take long (not parallel yet)') ##TODO let's do it paralell
     else:
         if not os.path.exists(cumfile):
             print('Error reading specified input file, please fix')
@@ -144,9 +151,12 @@ def main(argv=None):
     cumh5 = h5.File(cumfile, 'r')
 
     imdates = cumh5['imdates'][()].astype(str).tolist()
-    cum = cumh5['cum']
-    n_im, length, width = cum.shape
-
+    if not sbovl:
+        cum = cumh5['cum']
+        n_im, length, width = cum.shape
+    elif sbovl:
+        cum = cumh5['cum_abs']
+        n_im, length, width = cum.shape
     imdates_dt = [dt.datetime.strptime(imd, '%Y%m%d').toordinal() for imd in imdates]
     dt_cum = np.float32((np.array(imdates_dt)-imdates_dt[0])/365.25)
 
@@ -168,7 +178,7 @@ def main(argv=None):
             dostc = False
         if os.path.exists(vstdfile):
             dovstd = False
-    
+
     #%% For each patch
     for i, rows in enumerate(patchrow):
         print('\nProcess {0}/{1}th line ({2}/{3}th patch)...'.format(rows[1], patchrow[-1][-1], i+1, n_patch), flush=True)
@@ -226,7 +236,7 @@ def main(argv=None):
         #%% Finish patch
         elapsed_time2 = int(time.time()-start2)
         print('  Elapsed time for {0}th patch: {1} sec'.format(i+1, elapsed_time2))
-    
+
     # calc n_gaps_merged
     try:
         gap = cumh5['gap']
@@ -238,7 +248,6 @@ def main(argv=None):
             np.float32(ngaps_merge).tofile(f)
     except:
         print('Error calculating n_gaps_merged')
-    
     if ransac:
         openmode = 'w'
         vel2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
@@ -254,8 +263,10 @@ def main(argv=None):
         vel2int = get_vel_ransac2(dt_cum, cumda, True)
         vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = vel2int.compute(num_workers=n_para)
         '''
-        cum_patch = cum.reshape((n_im, n_pt_all)).transpose()
+        cum_np = cum[:, :, :]  # Load into memory
+        cum_patch = cum_np.reshape((n_im, n_pt_all)).transpose()
         bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
+        cum_patch = cum_patch[bool_unnan_pt, :]
         vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = inv_lib.get_vel_ransac(dt_cum, cum_patch, return_intercept=True)
         
         ### Output data and image
@@ -265,7 +276,7 @@ def main(argv=None):
             vel2.tofile(f)
         with open(inter2file, openmode) as f:
             intercept2.tofile(f)
-    
+                   
     #%% Close h5 file
     cumh5.close()
 
@@ -304,7 +315,16 @@ def main(argv=None):
         cmax = np.nanpercentile(vel2, 99)
         cmap_vel = cmc.roma.reversed()
         plot_lib.make_im_png(vel2, pngfile, cmap_vel, title, cmin, cmax)
-    
+        
+        #saving the cum_file
+        if sbovl:
+            print('  Saving ransac vel as vel_abs into cum.h5...', flush=True)
+            with h5.File(cumfile, 'a') as f:
+                if 'vel_abs' in f:
+                    print('Overwriting existing vel_abs dataset...')
+                    del f['vel_abs']
+                f.create_dataset('vel_abs', data=vel2.reshape((length, width)), dtype='float32')
+        
     ngaps_merge = io_lib.read_img(ngap_file, length, width)
     pngfile = ngap_file+'.png'
     title = 'Number of gaps merged'

@@ -62,7 +62,7 @@ import h5py as h5
 import numpy as np
 import pandas as pd
 import datetime as dt
-from LiCSBAS_out2nc import loadall2cube
+#from LiCSBAS_out2nc import loadall2cube
 import daz_lib_licsar as dl
 
 class Usage(Exception):
@@ -117,28 +117,35 @@ def main(argv=None):
             print('Error reading specified input file, please fix')
             return 2
         
-    #%%Load cumulative time-series cube
+    #%%Read cum.h5, add daz values and remove tide and iono corrections
     print(f"Reading cum.h5 from: {cumfile}")
-
+    # Load data
     with h5.File(cumfile, 'r') as f:
         cum = f['cum'][()]
         imdates = f['imdates'][()].astype(str)
-        
-    cum = cum - cum[0]  # reference to first epoch
+        tide = f['tide'][()]
+        iono = f['iono'][()]
 
-    # Get daz values
+    # Reference all to first epoch
+    cum = cum - cum[0]
+    tide = tide - tide[0]
+    iono = iono - iono[0]
+
+    # Get daz correction (azimuth ionospheric delay)
     dazes = dl.get_daz_frame(frame)[['epoch', 'daz']]
     dazes['epoch'] = pd.to_datetime(dazes['epoch'])
-    dazes['daz'] = dazes['daz'] * 14000  # convert to mm
+    dazes['daz'] = dazes['daz'] * 14000  # Convert to mm (scale for azimuth geometry)
 
+    # Interpolate daz to match imdates
     df_daz = pd.DataFrame({'epoch': pd.to_datetime(imdates)})
     df_daz = df_daz.merge(dazes, on='epoch', how='left').sort_values('epoch')
     df_daz['daz'] = df_daz['daz'].interpolate(method='nearest', limit_direction='both')
-    daz = df_daz['daz'].to_numpy() - df_daz['daz'].iloc[0]  # align to first epoch
+    daz = df_daz['daz'].to_numpy()
+    daz = daz - daz[0]  # Align to first epoch
 
-    # Apply correction
-    cum_abs = cum + daz[:, None, None]
-
+    # Apply all corrections
+    cum_abs = cum + daz[:, None, None] - tide - iono
+    
     print(f"Writing cum_abs to {cumfile} ...")
     with h5.File(cumfile, 'r+') as f:
         if 'cum_abs' in f:

@@ -378,15 +378,25 @@ if __name__ == "__main__":
         except KeyError:
             iono = None
             print('No iono correction found in {}. Skip.'.format(cumfile))
-
+  
     if absolute:
+        cum_abs = None
+        vel = None
+
+        # Check for absolute displacement
         try:
             cum_abs = cumh5['cum_abs']
             label_abs = 'Absolute displacement'
-            print('Absolute displacement found.')
+            print('Absolute displacement (cum_abs) found.')
         except KeyError:
-            cum_abs = None
-            print('No absolute displacement found in {}. Skip.'.format(cumfile))
+            print('No absolute displacement (cum_abs) found in {}. Skip.'.format(cumfile))
+
+        # Check for absolute velocity
+        try:
+            vel = cumh5['vel_abs']
+            print('Absolute velocity (vel_abs) found.')
+        except KeyError:
+            print('No absolute velocity (vel_abs) found in {}.'.format(cumfile))          
    
     ### Set initial ref area
     if refarea:
@@ -557,8 +567,10 @@ if __name__ == "__main__":
         climauto = False
         if dmin is None: dmin = dmin_auto - refvalue_lastcum
         if dmax is None: dmax = dmax_auto - refvalue_lastcum
-
-    refvalue_vel = np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
+    if not absolute:
+        refvalue_vel = np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
+    else:
+        refvalue_vel = 0
     vmin_auto = np.nanpercentile(vel*mask, 100-auto_crange)
     vmax_auto = np.nanpercentile(vel*mask, auto_crange)
     if vmin is None and vmax is None: ## auto
@@ -1130,26 +1142,26 @@ if __name__ == "__main__":
                 axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
                 axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
             
-            ##cum_corrected
+            ##cum_uncorrected
             # if not cumfile2: ## I assumed the cumfile2 also include the correction, therefore I skip that to avoid dublication ## I dublicate right now to make sure cum_filt.h5 is correct.
-            dph_corr = dph.copy()
+            dph_uncorr = dph.copy()
             if tide is not None:
-                dph_corr -= tide_adjusted
+                dph_uncorr += tide_adjusted
             if iono is not None:
-                dph_corr -= iono_adjusted
+                dph_uncorr += iono_adjusted
                 
-            #Compute corrected velocity (vel_corr)
-            vel_corr = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_corr, 1)[0] * 365.25  # Convert to mm/yr
+            #Compute corrected velocity (vel_uncorr)
+            vel_uncorr = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_uncorr, 1)[0] * 365.25  # Convert to mm/yr
             
             #Fit function for corrected disp
             lines_corr = [0, 0, 0, 0]
             for model, vis in enumerate(visibilities):
-                yvalues_corr = calc_model(dph_corr, imdates_ordinal, xvalues, model)
+                yvalues_corr = calc_model(dph_uncorr, imdates_ordinal, xvalues, model)
                 if not novel_flag:
                     lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, '#00CC00', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
                 
-            axts.scatter(imdates_dt, dph_corr, label='corrected_cum', c='#00CC00', alpha=0.8, zorder=5, marker="s")  # Cyan markers
-            axts.set_title('vel(1) = {:.1f} mm/yr, vel(cor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_corr, jj, ii), fontsize=10)
+            axts.scatter(imdates_dt, dph_uncorr, label='uncorrected_cum', c='#00CC00', alpha=0.8, zorder=5, marker="s")  # Cyan markers
+            axts.set_title('vel(1) = {:.1f} mm/yr, vel(uncor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_uncorr, jj, ii), fontsize=10)
             
             ### cumfile2
             if cumfile2:
