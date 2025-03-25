@@ -32,6 +32,7 @@ LiCSBAS_cum2vel.py [-s yyyymmdd] [-e yyyymmdd] [-i infile] [-o outfilenamestr] [
  --offsets offsets.txt  Estimate offsets read from external txt file - both yyyymmdd and yyyy-mm-dd form is supported
  --export_model modelfile.h5  Export the model time series to H5 file. Can be used for step 16 (Default: not export)
  --store_to_results  Setting this parameter, outputs will be stored to the results directory (overwriting existing files)
+ --datavar cum   Option to change the input data variable name (standard is 'cum' - will work for any with the expected shape)
 """
 #%% Change log
 '''
@@ -96,6 +97,7 @@ def main(argv=None):
     imd_s = []
     imd_e = []
     cumfile = 'cum_filt.h5'
+    datavar = 'cum'
     outfile = []
     refarea = []
     refarea_geo = []
@@ -121,7 +123,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "store_to_results", "vstd", "sin", "eqoffsets=", "offsets=","export_model=","png", "ref_geo=", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hs:e:i:o:r:", ["help", "datavar=", "store_to_results", "vstd", "sin", "eqoffsets=", "offsets=","export_model=","png", "ref_geo=", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -150,6 +152,8 @@ def main(argv=None):
                 maskfile = a
             elif o == '--png':
                 pngflag = True
+            elif o == '--datavar':
+                datavar = a
             elif o == '--eqoffsets':
                 minmag = float(a)
                 eqoffsetsflag = True
@@ -211,7 +215,7 @@ def main(argv=None):
     imdates = cumh5['imdates'][()].astype(str).tolist()
     # cumh5 = xr.open_dataset(cumfile) # future: xr
     # imdates = list(a.time.dt.strftime('%Y%m%d').values)
-    cum = cumh5['cum']
+    cum = cumh5[datavar]
     n_im_all, length, width = cum.shape
 
     if refarea:
