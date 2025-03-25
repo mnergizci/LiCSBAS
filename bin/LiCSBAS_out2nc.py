@@ -298,7 +298,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         cube['amp_mean']=cube.amplitude.mean(dim='time')
         cube['amp_std']=cube.amplitude.std(dim='time')
         #cube['amp_dispersion_index']=(cube.amp_std**2)/cube['amp_mean']
-        cube['amp_dispersion_index'] = cube['amp_std'] / cube['amp_mean']
+        #cube['amp_dispersion_index'] = cube['amp_std'] / cube['amp_mean']
         #cube['amp_stability_index'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
         cube['amp_stability_index'] = 1 - (cube['amp_std'] / cube['amp_mean'])  # from 0-1, close to 0 = very stable
         cube['amp_stability_index'].values[cube['amp_stability_index'] <= 0] = 0.00001
@@ -519,12 +519,12 @@ def alignsar_rename(cube):
     cube = _updatecube(cube, 'stc', newvarname = 'spatiotemporal_consistency',
                 unittext = 'mm',
                 desctext = 'Spatio-temporal consistency as minimum RMSE of double differences of time series in space and time between the pixel and adjacent pixels')
-    cube = _updatecube(cube, 'amp_dispersion_index',
-                unittext = 'unitless',
-                desctext = 'Amplitude dispersion index calculated as variance/mean of the amplitudes')
+    #cube = _updatecube(cube, 'amp_dispersion_index',
+    #            unittext = 'unitless',
+    #            desctext = 'Amplitude dispersion index calculated as variance/mean of the amplitudes')
     cube = _updatecube(cube, 'amp_stability_index',
                 unittext = 'unitless',
-                desctext = 'Amplitude stability calculated as 1 - mean/variance of the amplitudes (close to 0 = most stable)')
+                desctext = 'Amplitude stability calculated as 1 - mean/stddev of the amplitudes (close to 1 = most stable)')
     # tricky one - spatial coherence if in 4D cube
     cube = _updatecube(cube, 'spatial_coherence',
                 unittext = 'unitless',
