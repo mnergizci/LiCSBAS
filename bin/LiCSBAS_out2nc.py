@@ -297,8 +297,10 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         print('calculating mean amp and amp stab index')
         cube['amp_mean']=cube.amplitude.mean(dim='time')
         cube['amp_std']=cube.amplitude.std(dim='time')
-        cube['amp_dispersion_index']=(cube.amp_std**2)/cube['amp_mean']
-        cube['amp_stability_index'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
+        #cube['amp_dispersion_index']=(cube.amp_std**2)/cube['amp_mean']
+        cube['amp_dispersion_index'] = cube['amp_std'] / cube['amp_mean']
+        #cube['amp_stability_index'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
+        cube['amp_stability_index'] = 1 - (cube['amp_std'] / cube['amp_mean'])  # from 0-1, close to 0 = very stable
         cube['amp_stability_index'].values[cube['amp_stability_index'] <= 0] = 0.00001
     if docoh:
         # will set only 12 and 24 day cohs for now
