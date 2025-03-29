@@ -31,6 +31,8 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
 '''
 v1.1 20250201+ MN
  - adding tide and iono to the cube if exists.
+v1.2 2025+ ML
+ - some fixes towards AlignSAR cube
 v1.1 20241012+ ML
  - allowing extras for AlignSAR cube
 v1.05 20240420 ML
@@ -320,8 +322,10 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         print('calculating mean amp and amp stab index')
         cube['amp_mean']=cube.amplitude.mean(dim='time')
         cube['amp_std']=cube.amplitude.std(dim='time')
-        cube['amp_dispersion_index']=(cube.amp_std**2)/cube['amp_mean']
-        cube['amp_stability_index'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
+        #cube['amp_dispersion_index']=(cube.amp_std**2)/cube['amp_mean']
+        #cube['amp_dispersion_index'] = cube['amp_std'] / cube['amp_mean']
+        #cube['amp_stability_index'] = 1 - cube['amp_mean'] / (cube.amp_std ** 2)  # from 0-1, close to 0 = very stable
+        cube['amp_stability_index'] = 1 - (cube['amp_std'] / cube['amp_mean'])  # from 0-1, close to 0 = very stable
         cube['amp_stability_index'].values[cube['amp_stability_index'] <= 0] = 0.00001
     if docoh:
         # will set only 12 and 24 day cohs for now
@@ -400,6 +404,9 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
             # w.r.t. ref point 
             cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
             cube[varname] = cube[varname] - cube[varname][0]  # must be referred to the reference epoch (first epoch)
+            # change sign as sltd was radians of delay where POSITIVE means BIGGER DELAY (opposite to SLC phase)
+            # and after inversion, the increments [mm] are NEGATIVE for BIGGER DELAY (e.g. subsidence)
+            cube[varname] = cube[varname]*(-1)
         print('Getting residuals from filtering assuming atmo-correction')
         cumfile = os.path.join(tsdir, 'cum.h5')
         cumnf = xr.open_dataset(cumfile)
@@ -408,13 +415,13 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
         new_var = xr.DataArray(data=np.zeros((var.shape)).astype(np.float32), dims=var.dims)
         cube = cube.assign({varname: new_var.copy(deep=True)})
         new_var = None
-        cube[varname].values = cube['cum'].values - cumnf.cum.values
+        cube[varname].values = cumnf['cum'].values - cube['cum'].values
         #for i in range(len(cube.time)):
         #    cube[varname].isel(time=i)[:] = cube['cum'][i].values - cumnf.cum[i].values #np.flipud(cumnf.cum[i].values) # filt minus not filt
         # to same ref point (might have changed)
         cube[varname]=cube[varname]-cube[varname].sel(lon=cube.ref_lon, lat=cube.ref_lat, method='nearest')
         # 2024-10-14: after AlignSAR meeting: we should actually keep cum being unfiltered... thus changing here (lazy):
-        cube['cum'] = cube['cum'] - cube[varname]
+        cube['cum'] = cube['cum'] + cube[varname]
         # 2025-03: let's remove also GACOS corrections (?) -- but then we should store velocity etc. of such non-corrected data!
         if gacosremove:
             if 'atmosphere_external' in cube:
@@ -540,12 +547,12 @@ def alignsar_rename(cube):
     cube = _updatecube(cube, 'stc', newvarname = 'spatiotemporal_consistency',
                 unittext = 'mm',
                 desctext = 'Spatio-temporal consistency as minimum RMSE of double differences of time series in space and time between the pixel and adjacent pixels')
-    cube = _updatecube(cube, 'amp_dispersion_index',
-                unittext = 'unitless',
-                desctext = 'Amplitude dispersion index calculated as variance/mean of the amplitudes')
+    #cube = _updatecube(cube, 'amp_dispersion_index',
+    #            unittext = 'unitless',
+    #            desctext = 'Amplitude dispersion index calculated as variance/mean of the amplitudes')
     cube = _updatecube(cube, 'amp_stability_index',
                 unittext = 'unitless',
-                desctext = 'Amplitude stability calculated as 1 - mean/variance of the amplitudes (close to 0 = most stable)')
+                desctext = 'Amplitude stability calculated as 1 - mean/stddev of the amplitudes (close to 1 = most stable)')
     # tricky one - spatial coherence if in 4D cube
     cube = _updatecube(cube, 'spatial_coherence',
                 unittext = 'unitless',
@@ -711,7 +718,7 @@ def main(argv=None):
     #reference it
     if refarea_geo:
         #ref = cube.rio.clip_box(minrefx, minrefy, maxrefx, maxrefy)
-        ref = cube.sel(lon=slice(minrefx, maxrefx), lat=slice(minrefy, maxrefy))
+        ref = cube.sel(lon=slice(minrefx, maxrefx), lat=slice(maxrefy,minrefy))
         if len(ref.vel) == 0:
             print('warning, no points in the reference area - will export without referencing')
         else:
@@ -747,7 +754,7 @@ def main(argv=None):
     
     #only now will clip - this way the reference area can be outside the clip, if needed
     if cliparea_geo:
-        cube = cube.sel(lon=slice(minclipx, maxclipx), lat=slice(minclipy, maxclipy))
+        cube = cube.sel(lon=slice(minclipx, maxclipx), lat=slice(maxclipy, minclipy))
     
     if postfilter:
         #do filtered (it is nice)

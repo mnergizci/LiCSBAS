@@ -507,21 +507,26 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
   fi
 fi
 
+###TODO I know it is not tidy but I need to call them before step 14 for sbovl processing.
+##TODO right now is only consider to create absolute 
+if [ "$p13_sbovl" == "y" ]; then
+  p131_sbovl_abs='y'
+fi
+
+if [ "$p131_sbovl_abs" == "y" ]; then
+  extra='-t '$TSdir
+  if [ "$check_only" == "y" ];then
+    echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
+    echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'
+    echo "LiCSBAS131_boi_absolute.py $extra"
+  else
+    python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"
+    python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"
+    LiCSBAS131_boi_absolute.py $extra
+  fi
+fi
+
 if [ $start_step -le 14 -a $end_step -ge 14 ];then
-  
-  if [ "$p13_sbovl" == "y" ]; then
-    p131_sbovl_abs='y'
-  fi
-  
-  if [ "$p131_sbovl_abs" == "y" ]; then
-    extra='-t '$TSdir
-    if [ "$check_only" == "y" ];then
-      echo "LiCSBAS131_boi_absolute.py $extra"
-    else
-      LiCSBAS131_boi_absolute.py $extra
-    fi
-  fi
-  
   p14_op=""
   if [ ! -z $p14_TSdir ];then p14_op="$p14_op -t $p14_TSdir";
     else p14_op="$p14_op -t $TSdir"; fi

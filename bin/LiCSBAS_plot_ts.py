@@ -379,6 +379,24 @@ if __name__ == "__main__":
             iono = None
             print('No iono correction found in {}. Skip.'.format(cumfile))
   
+        # iono correction 2 (if exists) low ress CODE GIM    
+        try:
+            if 'geo.iono.code.sTECA.tif' in cumh5:
+                iono2 = cumh5['geo.iono.code.sTECA.tif'][:]
+                label_iono2 = 'Iono2 correction (sTECA)'
+                print('Second Ionospheric correction (sTECA) found.')
+            elif 'geo.iono.code.tif' in cumh5:
+                iono2 = cumh5['geo.iono.code.tif'][:]
+                label_iono2 = 'Iono2 correction (CODE)'
+                print('Second Ionospheric correction (CODE) found.')
+            else:
+                iono2 = None
+                print(f'No iono2 correction found in {cumfile}. Skip.')
+        except Exception as e:
+            iono2 = None
+            print(f'Error checking iono2 in {cumfile}: {e}')   
+            
+  
     if absolute:
         cum_abs = None
         vel = None
@@ -477,6 +495,9 @@ if __name__ == "__main__":
             tide_ref = tide[ix_m, :, :]
         if iono is not None:
             iono_ref = iono[ix_m, :, :]
+        if iono2 is not None:
+            iono2_ref = iono2[ix_m, :, :]
+        
     if absolute:
         if cum_abs is not None:
             cum_abs_ref = cum_abs[ix_m, :, :]
@@ -1116,7 +1137,18 @@ if __name__ == "__main__":
                     iono_adjusted = iono[:, ii, jj]-iono_ref[ii, jj]
                 # Plot adjusted iono correction
                 axts_corr.scatter(imdates_dt, iono_adjusted, label=label_iono, c='#800080', alpha=0.8, zorder=4, marker="^")  # Purple
-                axts_corr.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line      
+                axts_corr.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line 
+            
+            if iono2 is not None:
+                # Adjust iono2 correction by subtracting the reference value
+                if not absolute:
+                    iono2_ref_value = iono2_ref[ii, jj]-np.nanmean(iono2_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                    iono2_adjusted = iono2[:, ii, jj]-np.nanmean(iono2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - iono2_ref_value
+                else:
+                    iono2_adjusted = iono2[:, ii, jj]-iono2_ref[ii, jj]
+                # Plot adjusted iono2 correction
+                axts_corr.scatter(imdates_dt, iono2_adjusted, label=label_iono2, c='red', alpha=0.8, zorder=4, marker="p")  # Purple
+                axts_corr.plot(imdates_dt, iono2_adjusted, color='red', alpha=0.8, linestyle='-', zorder=4)  # Purple line       
             
             ##plot cum and cum_corr in the bottom panel
             ### cumfile
