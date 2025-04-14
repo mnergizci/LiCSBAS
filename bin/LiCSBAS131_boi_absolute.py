@@ -62,8 +62,11 @@ import h5py as h5
 import numpy as np
 import pandas as pd
 import datetime as dt
+import time
 #from LiCSBAS_out2nc import loadall2cube
 import daz_lib_licsar as dl
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 class Usage(Exception):
     """Usage context manager"""
@@ -76,7 +79,7 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
         
-        
+    start = time.time()    
     #%%Set defaults
     tsadir = ''
     cumfile = None
@@ -123,36 +126,101 @@ def main(argv=None):
     with h5.File(cumfile, 'r') as f:
         cum = f['cum'][()]
         imdates = f['imdates'][()].astype(str)
-        tide = f['tide'][()]
-        iono = f['iono'][()]
+        
+        # check if they exist.
+        tide_exists = 'tide' in f
+        iono_exists = 'iono' in f
+        
+        tide = f['tide'][()] if tide_exists else np.zeros_like(cum)
+        iono = f['iono'][()] if iono_exists else np.zeros_like(cum)
+        
 
     # Reference all to first epoch
     cum = cum - cum[0]
-    tide = tide - tide[0]
-    iono = iono - iono[0]
+    if tide_exists:
+        tide = tide - tide[0]
+    if iono_exists:
+        iono = iono - iono[0]
+    
 
     # Get daz correction (azimuth ionospheric delay)
     dazes = dl.get_daz_frame(frame)[['epoch', 'daz']]
     dazes['epoch'] = pd.to_datetime(dazes['epoch'])
     dazes['daz'] = dazes['daz'] * 14000  # Convert to mm (scale for azimuth geometry)
+    ##plotting daz and save
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.scatter(dazes['epoch'], dazes['daz'], color='red', alpha=0.6, s=20, label=frame)
 
+    # Set labels and grid
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('DAZ (mm)')
+    ax.legend(fontsize=8)
+    ax.grid(True)
+
+    # Force last date into x-ticks
+    last_date = dazes['epoch'].max()
+    xticks = list(ax.get_xticks())  # Default ticks
+    xticks.append(mdates.date2num(last_date))  # Add last date in float format
+    ax.set_xticks(sorted(set(xticks)))  # Ensure unique & sorted
+
+    # Use date formatter
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    fig.autofmt_xdate()  # Auto-format angle of date labels
+
+    # Save and show
+    fig.tight_layout()
+    plt.savefig(os.path.join(tsadir, f"{frame}_daz_plot.png"), dpi=150)
+    
     # Interpolate daz to match imdates
     df_daz = pd.DataFrame({'epoch': pd.to_datetime(imdates)})
     df_daz = df_daz.merge(dazes, on='epoch', how='left').sort_values('epoch')
+    #### checking the sizes is not fit.
+    df_daz = df_daz.drop_duplicates(subset='epoch')  # Just in case
+    if len(df_daz) != len(imdates):
+        raise ValueError(f"Mismatch in time steps after merge: imdates={len(imdates)}, df_daz={len(df_daz)}")
+    #####
+    
     df_daz['daz'] = df_daz['daz'].interpolate(method='nearest', limit_direction='both')
     daz = df_daz['daz'].to_numpy()
     daz = daz - daz[0]  # Align to first epoch
 
-    # Apply all corrections
-    cum_abs = cum + daz[:, None, None] - tide - iono
+    # Apply all corrections ##TODO save only final result when you satify with the results
+    cum_abs = cum + daz[:, None, None] # Add daz correction
+    # apply tide and iono corrections if they exists
     
-    print(f"Writing cum_abs to {cumfile} ...")
-    with h5.File(cumfile, 'r+') as f:
-        if 'cum_abs' in f:
-            del f['cum_abs']
-        f.create_dataset('cum_abs', data=cum_abs.astype('float32'), compression='gzip')
+    if tide_exists:
+        cum_abs_notide = cum_abs - tide
+    else:
+        cum_abs_notide = cum_abs.copy()
 
-    print("absolute BOI's saved successfully.")
+    if iono_exists:
+        cum_abs_notide_noiono = cum_abs_notide - iono   #if the no set is hthe applied notide_noiono represents the noiono
+    else:
+        cum_abs_notide_noiono = cum_abs_notide.copy()
+    
+    # Save corrected datasets
+    print(f"Writing corrected cumulative datasets to {cumfile} ...")
+    with h5.File(cumfile, 'r+') as f:
+        for name, data in {
+            'cum_abs': cum_abs,
+            'cum_abs_notide': cum_abs_notide,
+            'cum_abs_notide_noiono': cum_abs_notide_noiono
+        }.items():
+            if name in f:
+                del f[name]
+            f.create_dataset(name, data=data.astype('float32'), compression='gzip')
+        
+
+    #%% Finish
+    elapsed_time = time.time()-start
+    hour = int(elapsed_time/3600)
+    minite = int(np.mod((elapsed_time/60),60))
+    sec = int(np.mod(elapsed_time,60))
+    print("\nElapsed time: {0:02}h {1:02}m {2:02}s".format(hour,minite,sec))
+
+    print('\n{} Successfully finished!!\n'.format(os.path.basename(argv[0])))
+    # print('Output directory: {}\n'.format(os.path.relpath(tsadir)))
+
 #%% main
 if __name__ == "__main__":
     sys.exit(main())

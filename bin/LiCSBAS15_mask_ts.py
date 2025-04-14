@@ -339,7 +339,10 @@ def main(argv=None):
         thre_dict['n_gap_merged'] = thre_dict.pop('n_gap')
     
     #%% Read data
-    velfile = os.path.join(resultsdir,'vel')
+    if sbovl:
+        velfile = os.path.join(resultsdir,'vel_abs')
+    else:
+        velfile = os.path.join(resultsdir,'vel')
     vel = io_lib.read_img(velfile, length, width)
     bool_nan = np.isnan(vel)
     bool_nan[vel==0] = True ## Ref point. Unmask later
@@ -524,7 +527,10 @@ def main(argv=None):
 
     
     #%% Output vel.mskd and mask
-    velmskdfile = os.path.join(resultsdir,'vel.mskd')
+    if sbovl:
+        velmskdfile = os.path.join(resultsdir,'vel_abs.mskd')
+    else:    
+        velmskdfile = os.path.join(resultsdir,'vel.mskd')
     vel_mskd.tofile(velmskdfile)
 
     pngfile = velmskdfile+'.png'
