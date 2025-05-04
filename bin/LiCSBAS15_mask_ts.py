@@ -54,7 +54,7 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
  Default thresholds:
    C-band : -c 0.05 -u 1.5 -v 100 -T 1 -g 10 -s 5  -i 50 -l 5 -r 2
    L-band : -c 0.01 -u 1   -v 200 -T 1 -g 1  -s 10 -i 50 -l 1 -r 10
- 
+   SBOI   : -c 0.5 -u 0.5 -g 50 -s 20 -r 30 -i 1000 -L 0.5   
 """
 #%% Change log
 '''
@@ -340,7 +340,7 @@ def main(argv=None):
     
     #%% Read data
     if sbovl:
-        velfile = os.path.join(resultsdir,'vel_abs')
+        velfile = os.path.join(resultsdir,'vel_ransac_abs_notide_noiono')
     else:
         velfile = os.path.join(resultsdir,'vel')
     vel = io_lib.read_img(velfile, length, width)
@@ -528,7 +528,7 @@ def main(argv=None):
     
     #%% Output vel.mskd and mask
     if sbovl:
-        velmskdfile = os.path.join(resultsdir,'vel_abs.mskd')
+        velmskdfile = velfile + '.mskd'
     else:    
         velmskdfile = os.path.join(resultsdir,'vel.mskd')
     vel_mskd.tofile(velmskdfile)
