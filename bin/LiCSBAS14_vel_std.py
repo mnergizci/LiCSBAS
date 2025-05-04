@@ -91,12 +91,13 @@ def main(argv=None):
     cumfile = False
     skipexisting = False
     sbovl = False
+    bootnum = 100
     
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "ht:i:",
-                                       ["help", "mem_size=", "gpu", "ransac", "skipexisting", "sbovl"])
+                                       ["help", "mem_size=", "gpu", "ransac", "skipexisting", "sbovl", "bootnum="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -117,6 +118,8 @@ def main(argv=None):
                 skipexisting = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--bootnum':
+                bootnum = int(a)
 
 
         if not tsadir:
@@ -138,7 +141,6 @@ def main(argv=None):
     tsadir = os.path.abspath(tsadir)
     resultsdir = os.path.join(tsadir,'results')
 
-
     #%% Read data information
     if not cumfile:
         cumfile=os.path.join(tsadir,'cum.h5')
@@ -155,13 +157,13 @@ def main(argv=None):
     cum_keys = []
     if sbovl:
         # Process all three if sbovl (absolute) is specified
-        for k in ['cum_abs', 'cum_abs_notide', 'cum_abs_notide_noiono']:
+        for k in ['cum','cum_abs','cum_abs_notide','cum_abs_notide_noiono']:
             if k in cumh5:
                 cum_keys.append(k)
     else:
         # Default to 'cum' for standard processing
         cum_keys.append('cum')
-     
+
     # Loop through each dataset   
     for cum_key in cum_keys:
         print(f"\n=== Processing cumulative dataset: {cum_key} ===", flush=True)
@@ -217,7 +219,6 @@ def main(argv=None):
                 openmode = 'w' if i == 0 else 'a' #w only 1st patch
                 with open(stcfile, openmode) as f:
                     stc.tofile(f)
-
             if dovstd:
                 #%% Calc vstd
                 ### Read data for vstd
@@ -237,7 +238,7 @@ def main(argv=None):
 
                 print('  Calculating std of velocity by bootstrap...', flush=True)
                 vstd[bool_unnan_pt], bootvel[bool_unnan_pt] = inv_lib.calc_velstd_withnan(cum_patch, dt_cum,
-                                                                gpu=gpu)
+                                                                gpu=gpu, bootnum=bootnum)
 
                 ### Output data and image
 
@@ -265,7 +266,7 @@ def main(argv=None):
         if ransac:
             openmode = 'w'
             vel2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
-            intercept2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan
+            intercept2 = np.zeros((n_pt_all), dtype=np.float32)*np.nan            
             print('  Recalculating velocity using RANSAC algorithm... (not parallel now)', flush=True)
             '''
             for the next release:
@@ -281,20 +282,25 @@ def main(argv=None):
             cum_patch = cum_np.reshape((n_im, n_pt_all)).transpose()
             bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
             cum_patch = cum_patch[bool_unnan_pt, :]
-            vel2[bool_unnan_pt], intercept2[bool_unnan_pt] = inv_lib.get_vel_ransac(dt_cum, cum_patch, return_intercept=True)
+            vel2[bool_unnan_pt], intercept2[bool_unnan_pt], inlier_masks= inv_lib.get_vel_ransac(dt_cum, cum_patch, return_intercept=True)
+            # vstd_ransac[bool_unnan_pt]= inv_lib.calc_velstd_withnan_ransac(cum_patch, dt_cum, bootnum=bootnum)
             
             ### Output data and image
             # Use suffix to define filenames clearly per cumulative input
             if sbovl:
                 vel2file = os.path.join(resultsdir, f'vel_ransac{suffix}')
                 inter2file = os.path.join(resultsdir, f'intercept_ransac{suffix}')
+                # vstdfile = os.path.join(resultsdir, f'vstd_ransac{suffix}')
             else:
                 vel2file = os.path.join(resultsdir, f'vel2{suffix}')
                 inter2file = os.path.join(resultsdir, f'intercept2{suffix}')
+                # vstdfile = os.path.join(resultsdir, f'vstd2{suffix}')
             with open(vel2file, openmode) as f:
                 vel2.tofile(f)
             with open(inter2file, openmode) as f:
                 intercept2.tofile(f)
+            # with open(vstdfile, openmode) as f:
+            #     vstd_ransac.tofile(f)
                     
     #%% Close h5 file
     cumh5.close()

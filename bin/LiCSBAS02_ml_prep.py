@@ -210,8 +210,10 @@ def main(argv=None):
     #%% ENU
     for ENU in ['E', 'N', 'U']:
         print('\nCreate {}'.format(ENU+'.geo'), flush=True)
-        enutif = glob.glob(os.path.join(geocdir, '*.geo.{}.tif'.format(ENU)))
-
+        if sbovl:
+            enutif = glob.glob(os.path.join(geocdir, '*.geo.{}.azi.tif'.format(ENU)))
+        else:
+            enutif = glob.glob(os.path.join(geocdir, '*.geo.{}.tif'.format(ENU)))
         ### Download if not exist
         if len(enutif)==0:
             print('  No *.geo.{}.tif found in {}'.format(ENU, os.path.basename(geocdir)), flush=True)

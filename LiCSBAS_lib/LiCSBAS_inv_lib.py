@@ -57,7 +57,7 @@ try:
     from sklearn.linear_model import RANSACRegressor
 except:
     print('not loading RANSAC (optional experimental function)')
-
+from sklearn.utils import resample
 
 #debugmode = True
 #print('inversion runs in debug mode - please inform Milan if this works now')
@@ -792,18 +792,19 @@ def get_vel_ransac(dt_cum, cumm, return_intercept=False):
             reg = RANSACRegressor().fit(X[mask],y[mask])   # the implementation is fine, parameters should be quite robust
             # yet, one may check parameters max_trials[=100]
             vel2[i] = reg.estimator_.coef_[0]
+            inlier_mask = reg.inlier_mask_
             if return_intercept:
                 intercept2[i] = reg.estimator_.intercept_ # if needed..
     
     print('')
     if return_intercept:
-        return vel2 , intercept2
+        return vel2 , intercept2, inlier_mask
     else:
         return vel2
 
 
 #%%
-def calc_velstd_withnan(cum, dt_cum, gpu=False):
+def calc_velstd_withnan(cum, dt_cum, gpu=False, bootnum=100):
     """
     Calculate std of velocity by bootstrap for each point which may include nan.
 
@@ -817,9 +818,9 @@ def calc_velstd_withnan(cum, dt_cum, gpu=False):
       vstd   : Std of Velocity for each point (n_pt)
       vel   : median of bootstrapped velocity (n_pt)
     """
-    global bootcount, bootnum
+    global bootcount
     n_pt, n_im = cum.shape
-    bootnum = 100
+    bootnum = bootnum
     bootcount = 0
 
     vstd = np.zeros((n_pt), dtype=np.float32)
@@ -831,7 +832,7 @@ def calc_velstd_withnan(cum, dt_cum, gpu=False):
     data[np.isnan(data)] = 0
 
     velinv = lambda x : censored_lstsq2(G[x, :], data[x, :], mask[x, :],
-                                        gpu=gpu)[1]
+                                        gpu=gpu, bootnum=bootnum)[1]
 
     with NumpyRNGContext(1):
         bootresult = bootstrap(ixs_day, bootnum, bootfunc=velinv)
@@ -844,9 +845,9 @@ def calc_velstd_withnan(cum, dt_cum, gpu=False):
     return vstd, vel
 
 
-def censored_lstsq2(A, B, M, gpu=False):
+def censored_lstsq2(A, B, M, gpu=False, bootnum=100):
     ## http://alexhwilliams.info/itsneuronalblog/2018/02/26/censored-lstsq/
-    global bootcount, bootnum
+    global bootcount
     if gpu:
         import cupy as xp
         A = xp.asarray(A)
@@ -884,6 +885,54 @@ def censored_lstsq2(A, B, M, gpu=False):
 
     return X
 
+# def calc_velstd_withnan_ransac(cum, dt_cum, bootnum=100):
+#     """
+#     This is more logical but takes ages. MN    
+#     Calculate std of velocity using RANSAC + bootstrap, handling NaNs.
+
+#     Inputs:
+#       cum    : Cumulative displacement (n_pt, n_im)
+#       dt_cum : Time in days or years (n_im,)
+#       bootnum: Number of bootstrap samples
+
+#     Returns:
+#       vstd   : Standard deviation of RANSAC velocity (n_pt,)
+#     """
+#     n_pt, n_im = cum.shape
+#     vstd = np.full(n_pt, np.nan, dtype=np.float32)
+#     X_full = dt_cum.reshape(-1, 1)
+
+#     for i in range(n_pt):
+#         y = cum[i]
+#         mask = ~np.isnan(y)
+#         if mask.sum() < 2:
+#             continue  # Skip if not enough valid points
+
+#         X_valid = X_full[mask]
+#         y_valid = y[mask]
+#         boot_slopes = []
+
+#         for _ in range(bootnum):
+#             try:
+#                 idx = resample(np.arange(len(X_valid)))
+#                 X_sample = X_valid[idx]
+#                 y_sample = y_valid[idx]
+
+#                 reg = RANSACRegressor().fit(X_sample, y_sample)
+#                 slope = reg.estimator_.coef_[0]
+#                 boot_slopes.append(slope if np.isfinite(slope) else np.nan)
+#             except:
+#                 boot_slopes.append(np.nan)
+
+#         boot_slopes = np.array(boot_slopes)
+#         if np.sum(~np.isnan(boot_slopes)) > 1:
+#             vstd[i] = np.nanstd(boot_slopes)
+
+#         if i % 100 == 0:
+#             print(f"\r  RANSAC bootstrap {i}/{n_pt}", end='', flush=True)
+
+#     print('')
+#     return vstd
 
 #%%
 def calc_stc(cum, gpu=False):
