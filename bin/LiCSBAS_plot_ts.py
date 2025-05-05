@@ -396,25 +396,38 @@ if __name__ == "__main__":
             iono2 = None
             print(f'Error checking iono2 in {cumfile}: {e}')   
             
-  
+    # breakpoint()
     if absolute:
         cum_abs = None
         vel = None
-
+        # breakpoint()
         # Check for absolute displacement
-        try:
-            cum_abs = cumh5['cum_abs']
-            label_abs = 'Absolute displacement'
+        if 'cum_abs_notide_noiono' in cumh5:
+            cum_abs = cumh5['cum_abs_notide_noiono'][()]
+            print('Absolute displacement (cum_abs_notide_noiono) found.')
+        elif 'cum_abs_notide' in cumh5:
+            cum_abs = cumh5['cum_abs_notide'][()]
+            print('Absolute displacement (cum_abs_notide) found.')
+        elif 'cum_abs' in cumh5:
+            cum_abs = cumh5['cum_abs'][()]
             print('Absolute displacement (cum_abs) found.')
-        except KeyError:
+        else:
+            cum_abs = None
             print('No absolute displacement (cum_abs) found in {}. Skip.'.format(cumfile))
 
         # Check for absolute velocity
-        try:
+        if 'vel_abs_notide_noiono' in cumh5:
+            vel = cumh5['vel_abs_notide_noiono']
+            print('Absolute velocity (vel_abs_notide_noiono) found.')
+        elif 'vel_abs_notide' in cumh5:
+            vel = cumh5['vel_abs_notide']
+            print('Absolute velocity (vel_abs_notide) found.')
+        elif 'vel_abs' in cumh5:
             vel = cumh5['vel_abs']
             print('Absolute velocity (vel_abs) found.')
-        except KeyError:
-            print('No absolute velocity (vel_abs) found in {}.'.format(cumfile))          
+        else:
+            vel = None
+            print('No absolute velocity found in {}.'.format(cumfile))        
    
     ### Set initial ref area
     if refarea:
@@ -504,32 +517,67 @@ if __name__ == "__main__":
             
     ### cumfile2
     if cumfile2:
-        print('Reading {} as 2nd'.format(os.path.relpath(cumfile2)))
-        cumh52 = h5.File(cumfile2,'r')
-
-        try:
-            cum2 = cumh52['cum']
-        except:
-            cum2 = cumh52['cum_model']
-            print('loading model cum data')
-
-        cum2_ref = cum2[ix_m, :, :]
-        vel2 = cumh52['vel']
-
-        if 'deramp_flag' in list(cumh52.keys()):
-            deramp_flag2 = cumh52['deramp_flag'][()]
-            if len(deramp_flag2) == 0: # no deramp
-                deramp2 = ''
+        if absolute:  #SBOI scenario for InSAR LoS plotting
+            print('Reading {} as 2nd'.format(os.path.relpath(cumfile2)))
+            cumh52 = h5.File(cumfile2,'r')
+            if 'cum_abs_notide_noiono' in cumh52:
+                cum2 = cumh52['cum_abs_notide_noiono'][()]
+                vel2 = cumh52['vel_abs_notide_noiono'][()]
+                print('Absolute displacement (cum_abs_notide_noiono) found.')
+            elif 'cum_abs_notide' in cumh52:
+                cum2 = cumh52['cum_abs_notide'][()]
+                vel2 = cumh52['vel_abs_notide'][()]
+                print('Absolute displacement (cum_abs_notide) found.')
+            elif 'cum_abs' in cumh52:
+                cum2 = cumh52['cum_abs'][()]
+                vel2 = cumh52['vel_abs'][()]
+                print('Absolute displacement (cum_abs) found.')
             else:
-                deramp2 = ', drmp={}'.format(deramp_flag2)
-            filtwidth_km2 = float(cumh52['filtwidth_km'][()])
-            filtwidth_yr2 = float(cumh52['filtwidth_yr'][()])
-            filtwidth_day2 = int(np.round(filtwidth_yr2*365.25))
-            label2 = '2: s={:.1f}km, t={:.2f}yr ({}d){}'.format(filtwidth_km2, filtwidth_yr2, filtwidth_day2, deramp2)
-        else:
-            label2 = '2: No filter'
+                cum2 = None
+                vel2 = None
+                print('No absolute displacement (cum_abs) found in {}. Skip.'.format(cumfile))
+            
+            cum2_ref = cum2[ix_m, :, :]
 
+            if 'deramp_flag' in list(cumh52.keys()):
+                deramp_flag2 = cumh52['deramp_flag'][()]
+                if len(deramp_flag2) == 0: # no deramp
+                    deramp2 = ''
+                else:
+                    deramp2 = ', drmp={}'.format(deramp_flag2)
+                filtwidth_km2 = float(cumh52['filtwidth_km'][()])
+                filtwidth_yr2 = float(cumh52['filtwidth_yr'][()])
+                filtwidth_day2 = int(np.round(filtwidth_yr2*365.25))
+                label2 = '2: s={:.1f}km, t={:.2f}yr ({}d){}'.format(filtwidth_km2, filtwidth_yr2, filtwidth_day2, deramp2)
+            else:
+                label2 = '2: No filter'
+                
+        else: ###Normal scenerio for InSAR LoS plotting
+            print('Reading {} as 2nd'.format(os.path.relpath(cumfile2)))
+            cumh52 = h5.File(cumfile2,'r')
 
+            try:
+                cum2 = cumh52['cum']
+            except:
+                cum2 = cumh52['cum_model']
+                print('loading model cum data')
+
+            cum2_ref = cum2[ix_m, :, :]
+            vel2 = cumh52['vel']
+
+            if 'deramp_flag' in list(cumh52.keys()):
+                deramp_flag2 = cumh52['deramp_flag'][()]
+                if len(deramp_flag2) == 0: # no deramp
+                    deramp2 = ''
+                else:
+                    deramp2 = ', drmp={}'.format(deramp_flag2)
+                filtwidth_km2 = float(cumh52['filtwidth_km'][()])
+                filtwidth_yr2 = float(cumh52['filtwidth_yr'][()])
+                filtwidth_day2 = int(np.round(filtwidth_yr2*365.25))
+                label2 = '2: s={:.1f}km, t={:.2f}yr ({}d){}'.format(filtwidth_km2, filtwidth_yr2, filtwidth_day2, deramp2)
+            else:
+                label2 = '2: No filter'
+    # breakpoint()
     #%% Read Mask (1: unmask, 0: mask, nan: no cum data)
     mask_base = np.ones((length, width), dtype=np.float32)
     mask_base[np.isnan(cum[ix_m, :, :])] = np.nan
@@ -1174,26 +1222,26 @@ if __name__ == "__main__":
                 axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
                 axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
             
-            ##cum_uncorrected
-            # if not cumfile2: ## I assumed the cumfile2 also include the correction, therefore I skip that to avoid dublication ## I dublicate right now to make sure cum_filt.h5 is correct.
-            dph_uncorr = dph.copy()
-            if tide is not None:
-                dph_uncorr += tide_adjusted
-            if iono is not None:
-                dph_uncorr += iono_adjusted
+            # ##cum_uncorrected
+            # # if not cumfile2: ## I assumed the cumfile2 also include the correction, therefore I skip that to avoid dublication ## I dublicate right now to make sure cum_filt.h5 is correct.
+            # dph_uncorr = dph.copy()
+            # if tide is not None:
+            #     dph_uncorr += tide_adjusted
+            # if iono is not None:
+            #     dph_uncorr += iono_adjusted
                 
-            #Compute corrected velocity (vel_uncorr)
-            vel_uncorr = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_uncorr, 1)[0] * 365.25  # Convert to mm/yr
+            # #Compute corrected velocity (vel_uncorr)
+            # vel_uncorr = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_uncorr, 1)[0] * 365.25  # Convert to mm/yr
             
-            #Fit function for corrected disp
-            lines_corr = [0, 0, 0, 0]
-            for model, vis in enumerate(visibilities):
-                yvalues_corr = calc_model(dph_uncorr, imdates_ordinal, xvalues, model)
-                if not novel_flag:
-                    lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, '#00CC00', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
+            # #Fit function for corrected disp
+            # lines_corr = [0, 0, 0, 0]
+            # for model, vis in enumerate(visibilities):
+            #     yvalues_corr = calc_model(dph_uncorr, imdates_ordinal, xvalues, model)
+            #     if not novel_flag:
+            #         lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, '#00CC00', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
                 
-            axts.scatter(imdates_dt, dph_uncorr, label='uncorrected_cum', c='#00CC00', alpha=0.8, zorder=5, marker="s")  # Cyan markers
-            axts.set_title('vel(1) = {:.1f} mm/yr, vel(uncor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_uncorr, jj, ii), fontsize=10)
+            # axts.scatter(imdates_dt, dph_uncorr, label='uncorrected_cum', c='#00CC00', alpha=0.8, zorder=5, marker="s")  # Cyan markers
+            # axts.set_title('vel(1) = {:.1f} mm/yr, vel(uncor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_uncorr, jj, ii), fontsize=10)
             
             ### cumfile2
             if cumfile2:
