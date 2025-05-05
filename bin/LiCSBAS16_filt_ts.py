@@ -619,32 +619,34 @@ def main(argv=None):
 
     # breakpoint()
     #%% Find stable ref point
-    print('\nFind stable reference point...', flush=True)
-    ### Compute RMS of time series with reference to all points
-    sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
-    for i in range(n_im):
-        sumsq_cum_wrt_med = sumsq_cum_wrt_med + (cum_filt[i, :, :]-np.nanmedian(cum_filt[i, :, :]))**2
-        ### we do not want ref point to contain nans
-        sumsq_cum_wrt_med[np.isnan(cum[i, :, :])] = np.nan
-    rms_cum_wrt_med = np.sqrt(sumsq_cum_wrt_med/n_im)*mask
+    if not sbovl: 
+        print('\nFind stable reference point...', flush=True)
+        ### Compute RMS of time series with reference to all points
+        sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
+        for i in range(n_im):
+            sumsq_cum_wrt_med = sumsq_cum_wrt_med + (cum_filt[i, :, :]-np.nanmedian(cum_filt[i, :, :]))**2
+            ### we do not want ref point to contain nans
+            sumsq_cum_wrt_med[np.isnan(cum[i, :, :])] = np.nan
+        rms_cum_wrt_med = np.sqrt(sumsq_cum_wrt_med/n_im)*mask
 
-    ### Mask by minimum n_gap
-    n_gap = io_lib.read_img(os.path.join(resultsdir, 'n_gap'), length, width)
-    min_n_gap = np.nanmin(n_gap)
-    mask_n_gap = np.float32(n_gap==min_n_gap)
-    mask_n_gap[mask_n_gap==0] = np.nan
-    rms_cum_wrt_med = rms_cum_wrt_med*mask_n_gap
+        ### Mask by minimum n_gap
+        n_gap = io_lib.read_img(os.path.join(resultsdir, 'n_gap'), length, width)
+        min_n_gap = np.nanmin(n_gap)
+        mask_n_gap = np.float32(n_gap==min_n_gap)
+        mask_n_gap[mask_n_gap==0] = np.nan
+        rms_cum_wrt_med = rms_cum_wrt_med*mask_n_gap
+        #breakpoint()
+        #TODO I have closed here as I get some nan errors for SBOI rms_cum_wrt_med = nan,  refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index IndexError: index 0 is out of bounds for axis 0 with size 0
+        ### Find stable reference
+        min_rms = np.nanmin(rms_cum_wrt_med)
+        refy1s, refx1s = np.where(rms_cum_wrt_med==min_rms)
+        refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index
+        refy2s, refx2s = refy1s+1, refx1s+1
+        print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
 
-    ### Find stable reference
-    min_rms = np.nanmin(rms_cum_wrt_med)
-    refy1s, refx1s = np.where(rms_cum_wrt_med==min_rms)
-    refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index
-    refy2s, refx2s = refy1s+1, refx1s+1
-    print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
-
-    # Cleaning memory - means need to get the refpoint_cum_org first
-    refpoint_cum_org = cum[:, refy1s, refx1s]
-    del cum
+        # Cleaning memory - means need to get the refpoint_cum_org first
+        refpoint_cum_org = cum[:, refy1s, refx1s]
+        del cum
 
     # adding back model to the filtered residuals
     if inputresidflag:
@@ -662,25 +664,25 @@ def main(argv=None):
     else:
         print('Skipping back referencing to stable point for SBOI')
 
-    ### Save image
-    rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
-    with open(rms_cum_wrt_med_file, 'w') as f:
-        rms_cum_wrt_med.tofile(f)
+    if not sbovl: ##TODO I have closed here as I get some nan errors for SBOI 
+        ### Save image
+        rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
+        with open(rms_cum_wrt_med_file, 'w') as f:
+            rms_cum_wrt_med.tofile(f)
+        pngfile = os.path.join(infodir, '16rms_cum_wrt_med.png')
+        plot_lib.make_im_png(rms_cum_wrt_med, pngfile, cmap_noise_r, 'RMS of cum wrt median (mm)', np.nanpercentile(rms_cum_wrt_med, 1), np.nanpercentile(rms_cum_wrt_med, 99))
 
-    pngfile = os.path.join(infodir, '16rms_cum_wrt_med.png')
-    plot_lib.make_im_png(rms_cum_wrt_med, pngfile, cmap_noise_r, 'RMS of cum wrt median (mm)', np.nanpercentile(rms_cum_wrt_med, 1), np.nanpercentile(rms_cum_wrt_med, 99))
+        ### Save ref
+        cumfh5.create_dataset('refarea', data='{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s))
+        refsfile = os.path.join(infodir, '16ref.txt')
+        with open(refsfile, 'w') as f:
+            print('{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), file=f)
 
-    ### Save ref
-    cumfh5.create_dataset('refarea', data='{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s))
-    refsfile = os.path.join(infodir, '16ref.txt')
-    with open(refsfile, 'w') as f:
-        print('{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), file=f)
-
-    if 'corner_lat' in list(cumh5.keys()): ## Geocoded
-        ### Make ref_stable.kml
-        reflat = lat1+dlat*refy1s
-        reflon = lon1+dlon*refx1s
-        io_lib.make_point_kml(reflat, reflon, os.path.join(infodir, '16ref.kml'))
+        if 'corner_lat' in list(cumh5.keys()): ## Geocoded
+            ### Make ref_stable.kml
+            reflat = lat1+dlat*refy1s
+            reflon = lon1+dlon*refx1s
+            io_lib.make_point_kml(reflat, reflon, os.path.join(infodir, '16ref.kml'))
 
 
     #%% Calc filtered velocity
