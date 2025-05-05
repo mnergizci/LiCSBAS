@@ -284,7 +284,7 @@ def main(argv=None):
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
 
-
+    # breakpoint()
     #%% Directory and file setting
     tsadir = os.path.abspath(tsadir)
     cumfile = os.path.join(tsadir, cumname)
@@ -320,18 +320,34 @@ def main(argv=None):
 
     cumffile = os.path.join(tsadir, 'cum_filt.h5')
 
+    #standard format
     vconstfile = os.path.join(resultsdir, 'vintercept.filt')
     velfile = os.path.join(resultsdir, 'vel.filt')
 
-    cumh5 = h5.File(cumfile,'r')
+    cumh5 = h5.File(cumfile,'r')  ##open cum.h5 to read non-filtered data
 
     if os.path.exists(cumffile): os.remove(cumffile)
-    cumfh5 = h5.File(cumffile,'w')
+    cumfh5 = h5.File(cumffile,'w') #open cum_filt.h5 to write filtered data
 
-
+    # breakpoint()
     #%% Dates
     imdates = cumh5['imdates'][()].astype(str).tolist()
-    cum_org = cumh5['cum'][()]
+    if sbovl:
+        print('SBOI mode activated.')
+        if 'cum_abs_notide_noiono' in cumh5:
+            cum_org = cumh5['cum_abs_notide_noiono'][()]
+            sbovl_suffix = '_abs_notide_noiono'
+        elif 'cum_abs_notide' in cumh5:
+            cum_org = cumh5['cum_abs_notide'][()]
+            sbovl_suffix = '_abs_notide'
+        else:
+            cum_org = cumh5['cum_abs'][()]
+            sbovl_suffix = '_abs'
+        ##redefine the output files
+        vconstfile = os.path.join(resultsdir, f'vintercept_ransac{sbovl_suffix}.filt')
+        velfile = os.path.join(resultsdir, f'vel_ransac{sbovl_suffix}.filt')
+    else:
+        cum_org = cumh5['cum'][()]
     n_im, length, width = cum_org.shape
 
     if n_para > n_im:
@@ -455,7 +471,7 @@ def main(argv=None):
         print('range: {}'.format(range_str), file=f)
         print('ex_range: {}'.format(ex_range_str), file=f)
 
-
+    # breakpoint()
     #%% Load Mask (1: unmask, 0: mask, nan: no cum data)
     if maskflag:
         maskfile = os.path.join(resultsdir, 'mask')
@@ -469,11 +485,11 @@ def main(argv=None):
         mask = np.ones((length, width), dtype=np.float32)
         mask[np.isnan(cum_org[0, :, :])] = np.nan
 
-
+    
     #%% First, deramp and hgt-linear if indicated
     cum = np.zeros(cum_org.shape, dtype=np.float32)*np.nan
     if not deg_ramp and not hgt_linearflag:
-        cum = cum_org
+        cum = cum_org  #TODO check here again.
         del cum_org
     else:
         if not deg_ramp:
@@ -601,6 +617,7 @@ def main(argv=None):
         # not filtering
         cum_filt = cum
 
+    # breakpoint()
     #%% Find stable ref point
     print('\nFind stable reference point...', flush=True)
     ### Compute RMS of time series with reference to all points
@@ -643,7 +660,7 @@ def main(argv=None):
         for i in range(n_im):
             cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
     else:
-        print('Skipping back referencing to stable point for SBOI?')
+        print('Skipping back referencing to stable point for SBOI')
 
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
@@ -708,10 +725,15 @@ def main(argv=None):
     if maskflag:
         print('\n(masked version)', flush=True)
         cum_filt = cum_filt * mask[np.newaxis, :, :]
-
-    cumfh5.create_dataset('vel', data=vel.reshape(length, width)*mask, compression=compress)
-    cumfh5.create_dataset('vintercept', data=vconst.reshape(length, width)*mask, compression=compress)
-    cumfh5.create_dataset('cum', data=cum_filt, compression=compress)
+    # breakpoint()
+    if sbovl:
+        cumfh5.create_dataset('vel' + sbovl_suffix, data=vel.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('vintercept' + sbovl_suffix, data=vconst.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('cum' + sbovl_suffix, data=cum_filt, compression=compress)
+    else:
+        cumfh5.create_dataset('vel', data=vel.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('vintercept', data=vconst.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('cum', data=cum_filt, compression=compress)
 
 
     #%% Add info and close
@@ -743,16 +765,22 @@ def main(argv=None):
     cumh5.close()
     cumfh5.close()
 
-
+    # breakpoint()
     #%% Output image
-    pngfile = os.path.join(resultsdir,'vel.filt.png')
+    if sbovl:
+        pngfile = os.path.join(resultsdir,f'vel_ransac{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+    else:
+        pngfile = os.path.join(resultsdir,'vel.filt.png')
     title = 'Filtered velocity (mm/yr)'
     vmin = np.nanpercentile(vel, 1)
     vmax = np.nanpercentile(vel, 99)
     plot_lib.make_im_png(vel, pngfile, cmap_vel, title, vmin, vmax)
 
     ## vintercept
-    pngfile = os.path.join(resultsdir,'vintercept.filt.png')
+    if sbovl:
+        pngfile = os.path.join(resultsdir,f'vintercept_ransac{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+    else:
+        pngfile = os.path.join(resultsdir,'vintercept.filt.png')
     title = 'Intercept of filtered velocity (mm)'
     vmin = np.nanpercentile(vconst, 1)
     vmax = np.nanpercentile(vconst, 99)
@@ -767,14 +795,20 @@ def main(argv=None):
 
 
     if maskflag:
-        pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
+        if sbovl:
+            pngfile = os.path.join(resultsdir,f'vel_ransac{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+        else:
+            pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
         title = 'Masked filtered velocity (mm/yr)'
         vmin = np.nanpercentile(vel_mskd, 1)
         vmax = np.nanpercentile(vel_mskd, 99)
         plot_lib.make_im_png(vel_mskd, pngfile, cmap_vel, title, vmin, vmax)
 
         ## vintercept
-        pngfile = os.path.join(resultsdir,'vintercept.filt.mskd.png')
+        if sbovl:
+            pngfile = os.path.join(resultsdir,f'vintercept_ransac{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+        else:
+            pngfile = os.path.join(resultsdir,'vintercept.filt.mskd.png')
         title = 'Masked intercept of filtered velocity (mm)'
         vmin = np.nanpercentile(vconst_mskd, 1)
         vmax = np.nanpercentile(vconst_mskd, 99)
@@ -883,6 +917,7 @@ def filter_wrapper(i):
 
     ### Second, HP in time
     if filtwidth_yr == 0.0:
+        # print('No temporal filter applied', flush=True)
         cum_hpt = cum[i, :, :] ## No temporal filter
     else:
         time_diff_sq = (dt_cum[i]-dt_cum)**2
