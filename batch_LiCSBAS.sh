@@ -596,7 +596,7 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z "$p16_ex_range" ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
   if [ ! -z "$p16_ex_range_geo" ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
   if [ "$p16_interpolate_nans" == "y" ] && [ "$p16_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
-  if [ "$p16_sbovl" == "y" ];then p16_op="$p16_op --sbovl --nofilter"; fi
+  # if [ "$p16_sbovl" == "y" ];then p16_op="$p16_op --sbovl --nofilter"; fi
   if [ "$p16_skippngs" == "y" ];then p16_op="$p16_op --nopngs"; fi
 
   if [ "$eqoffs" == "y" ]; then
