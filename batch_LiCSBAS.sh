@@ -514,7 +514,7 @@ if [ "$p13_sbovl" == "y" ]; then
 fi
 
 if [ "$p131_sbovl_abs" == "y" ]; then
-  extra='-t '$TSdir
+  extra="-t $TSdir --model"
   if [ "$check_only" == "y" ];then
     echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
     echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'

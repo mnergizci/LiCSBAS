@@ -19,14 +19,15 @@ have already been estimated using `daz_lib_licsar`.
 =====
 Usage
 =====
-apply_daz_to_cum.py -t TS_DIR [-i cum_file]
+LiCSBAS131_boi_absolute.py -t TS_DIR [-i cum_file] [--model]
 
  -t    Path to the LiCSBAS time-series directory (e.g., TS_GEOCml10)     [REQUIRED]
  -i    Name of the cumulative HDF5 file to process (default: cum.h5)     [OPTIONAL]
+ --model Use RANSAC model for daz values (default: False)                [OPTIONAL]
 
 Example:
 --------
-python apply_daz_to_cum.py -t /path/to/TS_GEOCml10
+python LiCSBAS131_boi_absolute.py -t TS_GEOCml10 [--model]
 
 This will:
  - Load the `cum.h5` time-series file from the specified folder
@@ -67,6 +68,7 @@ import time
 import daz_lib_licsar as dl
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from sklearn.linear_model import RANSACRegressor, LinearRegression
 
 class Usage(Exception):
     """Usage context manager"""
@@ -83,10 +85,10 @@ def main(argv=None):
     #%%Set defaults
     tsadir = ''
     cumfile = None
-    
+    model = False
     #%% Read options
     try:
-        opts, _ = getopt.getopt(argv[1:], "ht:i:", ["help"])
+        opts, _ = getopt.getopt(argv[1:], "ht:i:", ["help", "model"])
         for o, a in opts:
             if o in ("-h", "--help"):
                 print(__doc__)
@@ -95,6 +97,8 @@ def main(argv=None):
                 tsadir = a
             elif o == "-i":
                 cumfile = a
+            elif o == "--model":
+                model = True
 
         if not tsadir:
             raise Usage("TS directory not given. Use -t to specify.")
@@ -122,6 +126,7 @@ def main(argv=None):
         
     #%%Read cum.h5, add daz values and remove tide and iono corrections
     print(f"Reading cum.h5 from: {cumfile}")
+    # breakpoint()
     # Load data
     with h5.File(cumfile, 'r') as f:
         cum = f['cum'][()]
@@ -147,9 +152,42 @@ def main(argv=None):
     dazes = dl.get_daz_frame(frame)[['epoch', 'daz']]
     dazes['epoch'] = pd.to_datetime(dazes['epoch'])
     dazes['daz'] = dazes['daz'] * 14000  # Convert to mm (scale for azimuth geometry)
+    
+    # Interpolate daz to match imdates
+    df_daz = pd.DataFrame({'epoch': pd.to_datetime(imdates)})
+    df_daz = df_daz.merge(dazes, on='epoch', how='left').sort_values('epoch')
+    #### checking the sizes is not fit.
+    df_daz = df_daz.drop_duplicates(subset='epoch')  # Just in case
+    if len(df_daz) != len(imdates):
+        raise ValueError(f"Mismatch in time steps after merge: imdates={len(imdates)}, df_daz={len(df_daz)}")
+    #####
+    df_daz['daz'] = df_daz['daz'].interpolate(method='nearest', limit_direction='both')
+    
+    ##Modelling the daz values with RANSAC
+    # Convert epoch to numeric time in days
+    t0 = df_daz['epoch'].min()
+    df_daz['days'] = (df_daz['epoch'] - t0).dt.days
+
+    X = df_daz['days'].values.reshape(-1, 1)
+    y = df_daz['daz'].values
+    mask = ~np.isnan(y)
+
+    # Fit RANSAC
+    if np.sum(mask) < 2:
+        vel_ransac = np.nan
+        intercept_ransac = np.nan
+        df_daz['daz_model'] = np.nan
+    else:
+        reg = RANSACRegressor(base_estimator=LinearRegression()).fit(X[mask], y[mask])
+        vel_ransac = reg.estimator_.coef_[0]
+        intercept_ransac = reg.estimator_.intercept_
+        df_daz['daz_model'] = reg.predict(X)  # model prediction for all dates
+    
     ##plotting daz and save
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.scatter(dazes['epoch'], dazes['daz'], color='red', alpha=0.6, s=20, label=frame)
+    ax.scatter(df_daz['epoch'], df_daz['daz'], color='red', alpha=0.6, s=20, label=frame)
+    if 'daz_model' in df_daz:
+        ax.plot(df_daz['epoch'], df_daz['daz_model'], '-', color='blue', lw=2, label='RANSAC Model')
 
     # Set labels and grid
     ax.set_xlabel('Epoch')
@@ -158,7 +196,7 @@ def main(argv=None):
     ax.grid(True)
 
     # Force last date into x-ticks
-    last_date = dazes['epoch'].max()
+    last_date = df_daz['epoch'].max()
     xticks = list(ax.get_xticks())  # Default ticks
     xticks.append(mdates.date2num(last_date))  # Add last date in float format
     ax.set_xticks(sorted(set(xticks)))  # Ensure unique & sorted
@@ -171,19 +209,17 @@ def main(argv=None):
     fig.tight_layout()
     plt.savefig(os.path.join(tsadir, f"{frame}_daz_plot.png"), dpi=150)
     
-    # Interpolate daz to match imdates
-    df_daz = pd.DataFrame({'epoch': pd.to_datetime(imdates)})
-    df_daz = df_daz.merge(dazes, on='epoch', how='left').sort_values('epoch')
-    #### checking the sizes is not fit.
-    df_daz = df_daz.drop_duplicates(subset='epoch')  # Just in case
-    if len(df_daz) != len(imdates):
-        raise ValueError(f"Mismatch in time steps after merge: imdates={len(imdates)}, df_daz={len(df_daz)}")
-    #####
-    
-    df_daz['daz'] = df_daz['daz'].interpolate(method='nearest', limit_direction='both')
-    daz = df_daz['daz'].to_numpy()
-    daz = daz - daz[0]  # Align to first epoch
-
+    ##Extract daz values from the dataframe
+    # breakpoint()    
+    if model:
+        print('RANSAC model is used for daz values')
+        daz = df_daz['daz_model'].to_numpy()
+        daz = daz - daz[0]  # Align to first epoch
+    else:
+        print('Original data is used for daz values')
+        daz = df_daz['daz'].to_numpy()
+        daz = daz - daz[0]  # Align to first epoch
+    # breakpoint()
     # Apply all corrections ##TODO save only final result when you satify with the results
     cum_abs = cum + daz[:, None, None] # Add daz correction
     # apply tide and iono corrections if they exists
@@ -197,7 +233,7 @@ def main(argv=None):
         cum_abs_notide_noiono = cum_abs_notide - iono   #if the no set is hthe applied notide_noiono represents the noiono
     else:
         cum_abs_notide_noiono = cum_abs_notide.copy()
-    
+    # breakpoint()
     # Save corrected datasets
     print(f"Writing corrected cumulative datasets to {cumfile} ...")
     with h5.File(cumfile, 'r+') as f:
