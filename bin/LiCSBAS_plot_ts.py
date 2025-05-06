@@ -198,13 +198,14 @@ if __name__ == "__main__":
     absolute= False
     correction_flag = False
     novel_flag = False
+    raw_flag = False
 
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity"])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity", "raw"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -253,6 +254,8 @@ if __name__ == "__main__":
                 correction_flag = True
             elif o == '--novelocity':
                 novel_flag = True
+            elif o == '--raw':
+                raw_flag = True
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -1222,26 +1225,36 @@ if __name__ == "__main__":
                 axts.scatter(imdates_dt, dph, label=label1, c='b', alpha=0.6, zorder=5)
                 axts.set_title('vel = {:.1f} mm/yr @({}, {})'.format(vel1p, jj, ii), fontsize=10)
             
-            # ##cum_uncorrected
-            # # if not cumfile2: ## I assumed the cumfile2 also include the correction, therefore I skip that to avoid dublication ## I dublicate right now to make sure cum_filt.h5 is correct.
-            # dph_uncorr = dph.copy()
-            # if tide is not None:
-            #     dph_uncorr += tide_adjusted
-            # if iono is not None:
-            #     dph_uncorr += iono_adjusted
+            if raw_flag:
+                cum_abs_withoutiono = cumh5['cum_abs_notide'][()]
+                cum_abs_withoutiono_tide = cumh5['cum_abs'][()]
                 
-            # #Compute corrected velocity (vel_uncorr)
-            # vel_uncorr = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_uncorr, 1)[0] * 365.25  # Convert to mm/yr
+                # if not cumfile2: ## I assumed the cumfile2 also include the correction, therefore I skip that to avoid dublication ## I dublicate right now to make sure cum_filt.h5 is correct.
+                dph_uncorr1 = cum_abs_withoutiono_tide[:, ii, jj] - cum_abs_ref[ii, jj]
+                dph_uncorr2 = cum_abs_withoutiono[:, ii, jj] - cum_abs_ref[ii, jj]    
+                #Compute corrected velocity (vel_uncorr1)
+                vel_uncorr1 = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_uncorr1, 1)[0] * 365.25  # Convert to mm/yr
+                vel_uncorr2 = np.polyfit(imdates_ordinal - imdates_ordinal[0], dph_uncorr2, 1)[0] * 365.25  # Convert to mm/yr
+                
+                #Fit function for uncorrected disp2
+                lines_corr = [0, 0, 0, 0]
+                for model, vis in enumerate(visibilities):
+                    yvalues_corr = calc_model(dph_uncorr2, imdates_ordinal, xvalues, model)
+                    # if not novel_flag:
+                    #     lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, '#00CC00', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
+                    
+                axts.scatter(imdates_dt, dph_uncorr2, label='abs_notide', c='#FFA500', alpha=0.5, zorder=3, marker="s")  # Orange
+                axts.set_title('vel(1) = {:.1f} mm/yr, vel(uncor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_uncorr2, jj, ii), fontsize=10)
             
-            # #Fit function for corrected disp
-            # lines_corr = [0, 0, 0, 0]
-            # for model, vis in enumerate(visibilities):
-            #     yvalues_corr = calc_model(dph_uncorr, imdates_ordinal, xvalues, model)
-            #     if not novel_flag:
-            #         lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, '#00CC00', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
-                
-            # axts.scatter(imdates_dt, dph_uncorr, label='uncorrected_cum', c='#00CC00', alpha=0.8, zorder=5, marker="s")  # Cyan markers
-            # axts.set_title('vel(1) = {:.1f} mm/yr, vel(uncor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_uncorr, jj, ii), fontsize=10)
+                #Fit function for uncorrected disp1           
+                for model, vis in enumerate(visibilities):
+                    yvalues_corr = calc_model(dph_uncorr1, imdates_ordinal, xvalues, model)
+                    # if not novel_flag:
+                    #     lines_corr[model], = axts.plot(xvalues_dt, yvalues_corr, '#00CC00', visible=vis, alpha=0.6, zorder=3)  # Cyan for corrected
+                    
+                axts.scatter(imdates_dt, dph_uncorr1, label='abs', c='#00CC00', alpha=1, zorder=4, marker="s")  # Green
+                axts.set_title('vel(1) = {:.1f} mm/yr, vel(uncor) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel_uncorr1, jj, ii), fontsize=10)
+    
             
             ### cumfile2
             if cumfile2:
