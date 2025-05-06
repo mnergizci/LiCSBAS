@@ -531,7 +531,7 @@ if [ $start_step -le 14 -a $end_step -ge 14 ];then
   if [ ! -z $p14_TSdir ];then p14_op="$p14_op -t $p14_TSdir";
     else p14_op="$p14_op -t $TSdir"; fi
   if [ ! -z $p14_mem_size ];then p14_op="$p14_op --mem_size $p14_mem_size"; fi
-  if [ "$p14_sbovl" == "y" ];then p14_op="$p14_op --sbovl --ransac"; fi
+  if [ "$p14_sbovl" == "y" ];then p14_op="$p14_op --sbovl"; fi  #--ransac
   if [ $gpu == "y" ];then p14_op="$p14_op --gpu"; fi
   if [ "$eqoffs" == "y" ] && [ "$p14_sbovl" != "y" ]; then
     # we then do not want to regenerate vstd

@@ -29,7 +29,7 @@ LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac
  --gpu        Use GPU (Need cupy module)
  --ransac     Recalculate velocity free from outliers (use RANSAC algorithm)
  --skipexisting  Skip if exists
- --sbovl      sbovl option for recalculate the absolute velocity via RANSAC? #TODO ask supervisors for normal linear or Huber loss function rather than RANSAC.
+ --sbovl      sbovl option for recalculate the absolute velocity.
 """
 #%% Change log
 '''
@@ -157,7 +157,7 @@ def main(argv=None):
     cum_keys = []
     if sbovl:
         # Process all three if sbovl (absolute) is specified
-        for k in ['cum','cum_abs','cum_abs_notide','cum_abs_notide_noiono']:
+        for k in ['cum','cum_abs','cum_abs_notide','cum_abs_notide_noiono']: #TODO you can remove some of them later. Redundant but we need to try all for comparison of correction.
             if k in cumh5:
                 cum_keys.append(k)
     else:
@@ -305,10 +305,10 @@ def main(argv=None):
     #%% Close h5 file
     cumh5.close()
 
-
     #%% Output png
     print('\nOutput png images...')
     for cum_key in cum_keys:
+        # breakpoint()
         suffix = '' if cum_key == 'cum' else '_' + cum_key.replace('cum_', '')
         stcfile = os.path.join(resultsdir, f'stc{suffix}')
         vstdfile = os.path.join(resultsdir, f'vstd{suffix}')
@@ -339,13 +339,14 @@ def main(argv=None):
             bootvel = io_lib.read_img(bootvelfile, length, width)
             plot_lib.make_im_png(bootvel, bootvelfile + '.png', cmap_vel, title, cmin, cmax)
         
-        if sbovl:
-            vel2file = os.path.join(resultsdir, f'vel_ransac{suffix}')
-            inter2file = os.path.join(resultsdir, f'intercept_ransac{suffix}')
-        else:
-            vel2file = os.path.join(resultsdir, f'vel2{suffix}')
-            
+    
         if ransac:
+            if sbovl:
+                vel2file = os.path.join(resultsdir, f'vel_ransac{suffix}')
+                inter2file = os.path.join(resultsdir, f'intercept_ransac{suffix}')
+            else:
+                vel2file = os.path.join(resultsdir, f'vel2{suffix}')
+                
             vel2 = io_lib.read_img(vel2file, length, width)
             pngfile = vel2file+'.png'
             title = 'Outlier-free velocity (mm/yr)'

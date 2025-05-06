@@ -340,7 +340,12 @@ def main(argv=None):
     
     #%% Read data
     if sbovl:
-        velfile = os.path.join(resultsdir,'vel_ransac_abs_notide_noiono')
+        # velfile = os.path.join(resultsdir,'vel_ransac_abs_notide_noiono')
+        velfile = os.path.join(resultsdir,'bootvel_abs_notide_noiono')
+        if not os.path.exists(velfile):
+            velfile = os.path.join(resultsdir,'bootvel_abs_notide')
+        if not os.path.exists(velfile):
+            velfile = os.path.join(resultsdir,'bootvel_abs')        
     else:
         velfile = os.path.join(resultsdir,'vel')
     vel = io_lib.read_img(velfile, length, width)

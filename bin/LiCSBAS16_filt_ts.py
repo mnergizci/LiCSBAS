@@ -344,8 +344,10 @@ def main(argv=None):
             cum_org = cumh5['cum_abs'][()]
             sbovl_suffix = '_abs'
         ##redefine the output files
-        vconstfile = os.path.join(resultsdir, f'vintercept_ransac{sbovl_suffix}.filt')
-        velfile = os.path.join(resultsdir, f'vel_ransac{sbovl_suffix}.filt')
+        # vconstfile = os.path.join(resultsdir, f'vintercept_ransac{sbovl_suffix}.filt')
+        # velfile = os.path.join(resultsdir, f'vel_ransac{sbovl_suffix}.filt')
+        vconstfile = os.path.join(resultsdir, f'vintercept{sbovl_suffix}.filt')
+        velfile = os.path.join(resultsdir, f'vel{sbovl_suffix}.filt')
     else:
         cum_org = cumh5['cum'][()]
     n_im, length, width = cum_org.shape
@@ -770,7 +772,7 @@ def main(argv=None):
     # breakpoint()
     #%% Output image
     if sbovl:
-        pngfile = os.path.join(resultsdir,f'vel_ransac{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+        pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
     else:
         pngfile = os.path.join(resultsdir,'vel.filt.png')
     title = 'Filtered velocity (mm/yr)'
@@ -780,7 +782,7 @@ def main(argv=None):
 
     ## vintercept
     if sbovl:
-        pngfile = os.path.join(resultsdir,f'vintercept_ransac{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+        pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
     else:
         pngfile = os.path.join(resultsdir,'vintercept.filt.png')
     title = 'Intercept of filtered velocity (mm)'
@@ -798,7 +800,7 @@ def main(argv=None):
 
     if maskflag:
         if sbovl:
-            pngfile = os.path.join(resultsdir,f'vel_ransac{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+            pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
         else:
             pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
         title = 'Masked filtered velocity (mm/yr)'
@@ -808,7 +810,7 @@ def main(argv=None):
 
         ## vintercept
         if sbovl:
-            pngfile = os.path.join(resultsdir,f'vintercept_ransac{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+            pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
         else:
             pngfile = os.path.join(resultsdir,'vintercept.filt.mskd.png')
         title = 'Masked intercept of filtered velocity (mm)'
