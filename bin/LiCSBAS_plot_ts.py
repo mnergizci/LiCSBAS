@@ -415,8 +415,8 @@ if __name__ == "__main__":
             cum_abs = cumh5['cum_abs'][()]
             print('Absolute displacement (cum_abs) found.')
         else:
-            cum_abs = None
-            print('No absolute displacement (cum_abs) found in {}. Skip.'.format(cumfile))
+            cum_abs = cumh5['cum'][()]
+            print('No absolute displacement (cum_abs) found in {}. cum setted.'.format(cumfile))
 
         # Check for absolute velocity
         if 'vel_abs_notide_noiono' in cumh5:
@@ -429,8 +429,8 @@ if __name__ == "__main__":
             vel = cumh5['vel_abs']
             print('Absolute velocity (vel_abs) found.')
         else:
-            vel = None
-            print('No absolute velocity found in {}.'.format(cumfile))        
+            vel = cumh5['vel']
+            print('No absolute velocity found in {}. vel setted.'.format(cumfile))        
    
     ### Set initial ref area
     if refarea:

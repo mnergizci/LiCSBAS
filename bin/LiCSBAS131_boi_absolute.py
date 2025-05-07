@@ -24,6 +24,8 @@ LiCSBAS131_boi_absolute.py -t TS_DIR [-i cum_file] [--model]
  -t    Path to the LiCSBAS time-series directory (e.g., TS_GEOCml10)     [REQUIRED]
  -i    Name of the cumulative HDF5 file to process (default: cum.h5)     [OPTIONAL]
  --model Use RANSAC model for daz values (default: False)                [OPTIONAL]
+ --tide Apply tide correction (default: False)                          [OPTIONAL]
+ --iono Apply iono correction (default: False)                          [OPTIONAL]
 
 Example:
 --------
@@ -86,9 +88,11 @@ def main(argv=None):
     tsadir = ''
     cumfile = None
     model = False
+    tide_apply = False
+    iono_apply = False
     #%% Read options
     try:
-        opts, _ = getopt.getopt(argv[1:], "ht:i:", ["help", "model"])
+        opts, _ = getopt.getopt(argv[1:], "ht:i:", ["help", "model", "tide", "iono"])
         for o, a in opts:
             if o in ("-h", "--help"):
                 print(__doc__)
@@ -99,6 +103,10 @@ def main(argv=None):
                 cumfile = a
             elif o == "--model":
                 model = True
+            elif o == "--tide":
+                tide_apply = True
+            elif o == "--iono":
+                iono_apply = True
 
         if not tsadir:
             raise Usage("TS directory not given. Use -t to specify.")
@@ -126,7 +134,6 @@ def main(argv=None):
         
     #%%Read cum.h5, add daz values and remove tide and iono corrections
     print(f"Reading cum.h5 from: {cumfile}")
-    # breakpoint()
     # Load data
     with h5.File(cumfile, 'r') as f:
         cum = f['cum'][()]
@@ -209,8 +216,7 @@ def main(argv=None):
     fig.tight_layout()
     plt.savefig(os.path.join(tsadir, f"{frame}_daz_plot.png"), dpi=150)
     
-    ##Extract daz values from the dataframe
-    # breakpoint()    
+    ##Extract daz values from the dataframe  
     if model:
         print('RANSAC model is used for daz values')
         daz = df_daz['daz_model'].to_numpy()
@@ -219,32 +225,52 @@ def main(argv=None):
         print('Original data is used for daz values')
         daz = df_daz['daz'].to_numpy()
         daz = daz - daz[0]  # Align to first epoch
-    # breakpoint()
     # Apply all corrections ##TODO save only final result when you satify with the results
     cum_abs = cum + daz[:, None, None] # Add daz correction
-    # apply tide and iono corrections if they exists
     
-    if tide_exists:
-        cum_abs_notide = cum_abs - tide
+    # breakpoint()
+    # apply tide and iono corrections if they exists
+    if tide_apply:
+        if tide_exists:
+            cum_abs_notide = cum_abs - tide
+        else:
+            cum_abs_notide = cum_abs.copy()
     else:
         cum_abs_notide = cum_abs.copy()
 
-    if iono_exists:
-        cum_abs_notide_noiono = cum_abs_notide - iono   #if the no set is hthe applied notide_noiono represents the noiono
+    if iono_apply:
+        if iono_exists:
+            cum_abs_notide_noiono = cum_abs_notide - iono   #if the no set is hthe applied notide_noiono represents the noiono
+        else:
+            cum_abs_notide_noiono = cum_abs_notide.copy()
     else:
         cum_abs_notide_noiono = cum_abs_notide.copy()
-    # breakpoint()
-    # Save corrected datasets
+        
+    # Save corrected datasets based on availability and flags
     print(f"Writing corrected cumulative datasets to {cumfile} ...")
     with h5.File(cumfile, 'r+') as f:
-        for name, data in {
-            'cum_abs': cum_abs,
-            'cum_abs_notide': cum_abs_notide,
-            'cum_abs_notide_noiono': cum_abs_notide_noiono
-        }.items():
-            if name in f:
-                del f[name]
-            f.create_dataset(name, data=data.astype('float32'), compression='gzip')
+        # Always save raw cumulative
+        if 'cum_abs' in f:
+            del f['cum_abs']
+        f.create_dataset('cum_abs', data=cum_abs.astype('float32'), compression='gzip')
+
+        # Save tide-corrected if applied and data exists
+        if tide_apply and tide_exists:
+            if 'cum_abs_notide' in f:
+                del f['cum_abs_notide']
+            f.create_dataset('cum_abs_notide', data=cum_abs_notide.astype('float32'), compression='gzip')
+        
+        # Save iono-corrected if only iono corrections applied and exist
+        if not (tide_apply and tide_exists) and iono_apply and iono_exists:
+            if 'cum_abs_noiono' in f:
+                del f['cum_abs_noiono']
+            f.create_dataset('cum_abs_noiono', data=cum_abs_notide_noiono.astype('float32'), compression='gzip')
+            
+        # Save tide+iono-corrected if both corrections applied and exist
+        if tide_apply and tide_exists and iono_apply and iono_exists:
+            if 'cum_abs_notide_noiono' in f:
+                del f['cum_abs_notide_noiono']
+            f.create_dataset('cum_abs_notide_noiono', data=cum_abs_notide_noiono.astype('float32'), compression='gzip')
         
 
     #%% Finish
