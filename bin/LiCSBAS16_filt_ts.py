@@ -15,7 +15,7 @@ Inputs in TS_GEOCml*/ :
  - info/13parameters.txt
 
 Outputs in TS_GEOCml*/ :
- - cum_filt.h5
+ - cum_filt_s{spatial_kernel_size(km)}_t{temporal_width(day)}.h5
  - 16filt_cum/
    - yyyymmdd_filt.png
   [- yyyymmdd_deramp.png]     (if -r option is used)
@@ -179,6 +179,8 @@ def main(argv=None):
     interpolateflag = False
     gpu = False
     sbovl = False
+    tide = False
+    iono = False
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -209,7 +211,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl"])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl", "tide", "iono"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -254,6 +256,10 @@ def main(argv=None):
                 nopngs = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--tide':
+                tide = True
+            elif o == '--iono':
+                iono = True
             elif o == '--from_model':
                 modelfile = a
                 inputresidflag = True
@@ -318,7 +324,7 @@ def main(argv=None):
     if os.path.exists(filtcumdir): shutil.rmtree(filtcumdir)
     os.mkdir(filtcumdir)
 
-    cumffile = os.path.join(tsadir, 'cum_filt.h5')
+   
 
     #standard format
     vconstfile = os.path.join(resultsdir, 'vintercept.filt')
@@ -326,21 +332,20 @@ def main(argv=None):
 
     cumh5 = h5.File(cumfile,'r')  ##open cum.h5 to read non-filtered data
 
-    if os.path.exists(cumffile): os.remove(cumffile)
-    cumfh5 = h5.File(cumffile,'w') #open cum_filt.h5 to write filtered data
-
-    # breakpoint()
     #%% Dates
     imdates = cumh5['imdates'][()].astype(str).tolist()
     if sbovl:
         print('SBOI mode activated.')
-        if 'cum_abs_notide_noiono' in cumh5:
+        if 'cum_abs_notide_noiono' in cumh5 and tide and iono:
             cum_org = cumh5['cum_abs_notide_noiono'][()]
             sbovl_suffix = '_abs_notide_noiono'
-        elif 'cum_abs_notide' in cumh5:
+        elif 'cum_abs_notide' in cumh5 and tide:
             cum_org = cumh5['cum_abs_notide'][()]
             sbovl_suffix = '_abs_notide'
-        else:
+        elif 'cum_abs_noiono' in cumh5 and iono:
+            cum_org = cumh5['cum_abs_noiono'][()]
+            sbovl_suffix = '_abs_noiono'
+        elif 'cum_abs' in cumh5 and not tide and not iono:
             cum_org = cumh5['cum_abs'][()]
             sbovl_suffix = '_abs'
         ##redefine the output files
@@ -358,6 +363,16 @@ def main(argv=None):
     ### Calc dt in year
     imdates_dt = ([dt.datetime.strptime(imd, '%Y%m%d').toordinal() for imd in imdates])
     dt_cum = np.float32((np.array(imdates_dt)-imdates_dt[0])/365.25)
+
+    ### temporal filter width
+    if not filtwidth_yr and filtwidth_yr != 0:
+        filtwidth_yr = np.diff(dt_cum).mean() * 3  #dt_cum[-1]/(n_im-1)*3 ## avg interval*3
+
+    ####define the cum_filt file
+    cumffile = os.path.join(tsadir, f'cum_filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.h5')
+    if os.path.exists(cumffile): os.remove(cumffile)
+    cumfh5 = h5.File(cumffile,'w') #open cum_filt.h5 to write filtered data
+    # breakpoint()
 
     ### Save dates and other info into cumf
     cumfh5.create_dataset('imdates', data=cumh5['imdates'])
@@ -379,9 +394,6 @@ def main(argv=None):
     else: ## not geocoded
         print('No latlon field found in {}. Skip.'.format(cumname))
 
-    ### temporal filter width
-    if not filtwidth_yr and filtwidth_yr != 0:
-        filtwidth_yr = np.diff(dt_cum).mean() * 3  #dt_cum[-1]/(n_im-1)*3 ## avg interval*3
 
     ### hgt_linear
     if hgt_linearflag:
@@ -400,10 +412,13 @@ def main(argv=None):
     else:
         hgt = []
 
-        ### demerr
+    ### demerr
     if demerrflag:
         bperp = np.float32(np.array(cumh5['bperp'][()].tolist()))
         demerrfile = os.path.join(resultsdir, 'demerr')
+        
+
+    
     #%% --range[_geo] and --ex_range[_geo]
     if range_str: ## --range
         if not tools_lib.read_range(range_str, width, length):

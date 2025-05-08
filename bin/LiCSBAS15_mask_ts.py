@@ -168,11 +168,13 @@ def main(argv=None):
     cmap_vel = cmc.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
+    tide = False
+    iono = False
     
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged","sbovl"])
+            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged","sbovl", "tide", "iono"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -219,6 +221,10 @@ def main(argv=None):
                 n_gap_use_merged = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--tide':
+                tide = True
+            elif o == '--iono':
+                iono = True
 
         if not tsadir:
             raise Usage('No tsa directory given, -t is not optional!')
@@ -339,15 +345,23 @@ def main(argv=None):
         thre_dict['n_gap_merged'] = thre_dict.pop('n_gap')
     
     #%% Read data
+    # breakpoint()
     if sbovl:
         # velfile = os.path.join(resultsdir,'vel_ransac_abs_notide_noiono')
-        velfile = os.path.join(resultsdir,'bootvel_abs_notide_noiono')
-        if not os.path.exists(velfile):
+        if tide and iono:
+            velfile = os.path.join(resultsdir,'bootvel_abs_notide_noiono')
+        elif tide and not iono:
             velfile = os.path.join(resultsdir,'bootvel_abs_notide')
-        if not os.path.exists(velfile):
-            velfile = os.path.join(resultsdir,'bootvel_abs')        
+        elif not tide and iono:
+            velfile = os.path.join(resultsdir,'bootvel_abs_noiono') 
+        elif not tide and not iono:
+            velfile = os.path.join(resultsdir,'bootvel_abs')
     else:
         velfile = os.path.join(resultsdir,'vel')
+
+    if not os.path.exists(velfile):
+        raise FileNotFoundError(f"Velocity file not found: {velfile}")
+    
     vel = io_lib.read_img(velfile, length, width)
     bool_nan = np.isnan(vel)
     bool_nan[vel==0] = True ## Ref point. Unmask later

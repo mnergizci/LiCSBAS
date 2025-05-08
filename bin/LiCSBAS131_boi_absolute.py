@@ -26,6 +26,7 @@ LiCSBAS131_boi_absolute.py -t TS_DIR [-i cum_file] [--model]
  --model Use RANSAC model for daz values (default: False)                [OPTIONAL]
  --tide Apply tide correction (default: False)                          [OPTIONAL]
  --iono Apply iono correction (default: False)                          [OPTIONAL]
+ --refresh Remove existing datasets before writing new ones (default: False) [OPTIONAL]
 
 Example:
 --------
@@ -90,9 +91,10 @@ def main(argv=None):
     model = False
     tide_apply = False
     iono_apply = False
+    refresh = False
     #%% Read options
     try:
-        opts, _ = getopt.getopt(argv[1:], "ht:i:", ["help", "model", "tide", "iono"])
+        opts, _ = getopt.getopt(argv[1:], "ht:i:", ["help", "model", "tide", "iono", "refresh"])
         for o, a in opts:
             if o in ("-h", "--help"):
                 print(__doc__)
@@ -107,7 +109,9 @@ def main(argv=None):
                 tide_apply = True
             elif o == "--iono":
                 iono_apply = True
-
+            elif o == "--refresh":
+                refresh = True
+                
         if not tsadir:
             raise Usage("TS directory not given. Use -t to specify.")
         if not os.path.isdir(tsadir):
@@ -249,6 +253,12 @@ def main(argv=None):
     # Save corrected datasets based on availability and flags
     print(f"Writing corrected cumulative datasets to {cumfile} ...")
     with h5.File(cumfile, 'r+') as f:
+        ##let's remove the previous datasets if they exist
+        if refresh:
+            for key in ['cum_abs', 'cum_abs_notide', 'cum_abs_noiono', 'cum_abs_notide_noiono', 'vel_abs', 'vel_abs_notide', 'vel_abs_noiono', 'vel_abs_notide_noiono']:
+                if key in f:
+                    del f[key]
+                    
         # Always save raw cumulative
         if 'cum_abs' in f:
             del f['cum_abs']
