@@ -338,7 +338,16 @@ def main(argv=None):
             cmap_vel = cmc.roma.reversed()
             bootvel = io_lib.read_img(bootvelfile, length, width)
             plot_lib.make_im_png(bootvel, bootvelfile + '.png', cmap_vel, title, cmin, cmax)
-        
+            
+            #saving bootvel to the cum_file
+            if sbovl:
+                print(f' Saving {bootvelfile} into cum.h5...', flush=True)
+                with h5.File(cumfile, 'a') as f:
+                    dataset_name = f'vel{suffix}'
+                    if dataset_name in f:
+                        print('Overwriting existing vel_abs dataset...')
+                        del f[dataset_name]
+                    f.create_dataset(dataset_name, data=bootvel.reshape((length, width)), dtype='float32')
     
         if ransac:
             if sbovl:
@@ -358,6 +367,7 @@ def main(argv=None):
             #saving the cum_file
             if sbovl:
                 print(f' Saving vel_ransac{suffix} into cum.h5...', flush=True)
+                print('Please keep in mind if ransac is used, the cum.h5 file will be overwritten with the new velocity estimates not bootvel estimates')
                 with h5.File(cumfile, 'a') as f:
                     dataset_name = f'vel{suffix}'
                     if dataset_name in f:
