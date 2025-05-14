@@ -119,3 +119,5 @@ bin/LiCSBAS_correction_comparison.py
 *pkl
 *.png
 functions_for_report.py
+ipynb_test/dazes_021D.csv
+ipynb_test/daz_trial.py
