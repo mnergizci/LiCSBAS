@@ -88,6 +88,9 @@ p13_singular_gauss="" # y/n. n by default
 p13_skippngs="" # y/n. n by default
 p13_sbovl="n"
 p131_sbovl_abs="n" ## adding ICC+ESD offfset and apply SET and Iono correction to sbovl time series
+p131_sbovl_model="n" ## adding RANSAC model guide for daz values to handle the outliers especially between 2018-2021
+p131_sbovl_tide="n"
+p131_sbovl_iono="n"
 p14_sbovl="n"
 p15_coh_thre=""	# default: 0.05
 p15_n_unw_r_thre=""	# default: 1.5
@@ -102,6 +105,8 @@ p15_resid_rms_thre=""	# default: 15 mm
 p15_avg_phasebias="" # default: not used. Setting 1 or 1.2 rad is good option
 p15_n_gap_use_merged="y" # default: 'y'
 p15_sbovl="n"
+# p15_sbovl_tide="n" ##these already depend on p131_sbovl_tide and p131_sbovl_iono, so I will use them to call
+# p15_sbovl_iono="n"
 p16_filtwidth_km=""	# default: 2 km
 p16_filtwidth_yr=""	# default: avg_interval*3 yr
 p16_deg_deramp=""	# 1, bl, or 2. default: no deramp
@@ -116,6 +121,8 @@ p16_ex_range_geo=""	# e.g. 130.11/131.12/34.34/34.6 (in deg)
 p16_interpolate_nans="y"  # will interpolate nans in unmasked pixels
 p16_skippngs="" # y/n. n by default
 p16_sbovl="n"
+# p16_sbovl_tide="n" ##these already depend on p131_sbovl_tide and p131_sbovl_iono, so I will use them to call
+# p16_sbovl_iono="n"
 
 ### Less frequently used options. If blank, use default. ###
 p01_frame=""	# e.g. 021D_04972_131213 
@@ -507,14 +514,23 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
   fi
 fi
 
-###TODO I know it is not tidy but I need to call them before step 14 for sbovl processing.
-##TODO right now is only consider to create absolute 
+###TODO I know it is not tidy but I need to call them before step 14 for sbovl processing, MN
+##TODO right now is only consider to create absolute, MN
 if [ "$p13_sbovl" == "y" ]; then
   p131_sbovl_abs='y'
 fi
 
 if [ "$p131_sbovl_abs" == "y" ]; then
-  extra="-t $TSdir --model"
+  extra="-t $TSdir"
+  if [ "$p131_sbovl_model" == "y" ]; then
+    extra="$extra --model"
+  fi
+  if [ "$p131_sbovl_tide" == "y" ]; then
+    extra="$extra --tide"
+  fi
+  if [ "$p131_sbovl_iono" == "y" ]; then
+    extra="$extra --iono"
+  fi 
   if [ "$check_only" == "y" ];then
     echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
     echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'
@@ -566,7 +582,15 @@ if [ $start_step -le 15 -a $end_step -ge 15 ];then
   if [ ! -z "$p15_vmax" ];then p15_op="$p15_op --vmax $p15_vmax"; fi
   if [ "$p15_keep_isolated" == "y" ];then p15_op="$p15_op --keep_isolated"; fi
   if [ "$p15_noautoadjust" == "y" ];then p15_op="$p15_op --noautoadjust"; fi
-  if [ "$p15_sbovl" == "y" ];then p15_op="$p15_op --sbovl"; fi
+  if [ "$p15_sbovl" == "y" ];then 
+    p15_op="$p15_op --sbovl"; 
+    if [ "$p131_sbovl_tide" == "y" ];then
+      p15_op="$p15_op --tide"
+    fi
+    if [ "$p131_sbovl_iono" == "y" ];then
+      p15_op="$p15_op --iono"
+    fi
+  fi
   if [ "$p15_n_gap_use_merged" == "y" ];then p15_op="$p15_op --n_gap_use_merged"; fi
 
   if [ "$check_only" == "y" ];then
@@ -596,7 +620,15 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z "$p16_ex_range" ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
   if [ ! -z "$p16_ex_range_geo" ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
   if [ "$p16_interpolate_nans" == "y" ] && [ "$p16_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
-  if [ "$p16_sbovl" == "y" ];then p16_op="$p16_op --sbovl "; fi  #--nofilter
+  if [ "$p16_sbovl" == "y" ];then 
+    p16_op="$p16_op --sbovl "; 
+    if [ "$p131_sbovl_tide" == "y" ];then
+      p16_op="$p16_op --tide"
+    fi
+    if [ "$p131_sbovl_iono" == "y" ];then
+      p16_op="$p16_op --iono"
+    fi
+  fi
   if [ "$p16_skippngs" == "y" ];then p16_op="$p16_op --nopngs"; fi
 
   if [ "$eqoffs" == "y" ]; then

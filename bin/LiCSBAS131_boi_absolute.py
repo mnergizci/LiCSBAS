@@ -192,13 +192,28 @@ def main(argv=None):
         reg = RANSACRegressor(base_estimator=LinearRegression()).fit(X[mask], y[mask])
         vel_ransac = reg.estimator_.coef_[0]
         intercept_ransac = reg.estimator_.intercept_
-        df_daz['daz_model'] = reg.predict(X)  # model prediction for all dates
+        df_daz['daz_model'] = reg.predict(X)  # model prediction for all dates]    
+        # Replace DAZ values with model if the difference > threshold (250 mm)
+        threshold = 200
+        adjustment = 350
+        diff = np.abs(df_daz['daz'] - df_daz['daz_model'])
+        #df_daz['daz_mixed'] = np.where(diff > threshold, df_daz['daz_model'], df_daz['daz'])
+        df_daz['daz_mixed'] = df_daz['daz']  # initialize with original values
     
+        # Apply custom correction
+        mask_large_diff = diff > threshold
+        df_daz.loc[mask_large_diff & (df_daz['daz'] > df_daz['daz_model']), 'daz_mixed'] -= adjustment
+        df_daz.loc[mask_large_diff & (df_daz['daz'] < df_daz['daz_model']), 'daz_mixed'] += adjustment
+        
+        
+        
+        
     ##plotting daz and save
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.scatter(df_daz['epoch'], df_daz['daz'], color='red', alpha=0.6, s=20, label=frame)
     if 'daz_model' in df_daz:
         ax.plot(df_daz['epoch'], df_daz['daz_model'], '-', color='blue', lw=2, label='RANSAC Model')
+        ax.scatter(df_daz['epoch'], df_daz['daz_mixed'], color='green', alpha=0.6, s=15, label='DAZ Mixed (Corrected)')
 
     # Set labels and grid
     ax.set_xlabel('Epoch')
@@ -222,8 +237,8 @@ def main(argv=None):
     
     ##Extract daz values from the dataframe  
     if model:
-        print('RANSAC model is used for daz values')
-        daz = df_daz['daz_model'].to_numpy()
+        print('RANSAC model supported is used for daz values')
+        daz = df_daz['daz_mixed'].to_numpy()
         daz = daz - daz[0]  # Align to first epoch
     else:
         print('Original data is used for daz values')
