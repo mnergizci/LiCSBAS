@@ -22,6 +22,8 @@ import random
 from lmfit.model import *
 import os
 import time
+import numpy as np
+
 import matplotlib.pyplot as plt
 import sys
 from osgeo import gdal
