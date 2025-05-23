@@ -195,15 +195,15 @@ def main(argv=None):
         df_daz['daz_model'] = reg.predict(X)  # model prediction for all dates]    
         # Replace DAZ values with model if the difference > threshold (250 mm)
         threshold = 200
-        adjustment = 350
+        # adjustment = 350
         diff = np.abs(df_daz['daz'] - df_daz['daz_model'])
-        #df_daz['daz_mixed'] = np.where(diff > threshold, df_daz['daz_model'], df_daz['daz'])
-        df_daz['daz_mixed'] = df_daz['daz']  # initialize with original values
+        df_daz['daz_mixed'] = np.where(diff > threshold, df_daz['daz_model'], df_daz['daz'])
+        # df_daz['daz_mixed'] = df_daz['daz']  # initialize with original values
     
-        # Apply custom correction
-        mask_large_diff = diff > threshold
-        df_daz.loc[mask_large_diff & (df_daz['daz'] > df_daz['daz_model']), 'daz_mixed'] -= adjustment
-        df_daz.loc[mask_large_diff & (df_daz['daz'] < df_daz['daz_model']), 'daz_mixed'] += adjustment
+        # # Apply custom correction
+        # mask_large_diff = diff > threshold
+        # df_daz.loc[mask_large_diff & (df_daz['daz'] > df_daz['daz_model']), 'daz_mixed'] -= adjustment
+        # df_daz.loc[mask_large_diff & (df_daz['daz'] < df_daz['daz_model']), 'daz_mixed'] += adjustment
         
         
         

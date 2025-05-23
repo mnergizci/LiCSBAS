@@ -381,6 +381,21 @@ if __name__ == "__main__":
         except KeyError:
             iono = None
             print('No iono correction found in {}. Skip.'.format(cumfile))
+        
+        # gacos correction
+        try:
+            gacos = cumh5['gacos'][:]
+            label_gacos = 'Gacos correction'
+            print('Gacos correction found.')
+        except KeyError:
+            try:
+                gacos = cumh5['external_data'][:]
+                label_gacos = 'Gacos correction'
+                print('External data used as Gacos correction.')
+            except KeyError:
+                gacos = None
+                print(f'No gacos correction found in {cumfile}. Skip.')
+            
   
         # iono correction 2 (if exists) low ress CODE GIM    
         try:
@@ -511,6 +526,8 @@ if __name__ == "__main__":
             tide_ref = tide[ix_m, :, :]
         if iono is not None:
             iono_ref = iono[ix_m, :, :]
+        if gacos is not None:
+            gacos_ref = gacos[ix_m, :, :]
         if iono2 is not None:
             iono2_ref = iono2[ix_m, :, :]
         
@@ -1114,6 +1131,7 @@ if __name__ == "__main__":
             axts_corr.grid(zorder=0)
             axts_corr.set_axisbelow(True)
             axts_corr.set_title('Tide and Ionospheric Corrections')
+            # axts_corr.set_ylim(-75, 75)
 
             # Second subplot: Plot cumulative displacement
             axts.cla()
@@ -1189,6 +1207,17 @@ if __name__ == "__main__":
                 # Plot adjusted iono correction
                 axts_corr.scatter(imdates_dt, iono_adjusted, label=label_iono, c='#800080', alpha=0.8, zorder=4, marker="^")  # Purple
                 axts_corr.plot(imdates_dt, iono_adjusted, color='#800080', alpha=0.8, linestyle='-', zorder=4)  # Purple line 
+            
+            if gacos is not None:
+                # Adjust gacos correction by subtracting the reference value
+                if not absolute:
+                    gacos_ref_value = gacos_ref[ii, jj]-np.nanmean(gacos_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
+                    gacos_adjusted = gacos[:, ii, jj]-np.nanmean(gacos[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - gacos_ref_value
+                else:
+                    gacos_adjusted = gacos[:, ii, jj]-gacos_ref[ii, jj]
+                # Plot adjusted gacos correction
+                axts_corr.scatter(imdates_dt, gacos_adjusted, label=label_gacos, c='green', alpha=0.8, zorder=4, marker="s")
+                axts_corr.plot(imdates_dt, gacos_adjusted, color='green', alpha=0.8, linestyle='-', zorder=4)  # Green line
             
             if iono2 is not None:
                 # Adjust iono2 correction by subtracting the reference value
