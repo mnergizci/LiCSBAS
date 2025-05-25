@@ -179,6 +179,7 @@ def main(argv=None):
     interpolateflag = False
     gpu = False
     sbovl = False
+    sbovl_abs = False
     tide = False
     iono = False
     try:
@@ -211,7 +212,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl", "tide", "iono"])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl", "sbovl_abs", "tide", "iono"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -256,6 +257,9 @@ def main(argv=None):
                 nopngs = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--sbovl_abs':
+                sbovl = True
+                sbovl_abs = True
             elif o == '--tide':
                 tide = True
             elif o == '--iono':
@@ -334,7 +338,7 @@ def main(argv=None):
 
     #%% Dates
     imdates = cumh5['imdates'][()].astype(str).tolist()
-    if sbovl:
+    if sbovl_abs:
         print('SBOI mode activated.')
         if 'cum_abs_notide_noiono' in cumh5 and tide and iono:
             cum_org = cumh5['cum_abs_notide_noiono'][()]
@@ -369,7 +373,7 @@ def main(argv=None):
         filtwidth_yr = np.diff(dt_cum).mean() * 3  #dt_cum[-1]/(n_im-1)*3 ## avg interval*3
 
     ####define the cum_filt file
-    cumffile = os.path.join(tsadir, f'cum_filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.h5')
+    cumffile = os.path.join(tsadir, f'cum_filt.h5') #s{filtwidth_km}_t{int(filtwidth_yr*365.25)} MN
     if os.path.exists(cumffile): os.remove(cumffile)
     cumfh5 = h5.File(cumffile,'w') #open cum_filt.h5 to write filtered data
     # breakpoint()
@@ -636,7 +640,7 @@ def main(argv=None):
 
     # breakpoint()
     #%% Find stable ref point
-    if not sbovl: 
+    if not sbovl_abs: 
         print('\nFind stable reference point...', flush=True)
         ### Compute RMS of time series with reference to all points
         sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
@@ -675,13 +679,13 @@ def main(argv=None):
         modelh5.close()
 
     ### Rerferencing cumulative displacement to new stable ref
-    if not sbovl:
+    if not sbovl_abs:
         for i in range(n_im):
             cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
     else:
         print('Skipping back referencing to stable point for SBOI')
 
-    if not sbovl: ##TODO I have closed here as I get some nan errors for SBOI 
+    if not sbovl_abs: ##TODO I have closed here as I get some nan errors for SBOI 
         ### Save image
         rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
         with open(rms_cum_wrt_med_file, 'w') as f:
@@ -745,7 +749,7 @@ def main(argv=None):
         print('\n(masked version)', flush=True)
         cum_filt = cum_filt * mask[np.newaxis, :, :]
     # breakpoint()
-    if sbovl:
+    if sbovl_abs:
         cumfh5.create_dataset('vel' + sbovl_suffix, data=vel.reshape(length, width)*mask, compression=compress)
         cumfh5.create_dataset('vintercept' + sbovl_suffix, data=vconst.reshape(length, width)*mask, compression=compress)
         cumfh5.create_dataset('cum' + sbovl_suffix, data=cum_filt, compression=compress)
@@ -786,7 +790,7 @@ def main(argv=None):
 
     # breakpoint()
     #%% Output image
-    if sbovl:
+    if sbovl_abs:
         pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
     else:
         pngfile = os.path.join(resultsdir,'vel.filt.png')
@@ -796,7 +800,7 @@ def main(argv=None):
     plot_lib.make_im_png(vel, pngfile, cmap_vel, title, vmin, vmax)
 
     ## vintercept
-    if sbovl:
+    if sbovl_abs:
         pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
     else:
         pngfile = os.path.join(resultsdir,'vintercept.filt.png')
@@ -814,7 +818,7 @@ def main(argv=None):
 
 
     if maskflag:
-        if sbovl:
+        if sbovl_abs:
             pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
         else:
             pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
@@ -824,7 +828,7 @@ def main(argv=None):
         plot_lib.make_im_png(vel_mskd, pngfile, cmap_vel, title, vmin, vmax)
 
         ## vintercept
-        if sbovl:
+        if sbovl_abs:
             pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
         else:
             pngfile = os.path.join(resultsdir,'vintercept.filt.mskd.png')

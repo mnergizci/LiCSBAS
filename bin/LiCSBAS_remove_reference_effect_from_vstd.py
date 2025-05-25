@@ -314,10 +314,6 @@ if __name__ == "__main__":
 
         ### Output modeling parameters
         parameters_ifgfile = 'vstd_rescaling_parameters.txt'
-        print()
-        print("Modeling parameters used for rescaling VSTD are saved in 'vstd_rescaling_parameters.txt'.")
-        print("Please check it in the results directory.")
-        print("20250213, Dehua Wang, Leeds")
         model_str = f"{model} nugget={result.best_values['n']:.1f} " \
             f"sill={result.best_values['p'] + result.best_values['n']:.1f} " \
             f"range={result.best_values['r']:.0f}"

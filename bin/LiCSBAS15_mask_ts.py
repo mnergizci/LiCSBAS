@@ -165,6 +165,7 @@ def main(argv=None):
     auto_adjust = True
     n_gap_use_merged = False
     sbovl = False
+    sbovl_abs = False
     cmap_vel = cmc.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
@@ -174,7 +175,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged","sbovl", "tide", "iono"])
+            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged","sbovl", "sbovl_abs", "tide", "iono"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -221,6 +222,9 @@ def main(argv=None):
                 n_gap_use_merged = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--sbovl_abs':
+                sbovl = True
+                sbovl_abs = True
             elif o == '--tide':
                 tide = True
             elif o == '--iono':
@@ -346,7 +350,7 @@ def main(argv=None):
     
     #%% Read data
     # breakpoint()
-    if sbovl:
+    if sbovl_abs:
         # velfile = os.path.join(resultsdir,'vel_ransac_abs_notide_noiono')
         if tide and iono:
             velfile = os.path.join(resultsdir,'bootvel_abs_notide_noiono')
@@ -546,10 +550,7 @@ def main(argv=None):
 
     
     #%% Output vel.mskd and mask
-    if sbovl:
-        velmskdfile = velfile + '.mskd'
-    else:    
-        velmskdfile = os.path.join(resultsdir,'vel.mskd')
+    velmskdfile = velfile + '.mskd'
     vel_mskd.tofile(velmskdfile)
 
     pngfile = velmskdfile+'.png'

@@ -58,7 +58,7 @@ Outputs in TS_GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs] [--sbovl]
+LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs] [--sbovl] [--sbovl_abs]
                  [--no_storepatches] [--load_patches] [--nullify_noloops] [--offsets eqoffsets.txt]
 
  -d  Path to the GEOCml* dir containing stack of unw data
@@ -88,6 +88,8 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --offsets eqoffsets.txt  Estimate offsets read from external txt file - must have lines in the form of either yyyymmdd or yyyy-mm-dd
  --nullify_noloops   Nullifies data from ifgs not included in any loop BEFORE NULLIFICATION (if happened)
  --nullify_noloops_use_data_after_nullification  Just to test, will probably remove this
+ --sbovl running the inversion on sbovl data, which are in mm and cc format, not in unw format
+ --sbovl_abs running the inversion on sbovl data, and use absolute values of sbovl data, not referenced to the reference point
 """
 '''
 skipping here as will do it as post-processing:
@@ -218,6 +220,7 @@ def main(argv=None):
     nullify_noloops_use_data_after_nullification = False
     #print('NOTE, variable nullify_noloops_use_data_after_nullification set to False - testing')
     sbovl = False
+    sbovl_abs = False ##No need to set this to True if sbovl is not set MN
     
     try:
         n_para = len(os.sched_getaffinity(0))
@@ -251,7 +254,7 @@ def main(argv=None):
                                        ["help",  "mem_size=", "input_units=", "gamma=",
                                         "n_unw_r_thre=", "keep_incfile", "nopngs", "nullify_noloops", "nullify_noloops_use_data_after_nullification",
                                         "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches",
-                                        "offsets=", "sbovl"])
+                                        "offsets=", "sbovl", "sbovl_abs"])
                                       #  "step_events="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -301,6 +304,9 @@ def main(argv=None):
                 load_patches = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--sbovl_abs':
+                sbovl = True
+                sbovl_abs = True
             elif o == '--offsets':
                 offsetsfile = a
                 offsetsflag = True
@@ -421,7 +427,7 @@ def main(argv=None):
         refarea = f.read().split()[0]  #str, x1/x2/y1/y2
     refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
 
-
+    # breakpoint()
     #%% Read data information
     ### Get size
     mlipar = os.path.join(ifgdir, 'slc.mli.par')
@@ -691,14 +697,17 @@ def main(argv=None):
 
 
     #%% Ref phase for inversion
-    if not sbovl:
+    if not sbovl_abs:
         lengththis = refy2-refy1
         countf = width*refy1
         countl = width*lengththis # Number to be read
         ref_unw = []
         nanserror = []
         for i, ifgd in enumerate(ifgdates):
-            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+            if sbovl:
+                unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+            else:
+                unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
             f = open(unwfile, 'rb')
             f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd path, 4 means byte
 
@@ -836,10 +845,10 @@ def main(argv=None):
                 ### Read unw data (mm) at patch area
                 unw = np.fromfile(f, dtype=np.float32, count=countl).reshape((lengththis, width))*coef_r2m
                 unw[unw == 0] = np.nan # Fill 0 with nan
-                if not sbovl:
-                    unw = unw - ref_unw[i]
+                if not sbovl_abs:
+                    unw = unw - ref_unw[i] ## Remove reference phase
                 elif not printed_sbovl_warning:
-                    print('SBOVL: no reference removal set up??')
+                    print('SBOVL_abs: no reference removal set up as you set the sbovl_abs!')
                     printed_sbovl_warning = True  ##This helps to print the warning only once
                 unwpatch[i] = unw
                 f.close()
@@ -1216,13 +1225,13 @@ def main(argv=None):
     print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
 
     ### Rerferencing cumulative displacement  and vel to new stable ref
-    if not sbovl:
+    if not sbovl_abs:
         for i in range(n_im):
             cum[i, :, :] = cum[i, :, :] - cum[i, refy1s, refx1s]
         vel = vel - vel[refy1s, refx1s]
         vconst = vconst - vconst[refy1s, refx1s]
     else:
-        print('  Skip referencing cumulative displacement and velocity for sbovl data.', flush=True)
+        print('  Skip referencing cumulative displacement and velocity for sbovl_abs data', flush=True)
         
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '13rms_cum_wrt_med')
@@ -1460,7 +1469,7 @@ def inc_png_wrapper(imx, sbovl=False):
     try:
         unw = io_lib.read_img(unwfile, length, width)*coef_r2m
         ix_ifg = ifgdates.index(ifgd)
-        if not sbovl:
+        if not sbovl_abs:
             unw = unw - ref_unw[ix_ifg]
         # else:
         #     print('  Skip subtracting reference for sbovl data.', flush=True) ##to get rid of texting scrreen
