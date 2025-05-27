@@ -139,6 +139,9 @@ import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_plot_lib as plot_lib
+import re
+from scipy.interpolate import interp1d
+
 
 class Usage(Exception):
     """Usage context manager"""
@@ -359,7 +362,126 @@ def main(argv=None):
         velfile = os.path.join(resultsdir, f'vel{sbovl_suffix}.filt')
     else:
         cum_org = cumh5['cum'][()]
+        if sbovl:
+            if tide:
+                tide_org = cumh5['tide'][()]
+            if iono:
+                iono_org = cumh5['iono'][()]    
     n_im, length, width = cum_org.shape
+
+    #%% tide and iono removal for sboi before filtering
+    if sbovl:
+        if maskflag:
+            maskfile = os.path.join(resultsdir, 'mask')
+            mask = io_lib.read_img(maskfile, length, width)
+            mask[mask==0] = np.nan ## 0->nan
+            # if mask is involved, apply to cum already:
+            # cum_org = cum_org * mask[np.newaxis,:,:]
+            # 20240711: no, we will always want to filter through everthing and only then apply mask at the end..
+            # if this is not the case and you want to really drop pixels that are inputs to the filter, please uncomment the line above
+        else:
+            mask = np.ones((length, width), dtype=np.float32)
+            mask[np.isnan(cum_org[0, :, :])] = np.nan
+        
+        if not sbovl_abs: 
+            infodir = os.path.join(tsadir, 'info')
+            ref13file = os.path.join(infodir, '13ref.txt')
+            with open(ref13file, "r") as f:
+                ref13area = f.read().split()[0]  # str, x1/x2/y1/y2
+
+            ref13x1, ref13x2, ref13y1, ref13y2 = [int(s) for s in re.split('[:/]', ref13area)]
+
+            # --- Reference: Cumulative displacement ---
+            refpoint_cum_org = np.nanmean(cum_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
+            if np.any(np.isnan(refpoint_cum_org)):
+                print("Some NaNs detected in refpoint_cum_org — replacing with nanmedian across all pixels.")
+                refpoint_cum_org = np.where(
+                    np.isnan(refpoint_cum_org),
+                    np.nanmedian(cum_org, axis=(1,2)),
+                    refpoint_cum_org
+                )
+            if np.any(np.isnan(refpoint_cum_org)):
+                print("Still NaNs in refpoint_cum_org — interpolating over time.")
+                time_idx = np.arange(refpoint_cum_org.shape[0])
+                valid = ~np.isnan(refpoint_cum_org)
+                if np.sum(valid) >= 2:
+                    f_interp = interp1d(time_idx[valid], refpoint_cum_org[valid], kind='linear',
+                                        bounds_error=False, fill_value='extrapolate')
+                    refpoint_cum_org = f_interp(time_idx)
+                else:
+                    print("WARNING: Not enough valid points in refpoint_cum_org to interpolate.")
+                    refpoint_cum_org[:] = 0
+
+
+            # --- Reference: Tide correction ---
+            if tide:
+                refpoint_tide = np.nanmean(tide_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
+                if np.any(np.isnan(refpoint_tide)):
+                    print("Some NaNs detected in refpoint_tide — replacing with nanmedian across all pixels.")
+                    refpoint_tide = np.where(
+                        np.isnan(refpoint_tide),
+                        np.nanmedian(tide_org, axis=(1,2)),
+                        refpoint_tide
+                    )
+                if np.any(np.isnan(refpoint_tide)):
+                    print("Still NaNs in refpoint_tide — interpolating over time.")
+                    time_idx = np.arange(refpoint_tide.shape[0])
+                    valid = ~np.isnan(refpoint_tide)
+                    if np.sum(valid) >= 2:
+                        f_interp = interp1d(time_idx[valid], refpoint_tide[valid], kind='linear',
+                                            bounds_error=False, fill_value='extrapolate')
+                        refpoint_tide = f_interp(time_idx)
+                    else:
+                        print("WARNING: Not enough valid points in refpoint_tide to interpolate.")
+                        refpoint_tide[:] = 0
+            else:
+                refpoint_tide = None
+
+
+            # --- Reference: Ionospheric correction ---
+            if iono:
+                refpoint_iono = np.nanmean(iono_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
+                if np.any(np.isnan(refpoint_iono)):
+                    print("Some NaNs detected in refpoint_iono — replacing with nanmedian across all pixels.")
+                    refpoint_iono = np.where(
+                        np.isnan(refpoint_iono),
+                        np.nanmedian(iono_org, axis=(1,2)),
+                        refpoint_iono
+                    )
+                if np.any(np.isnan(refpoint_iono)):
+                    print("Still NaNs in refpoint_iono — interpolating over time.")
+                    time_idx = np.arange(refpoint_iono.shape[0])
+                    valid = ~np.isnan(refpoint_iono)
+                    if np.sum(valid) >= 2:
+                        f_interp = interp1d(time_idx[valid], refpoint_iono[valid], kind='linear',
+                                            bounds_error=False, fill_value='extrapolate')
+                        refpoint_iono = f_interp(time_idx)
+                    else:
+                        print("WARNING: Not enough valid points in refpoint_iono to interpolate.")
+                        refpoint_iono[:] = 0
+            else:
+                refpoint_iono = None
+
+
+            # --- Reference each dataset ---
+            for i in range(n_im):
+                cum_org[i, :, :] -= refpoint_cum_org[i]
+                if tide:
+                    tide_org[i, :, :] -= refpoint_tide[i]
+                if iono:
+                    iono_org[i, :, :] -= refpoint_iono[i]
+
+            # --- Finally, remove full tide and iono (already referenced) from cumulative
+            if tide:
+                cum_org -= tide_org
+            if iono:
+                cum_org -= iono_org
+
+            # --- Else case for sbovl_abs (presumably)
+            else:
+                print('Skipping back referencing to stable point for SBOI + daz mode')
+
+
 
     if n_para > n_im:
         n_para = n_im
@@ -683,7 +805,7 @@ def main(argv=None):
         for i in range(n_im):
             cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
     else:
-        print('Skipping back referencing to stable point for SBOI')
+        print('Skipping back referencing to stable point for SBOI + daz mode')
 
     if not sbovl_abs: ##TODO I have closed here as I get some nan errors for SBOI 
         ### Save image

@@ -538,14 +538,22 @@ if [ "$p13_sbovl" == "y" ]; then
       python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"
       LiCSBAS131_boi_absolute.py $extra
     fi
-  # else
-  #   if [ "$check_only" == "y" ];then
-  #     echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
-  #     echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'
-  #   else
-  #     python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"
-  #     python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"
-  #   fi
+  else
+    if [ "$check_only" == "y" ];then
+      if [ "$p131_sbovl_tide" == "y" ]; then
+        echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
+      fi
+      if [ "$p131_sbovl_iono" == "y" ]; then  
+        echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'
+      fi
+    else
+      if [ "$p131_sbovl_tide" == "y" ]; then
+        python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"
+      fi
+      if [ "$p131_sbovl_iono" == "y" ]; then
+        python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"
+      fi
+    fi
   fi
 fi
 
@@ -631,16 +639,17 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z "$p16_ex_range" ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
   if [ ! -z "$p16_ex_range_geo" ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
   if [ "$p16_interpolate_nans" == "y" ] && [ "$p16_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
-  if [ "$sbovl_abs" == "y" ];then 
-    p16_op="$p16_op --sbovl_abs "; 
+  if [ "$p16_sbovl" == "y" ];then 
+    p16_op="$p16_op --sbovl --nofilter";
+    if [ "$sbovl_abs" == "y" ];then
+      p16_op="$p16_op --sbovl_abs ";
+    fi 
     if [ "$p131_sbovl_tide" == "y" ];then
       p16_op="$p16_op --tide"
     fi
     if [ "$p131_sbovl_iono" == "y" ];then
       p16_op="$p16_op --iono"
     fi
-  elif [ "$p16_sbovl" == "y" ];then 
-    p16_op="$p16_op --sbovl --nofilter"; 
   fi
   if [ "$p16_skippngs" == "y" ];then p16_op="$p16_op --nopngs"; fi
 

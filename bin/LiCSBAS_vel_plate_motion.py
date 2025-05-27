@@ -108,12 +108,15 @@ def main(argv=None):
         elif not os.path.exists(tsdir):
             raise Usage('No {} exists! '.format(tsdir))
         elif not os.path.exists(os.path.join(tsdir, 'results', 'vel.filt.mskd')):
-            if sbovl_abs:
+            if os.path.exists(os.path.join(tsdir, 'results', 'vel.mskd')):
+                print('Warning, vel.filt.mskd does not exist, but vel.mskd exists. Will use it instead.')
+                input = 'vel.mskd'
+            elif sbovl_abs:
                 if not os.path.exists(os.path.join(tsdir, 'results', input)):
                     raise Usage(f'Error, the {input} file does not exist - please check SBOI processing.')
             else:
                 raise Usage('Error, the vel_filt.mskd file does not exist - please finish processing incl step 16')
-
+        
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
         print("  "+str(err.msg), file=sys.stderr)

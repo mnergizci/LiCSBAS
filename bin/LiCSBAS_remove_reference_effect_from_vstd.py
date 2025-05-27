@@ -3,7 +3,7 @@
 ========
 Overview
 ========
-This script takes a vstd.tif and removes the reference effect from the line-of-sight vstd maps by fitting a spherical or exponential model to the scatter between uncertainty and distance away from the reference center.
+This script takes a vstd.tif and removes the reference effect from the line-of-sight vstd maps by fitting a spherical, exponential or linear model to the scatter between uncertainty and distance away from the reference center.
 
 Input:
     vstd.tif
