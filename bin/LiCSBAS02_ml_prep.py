@@ -126,7 +126,7 @@ def main(argv=None):
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
     ### For parallel processing
-    global ifgdates2, geocdir, outdir, nlook, n_valid_thre, cycle, cmap_wrap, plot_cc, cmap_cc, width, length
+    global ifgdates2, geocdir, outdir, nlook, n_valid_thre, cycle, cmap_wrap, plot_cc, cmap_cc, width, length, coh_thre
 
 
     #%% Set default
@@ -145,13 +145,15 @@ def main(argv=None):
     cmap_cc = cmc.batlow #SCM.batlow
     cycle = 3 #default of ifg, (75 for sbovl)
     n_valid_thre = 0.5
+    coh_thre = 0.2
     q = multi.get_context('fork')
+    
 
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:n:", ["help", "plot_cc", "freq=", "n_para=", "sbovl"])
+            opts, args = getopt.getopt(argv[1:], "hi:o:n:", ["help", "plot_cc", "freq=", "n_para=", "coh_thre=",  "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -166,6 +168,8 @@ def main(argv=None):
                 nlook = int(a)
             elif o == '--freq':
                 radar_freq = float(a)
+            elif o == '--coh_thre':
+                coh_thre = float(a)
             elif o == '--n_para':
                 n_para = int(a)
             elif o == '--plot_cc':
@@ -184,6 +188,12 @@ def main(argv=None):
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
 
+    if sbovl:
+        if n_valid_thre == 0.5:
+            n_valid_thre = 0.2
+        if coh_thre == 0.2:
+            coh_thre=0.4
+        
 
     #%% Directory and file setting
     geocdir = os.path.abspath(geocdir)
@@ -299,13 +309,12 @@ def main(argv=None):
             ifgdates2.append(ifgd)
         if sbovl:
             sbovlmmfile = os.path.join(ifgdir1, ifgd+'.sbovldiff.adf.mm')
-            sbovlccfile = os.path.join(ifgdir1, ifgd+'.sbovldiff.adf.cc')
+            sbovlccfile = os.path.join(ifgdir1, ifgd+'.cc')  #also use normal cc
             bovlmmfile = os.path.join(ifgdir1, ifgd+'.bovldiff.adf.mm')  # in case only bovl exists.
-            bovlccfile = os.path.join(ifgdir1, ifgd+'.bovldiff.adf.cc')
             
-            if not ((os.path.exists(sbovlmmfile) and os.path.exists(sbovlccfile)) or (os.path.exists(bovlmmfile) and os.path.exists(bovlccfile))):
+            if not ((os.path.exists(sbovlmmfile) and os.path.exists(sbovlccfile)) or (os.path.exists(bovlmmfile))):
                 sbovldates.append(ifgd)
-
+    # breakpoint()
     n_ifg2 = len(ifgdates2)
     if sbovl:
         n_sbovl = len(sbovldates)
@@ -536,7 +545,7 @@ def convert_wrapper(ifgd, is_sbovl=False):
 
     # Initialize suffix and cycle based on type
     if is_sbovl:
-        suffix = ['.geo.sbovldiff.adf.mm.tif', '.geo.sbovldiff.adf.cc.tif', '.sbovldiff.adf.mm', '.sbovldiff.adf.cc']
+        suffix = ['.geo.sbovldiff.adf.mm.tif', '.geo.cc.tif', '.sbovldiff.adf.mm', '.cc']
         cycle = 75
 
         # Check for sbovldiff files first
@@ -548,10 +557,10 @@ def convert_wrapper(ifgd, is_sbovl=False):
 
             # Fall back to bovldiff if sbovldiff not found
             unw_tiffile = os.path.join(geocdir, ifgd, ifgd + '.geo.bovldiff.adf.mm.tif')
-            cc_tiffile = os.path.join(geocdir, ifgd, ifgd + '.geo.bovldiff.adf.cc.tif')
+            cc_tiffile = os.path.join(geocdir, ifgd, ifgd + '.geo.cc.tif')
 
             if not os.path.exists(unw_tiffile) or not os.path.exists(cc_tiffile):
-                print(f'  No {ifgd + ".geo.bovldiff.adf.mm.tif"} or {ifgd + ".geo.bovldiff.adf.cc.tif"} found. Skip.', flush=True)
+                print(f'  No {ifgd + ".geo.bovldiff.adf.mm.tif"} or {ifgd + ".geo.cc.tif"} found. Skip.', flush=True)
                 return 1
 
     else:
@@ -602,10 +611,10 @@ def convert_wrapper(ifgd, is_sbovl=False):
         cc[cc == 0] = np.nan  # Treat zero coherence as missing data (NaN)
 
         # Apply weighted multilook to `unw` using coherence as weights
-        unw = tools_lib.multilook_weighted(unw, cc, nlook, nlook, n_valid_thre)
+        unw = tools_lib.multilook_weighted(unw, cc, nlook, nlook, n_valid_thre, coh_thre)
 
         # Apply weighted multilook to `cc`, using itself as the coherence weight
-        cc = tools_lib.multilook_weighted(cc, cc, nlook, nlook, n_valid_thre)
+        cc = tools_lib.multilook_weighted(cc, cc, nlook, nlook, n_valid_thre, coh_thre)
 
     # Save float outputs
     unw.tofile(unwfile)

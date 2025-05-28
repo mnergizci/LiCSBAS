@@ -14,7 +14,6 @@ Inputs in GEOCml*/ :
    - yyyymmdd_yyyymmdd.unw[.png]
    - yyyymmdd_yyyymmdd.cc
    - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
-   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (if --sbovl is used)
  - slc.mli[.par|.png]
  - baselines (can be dummy)
  - EQA.dem_par
@@ -315,10 +314,7 @@ def main(argv=None):
         n_unw_ifg.append((~np.isnan(unw)).sum())
 
         ## cc
-        if sbovl:
-            ccfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.cc')
-        else:
-            ccfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
+        ccfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
         if os.path.getsize(ccfile) == length*width:
             coh = io_lib.read_img(ccfile, length, width, np.uint8)
             coh = coh.astype(np.float32)/255

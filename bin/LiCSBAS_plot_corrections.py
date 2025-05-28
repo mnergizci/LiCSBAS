@@ -17,8 +17,8 @@ Usage
 
 Arguments:
  -t    Path to TS_GEOC directory with saved tide, iono, and gacos corrections
- -f    Frame ID (required if ENU .tif files not present)
  -o    Output PNG file name (default: <frame>.corrections.png)
+ -r   Reference area in lon/lat format (e.g., 30:40/50:60) to subtract mean value
 --sboi Run in SBOI mode to preserve absolute velocity (azimuth instead of LOS)
 """
 
@@ -65,20 +65,21 @@ def main(argv=None):
     output_file = None
     sboi = False
     keep_absolute = False
+    refarea = []
 
     # Argument parsing
     try:
-        opts, _ = getopt.getopt(argv[1:], "ht:f:o:", ["help", "sboi"])
+        opts, _ = getopt.getopt(argv[1:], "ht:o:r:", ["help", "sboi"])
         for opt, arg in opts:
             if opt in ('-h', '--help'):
                 print(__doc__)
                 return 0
             elif opt == '-t':
                 tsdir = arg
-            elif opt == '-f':
-                frame = arg
             elif opt == '-o':
                 output_file = arg
+            elif opt == '-r':
+                refarea = arg
             elif opt == '--sboi':
                 sboi = True
                 # keep_absolute = True
@@ -87,15 +88,14 @@ def main(argv=None):
             raise Usage("No TS_GEOC directory provided. Use -t option.")
         if not os.path.exists(tsdir):
             raise Usage(f"Directory {tsdir} does not exist.")
-        if frame is None:
-            raise Usage("Frame ID is required. Use -f option.")
-
+        
     except Usage as err:
         print(f"\nERROR: {err.msg}\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
 
     # File paths
     workdir = os.getcwd()
+    frame= os.path.basename(workdir)
     tide_file = os.path.join(workdir, 'tide.vel')
     iono_file = os.path.join(workdir, 'iono.vel')
     gacos_file = os.path.join(workdir, 'sltd.vel')
@@ -185,25 +185,26 @@ def main(argv=None):
     # Reference area subtraction if needed
     if not keep_absolute:
         refx1, refx2, refy1, refy2 = map(int, re.split('[:/]', cum.refarea.item()))
-        
-        if sboi:
-            with open(os.path.join(workdir, 'TS_GEOCml10/info/12ref.txt'), 'r') as f:
-                refarea = f.read().strip()  # e.g., '201:202/423:424'
-            # Split the string and convert to integers
-            refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
-        
+        if refarea:
+            refx1, refx2, refy1, refy2 = map(int, re.split('[:/]', refarea))
+        print(f'ref_area: {refx1}:{refx2}/{refy1}:{refy2}')
         mean_val = np.nanmean(vlos_eurasia.values[refy1:refy2, refx1:refx2])
+        mean_val = np.nan_to_num(mean_val, nan=0.0) #in case of all NaNs, would be already referenced that point #MN
         vlos_eurasia.values -= mean_val
         mean_val = np.nanmean(vlos.values[refy1:refy2, refx1:refx2])
+        mean_val = np.nan_to_num(mean_val, nan=0.0)
         vlos.values -= mean_val
         mean_val = np.nanmean(tide[refy1:refy2, refx1:refx2])
+        mean_val = np.nan_to_num(mean_val, nan=0.0)
         tide -= mean_val
         mean_val = np.nanmean(iono[refy1:refy2, refx1:refx2])
+        mean_val = np.nan_to_num(mean_val, nan=0.0)
         iono -= mean_val
         if not sboi:
             mean_val = np.nanmean(gacos[refy1:refy2, refx1:refx2])
+            mean_val = np.nan_to_num(mean_val, nan=0.0)
             gacos -= mean_val
-       
+
     # Uncorrected velocity
     if sboi:
         gacos = np.zeros_like(vlos.data)
@@ -282,17 +283,21 @@ def main(argv=None):
             if i == 5:
                 fig.shift_origin(xshift='3.3c', yshift='-1.5c')
 
+
+            
             v = np.nanpercentile(grid.data, [2, 98])
+            symmetry_needed = (v[0] < 0 and v[1] > 0 and abs(v[0] + v[1]) < 0.25 * max(abs(v[0]), abs(v[1])))
+            symmetry_needed = True
             lim = max(abs(v[0]), abs(v[1]))
-            # Ensure lim is positive
-            if lim < 0.1:
-                lim = 0.1  # or any small threshold that works visually
+            if symmetry_needed:
+                lim = max(abs(v[0]), abs(v[1]))
+                cmap_range = [-round(lim, 1), round(lim, 1)]
+            else:
+                cmap_range = [round(v[0], 1), round(v[1], 1)]
             
             if i == 0 or i == 5:
                 cmap_range = [-10, 10]
-            else:
-                cmap_range = [-round(lim, 1), round(lim, 1)]
-
+            
             pygmt.makecpt(cmap="vik", series=cmap_range)
             if i == 0 or i == 5:
                 fig.basemap(projection="M5c", region=region, frame=True)
@@ -313,9 +318,12 @@ def main(argv=None):
                 y=[rectangle[1], rectangle[1], rectangle[3], rectangle[3], rectangle[1]],
                 pen="2p,black")
             
+            
             pygmt.config(MAP_FRAME_TYPE="inside")
             if i == 0 or i == 5:
                 fig.basemap(projection="M5c", region=region, frame=["x2f1","y2f1",'WSne'])
+                fig.plot(data=f'{tr1_dir}/data/GEM_TR.shp', pen="0.5p,black",transparency=70)
+                fig.plot(data=fault_file, pen="1p,black",transparency=50)   
             else:
                 fig.basemap(projection="M3c", region=region, frame=["x2f1","y2f1",'wsne'])
                 
@@ -343,15 +351,18 @@ def main(argv=None):
                 fig.shift_origin(xshift='3.3c', yshift='-1.5c')
 
             v = np.nanpercentile(grid.data, [2, 98])
+            symmetry_needed = (v[0] < 0 and v[1] > 0 and abs(v[0] + v[1]) < 0.25 * max(abs(v[0]), abs(v[1])))
+            symmetry_needed = True
+            # print(v)
             lim = max(abs(v[0]), abs(v[1]))
-            # Ensure lim is positive
-            if lim < 0.1:
-                lim = 0.1  # or any small threshold that works visually
+            if symmetry_needed:
+                lim = max(abs(v[0]), abs(v[1]))
+                cmap_range = [-round(lim, 1), round(lim, 1)]
+            else:
+                cmap_range = [round(v[0], 1), round(v[1], 1)]
             
             if i == 0 or i == 4:
                 cmap_range = [-10, 10]
-            else:
-                cmap_range = [-round(lim, 1), round(lim, 1)]
 
             pygmt.makecpt(cmap="vik", series=cmap_range)
             if i == 0 or i == 4:
@@ -359,7 +370,8 @@ def main(argv=None):
             else:
                 fig.basemap(projection="M3c", region=region, frame=True)
             
-            pygmt.makecpt(cmap="gray", series=[-200, 10000, 3000], continuous=True, reverse=True)
+            # pygmt.makecpt(cmap="gray", series=[-200, 10000, 3000], continuous=True, reverse=True)
+            pygmt.makecpt(cmap="gray", series=[-9000, 9000, 3000], continuous=True)
             fig.grdimage(grid=dem,cmap=True,region=region,shading=True,frame=False)
             pygmt.makecpt(cmap="vik", series=cmap_range)
             fig.grdimage(grid=grid, cmap=True, nan_transparent=True)
@@ -376,9 +388,10 @@ def main(argv=None):
             pygmt.config(MAP_FRAME_TYPE="inside")
             if i == 0 or i == 4:
                 fig.basemap(projection="M5c", region=region, frame=["x2f1","y2f1",'WSne'])
+                fig.plot(data=f'{tr1_dir}/data/GEM_TR.shp', pen="0.5p,black",transparency=70)
+                fig.plot(data=fault_file, pen="1p,black",transparency=50)   
             else:
                 fig.basemap(projection="M3c", region=region, frame=["x2f1","y2f1",'wsne'])
-                
         # Save output
         if not output_file:
             output_file = f"{frame}.corrections_SBOI.png"

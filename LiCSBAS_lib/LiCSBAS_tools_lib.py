@@ -728,7 +728,7 @@ def multilook(array, nlook_r, nlook_c, n_valid_thre=0.5):
 
     return array_ml
 
-def multilook_weighted(array, coherence, nlook_r, nlook_c, n_valid_thre=0.5, coh_thre=0.75):
+def multilook_weighted(array, coherence, nlook_r, nlook_c, n_valid_thre=0.5, coh_thre=0.4):
     """
     Apply multilooking to the array, with weights based on coherence.
     Low-coherence pixels are ignored if they fall below the coherence threshold (coh_thre).
@@ -748,6 +748,10 @@ def multilook_weighted(array, coherence, nlook_r, nlook_c, n_valid_thre=0.5, coh
     length_ml = int(np.floor(length / nlook_r))
     width_ml = int(np.floor(width / nlook_c))
 
+    if np.nanmax(coherence) > 1.5: ## If coherence is in 0-255 range #MN
+        # Normalize coherence to 0-1 range
+        coherence = coherence.astype(np.float32) / 255.0
+        
     # Reshape for block processing
     array_reshape = array[:length_ml * nlook_r, :width_ml * nlook_c].reshape(length_ml, nlook_r, width_ml, nlook_c)
     coherence_reshape = coherence[:length_ml * nlook_r, :width_ml * nlook_c].reshape(length_ml, nlook_r, width_ml, nlook_c)

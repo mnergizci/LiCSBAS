@@ -17,7 +17,6 @@ Inputs in GEOCml*/ :
    - yyyymmdd_yyyymmdd.cc
    
    - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
-   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (if --sbovl is used)
  - EQA.dem_par
  - slc.mli.par
  - baselines (may be dummy)
@@ -549,7 +548,7 @@ def main(argv=None):
         n_coh_freq = np.zeros((length, width), dtype=np.int16)
         ii = 0
         for ifgd in ifgdates:
-            ccfile = os.path.join(ifgdir, ifgd, ifgd + '.sbovldiff.adf.cc')
+            ccfile = os.path.join(ifgdir, ifgd, ifgd + '.cc')
             if os.path.getsize(ccfile) == length * width:
                 coh = io_lib.read_img(ccfile, length, width, np.uint8)
                 coh = coh.astype(np.float32) / 255
@@ -855,10 +854,7 @@ def main(argv=None):
 
                 ### Read coh file at patch area for WLS
                 if inv_alg == 'WLS':
-                    if sbovl:
-                        cohfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.cc')
-                    else:
-                        cohfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
+                    cohfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
                     f = open(cohfile, 'rb')
 
                     if os.path.getsize(cohfile) == length*width: ## uint8 format

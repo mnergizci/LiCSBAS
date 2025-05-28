@@ -25,7 +25,6 @@ Inputs in GEOCml*/:
    - yyyymmdd_yyyymmdd.unw
    
    - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
-   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (if --sbovl is used)
 
 Outputs in TS_GEOCml*/ :
  - info/
@@ -206,10 +205,7 @@ def calc_block_sum_of_unw_coh_component_size():
         n_unw += ~np.isnan(unw) # Summing number of unnan unw
 
         # coherence values from 0 to 1
-        if args.sbovl:
-            ccfile = os.path.join(ccdir, ifgd, ifgd + '.sbovldiff.adf.cc')
-        else:
-            ccfile = os.path.join(ccdir, ifgd, ifgd + '.cc')
+        ccfile = os.path.join(ccdir, ifgd, ifgd + '.cc')
         coh = io_lib.read_img(ccfile, length, width, np.uint8)
         coh = coh.astype(np.float32) / 255  # keep 0 as 0 which represent nan values
         n_coh += coh
