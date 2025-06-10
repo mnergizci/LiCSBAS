@@ -162,7 +162,7 @@ def main(argv=None):
     cum_keys = []
     if sbovl_abs:
         # Process all three if sbovl (absolute) is specified
-        for k in ['cum','cum_abs','cum_abs_notide','cum_abs_notide_noiono', 'cum_abs_noiono']: #TODO you can remove some of them later. Redundant but we need to try all for comparison of correction.
+        for k in ['cum','cum_abs']: #TODO you can remove some of them later. Redundant but we need to try all for comparison of correction. 'cum_abs_notide','cum_abs_notide_noiono', 'cum_abs_noiono'
             if k in cumh5:
                 cum_keys.append(k)
     else:

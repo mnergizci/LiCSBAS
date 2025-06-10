@@ -352,7 +352,7 @@ def main(argv=None):
         elif 'cum_abs_noiono' in cumh5 and iono:
             cum_org = cumh5['cum_abs_noiono'][()]
             sbovl_suffix = '_abs_noiono'
-        elif 'cum_abs' in cumh5 and not tide and not iono:
+        elif 'cum_abs' in cumh5:
             cum_org = cumh5['cum_abs'][()]
             sbovl_suffix = '_abs'
         ##redefine the output files
@@ -913,7 +913,7 @@ def main(argv=None):
     # breakpoint()
     #%% Output image
     if sbovl_abs:
-        pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+        pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.png')
     else:
         pngfile = os.path.join(resultsdir,'vel.filt.png')
     title = 'Filtered velocity (mm/yr)'
@@ -923,7 +923,7 @@ def main(argv=None):
 
     ## vintercept
     if sbovl_abs:
-        pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+        pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.png')
     else:
         pngfile = os.path.join(resultsdir,'vintercept.filt.png')
     title = 'Intercept of filtered velocity (mm)'
@@ -941,7 +941,7 @@ def main(argv=None):
 
     if maskflag:
         if sbovl_abs:
-            pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+            pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.mskd.png')
         else:
             pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
         title = 'Masked filtered velocity (mm/yr)'
@@ -951,7 +951,7 @@ def main(argv=None):
 
         ## vintercept
         if sbovl_abs:
-            pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.mskd_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.png')
+            pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.mskd.png')
         else:
             pngfile = os.path.join(resultsdir,'vintercept.filt.mskd.png')
         title = 'Masked intercept of filtered velocity (mm)'

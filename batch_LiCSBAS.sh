@@ -523,12 +523,12 @@ if [ "$p13_sbovl" == "y" ]; then
     if [ "$p131_sbovl_model" == "y" ]; then
       extra="$extra --model"
     fi
-    if [ "$p131_sbovl_tide" == "y" ]; then
-      extra="$extra --tide"
-    fi
-    if [ "$p131_sbovl_iono" == "y" ]; then
-      extra="$extra --iono"
-    fi 
+    # if [ "$p131_sbovl_tide" == "y" ]; then
+    #   extra="$extra --tide"
+    # fi
+    # if [ "$p131_sbovl_iono" == "y" ]; then
+    #   extra="$extra --iono"
+    # fi 
     if [ "$check_only" == "y" ];then
       echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
       echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'
@@ -601,12 +601,12 @@ if [ $start_step -le 15 -a $end_step -ge 15 ];then
   if [ "$p15_noautoadjust" == "y" ];then p15_op="$p15_op --noautoadjust"; fi
   if [ "$sbovl_abs" == "y" ];then 
     p15_op="$p15_op --sbovl_abs"; 
-    if [ "$p131_sbovl_tide" == "y" ];then
-      p15_op="$p15_op --tide"
-    fi
-    if [ "$p131_sbovl_iono" == "y" ];then
-      p15_op="$p15_op --iono"
-    fi
+    # if [ "$p131_sbovl_tide" == "y" ];then
+    #   p15_op="$p15_op --tide"
+    # fi
+    # if [ "$p131_sbovl_iono" == "y" ];then
+    #   p15_op="$p15_op --iono"
+    # fi
   elif [ "$p15_sbovl" == "y" ];then 
     p15_op="$p15_op --sbovl"; 
   fi
