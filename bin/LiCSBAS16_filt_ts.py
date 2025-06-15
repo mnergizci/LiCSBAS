@@ -355,6 +355,10 @@ def main(argv=None):
         elif 'cum_abs' in cumh5:
             cum_org = cumh5['cum_abs'][()]
             sbovl_suffix = '_abs'
+        else:
+            cum_org = cumh5['cum'][()]
+            sbovl_suffix = ''
+        print(f'suffix for sbovl_abs: {sbovl_suffix}')
         ##redefine the output files
         # vconstfile = os.path.join(resultsdir, f'vintercept_ransac{sbovl_suffix}.filt')
         # velfile = os.path.join(resultsdir, f'vel_ransac{sbovl_suffix}.filt')
@@ -464,6 +468,7 @@ def main(argv=None):
 
 
             # --- Reference each dataset ---
+            # breakpoint()
             for i in range(n_im):
                 cum_org[i, :, :] -= refpoint_cum_org[i]
                 if tide:

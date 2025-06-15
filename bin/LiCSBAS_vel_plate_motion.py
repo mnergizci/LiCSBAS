@@ -159,6 +159,8 @@ def main(argv=None):
                 refarea = f.read().split()[0]  # str, x1/x2/y1/y2
             refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
             vlos.values = vlos.values - np.nanmean(vlos.values[refy1:refy2, refx1:refx2])
+    else:
+        print('\n Keeping absolute velocity \n')
     lts.export_xr2tif(vlos, outfile, dogdal = False)
 
     # %% Make png if specified

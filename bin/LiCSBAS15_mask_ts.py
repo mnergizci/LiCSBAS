@@ -360,8 +360,13 @@ def main(argv=None):
             velfile = os.path.join(resultsdir,'bootvel_abs_noiono') 
         elif not tide and not iono:
             velfile = os.path.join(resultsdir,'bootvel_abs')
+        #not exist velfile, so use vel
+        if not os.path.exists(velfile):
+            velfile = os.path.join(resultsdir,'vel')
+        print(f'Using {velfile}')
     else:
         velfile = os.path.join(resultsdir,'vel')
+        print(f'Using {velfile}')
 
     if not os.path.exists(velfile):
         raise FileNotFoundError(f"Velocity file not found: {velfile}")
