@@ -238,7 +238,8 @@ def main(argv=None):
     ##Extract daz values from the dataframe  
     if model:
         print('RANSAC model supported is used for daz values')
-        daz = df_daz['daz_mixed'].to_numpy()
+        #daz = df_daz['daz_mixed'].to_numpy()
+        daz = df_daz['daz_model'].to_numpy() #ML recommendation
         daz = daz - daz[0]  # Align to first epoch
     else:
         print('Original data is used for daz values')
