@@ -190,10 +190,11 @@ def main(argv=None):
 
     if sbovl:
         if n_valid_thre == 0.5:
-            n_valid_thre = 0.2
+            n_valid_thre = 0.1
         if coh_thre == 0.2:
-            coh_thre=0.4
-        
+            # coh_thre=0.4
+            coh_thre = 0.05
+            print(f"  Coherence threshold set to {coh_thre} for sbovl processing", flush=True)
 
     #%% Directory and file setting
     geocdir = os.path.abspath(geocdir)
@@ -611,10 +612,11 @@ def convert_wrapper(ifgd, is_sbovl=False):
         cc[cc == 0] = np.nan  # Treat zero coherence as missing data (NaN)
 
         # Apply weighted multilook to `unw` using coherence as weights
-        unw = tools_lib.multilook_weighted(unw, cc, nlook, nlook, n_valid_thre, coh_thre)
-
+        unw = tools_lib.multilook(unw, nlook, nlook, n_valid_thre)
+        # unw = tools_lib.multilook_weighted(unw, cc, nlook, nlook, n_valid_thre, coh_thre)
         # Apply weighted multilook to `cc`, using itself as the coherence weight
-        cc = tools_lib.multilook_weighted(cc, cc, nlook, nlook, n_valid_thre, coh_thre)
+        cc = tools_lib.multilook(cc, nlook, nlook, n_valid_thre)
+        # cc = tools_lib.multilook_weighted(cc, cc, nlook, nlook, n_valid_thre, coh_thre)
 
     # Save float outputs
     unw.tofile(unwfile)
