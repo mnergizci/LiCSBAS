@@ -189,12 +189,12 @@ def main(argv=None):
         return 2
 
     if sbovl:
-        if n_valid_thre == 0.5:
+        if n_valid_thre == 0.5: #This is needed as sbovl is already sparse data.
             n_valid_thre = 0.1
-        if coh_thre == 0.2:
-            # coh_thre=0.4
-            coh_thre = 0.05
-            print(f"  Coherence threshold set to {coh_thre} for sbovl processing", flush=True)
+        # if coh_thre == 0.2:
+        #     # coh_thre=0.4
+        #     coh_thre = 0.05
+        #     print(f"  Coherence threshold set to {coh_thre} for sbovl processing", flush=True)
 
     #%% Directory and file setting
     geocdir = os.path.abspath(geocdir)

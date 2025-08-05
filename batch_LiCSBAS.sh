@@ -71,6 +71,7 @@ p01_get_pha="n" # y/n
 p01_get_mli="n" # y/n
 p01_sbovl="n"
 p02_sbovl="n"
+p04_sbovl="n"
 p11_unw_thre=""	# default: 0.3
 p11_coh_thre=""	# default: 0.05
 p11_s_param="n" # y/n
@@ -323,6 +324,7 @@ if [ $step -eq 04 -a $start_step -le 04 -a $end_step -ge 04 ];then
     if [ ! -z $p04_mask_coh_thre_ifg ];then p04_op="$p04_op -s $p04_mask_coh_thre_ifg"; fi
     if [ ! -z $p04_mask_range ];then p04_op="$p04_op -r $p04_mask_range"; fi
     if [ ! -z $p04_mask_range_file ];then p04_op="$p04_op -f $p04_mask_range_file"; fi
+    if [ "$p04_sbovl" == "y" ]; then p04_op="$p04_op --sbovl"; fi
     if [ ! -z $p04_n_para ];then p04_op="$p04_op --n_para $p04_n_para";
     elif [ ! -z $n_para ];then p04_op="$p04_op --n_para $n_para";fi
 
