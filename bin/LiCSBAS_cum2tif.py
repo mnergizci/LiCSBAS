@@ -20,16 +20,17 @@ LiCSBAS_cum2tif_png.py -T TS_folder -i cum_h5 -m mask -p dem_par -f frame_number
 
   -T  Path to the folder. Default: TS_GEOCml10GACOSmask.
   -i  Path to the h5 file. Default: cum.h5.
-  -m  Path to the mask file.
-  -p  Path to the DEM parameter file. Default: EQA.dem_par
+  -mask  Path to the mask file.
+  -dem  Path to the DEM parameter file. Default: EQA.dem_par
   -f  frame number of naming files (Default: current working directory name)
-  -d  End date of cumulative displacement.
+  -p  primary date of cumulative displacement. Default is first date of the cum_filt.h5
+  -s  secondary date of cumulative displacement.
   --help  Show this help message and exit.
   --plate_motion  If set, it will calculate the plate motion effect
 
 """
 
-def cum_tiff_png(TS_folder, cum_h5, mask, dem_par, frame_number, imd_m, imd_s, plate_motion=False):
+def cum_tiff_png(TS_folder, cum_h5, mask, dem_par, frame_number, imd_p, imd_s, plate_motion=False):
   # breakpoint()
   cum_name= cum_h5.split('.')[0]
   cum_h5 = os.path.join(TS_folder, cum_h5) 
@@ -40,18 +41,18 @@ def cum_tiff_png(TS_folder, cum_h5, mask, dem_par, frame_number, imd_m, imd_s, p
   #read cum for the default start
   cumh55 = h5.File(cum_h5,'r')
   imdates = cumh55['imdates'][()].astype(str).tolist()
-  if not imd_m:
-      imd_m = imdates[0]
+  if not imd_p:
+      imd_p = imdates[0]
 
   # breakpoint()
-  os.system(f"LiCSBAS_cum2flt.py -i {cum_h5} -m {imd_m} -d {imd_s} -o {TS_folder}/results/{cum_name}_{imd_m}-{imd_s}.mask --mask {mask}")
+  os.system(f"LiCSBAS_cum2flt.py -i {cum_h5} -m {imd_p} -d {imd_s} -o {TS_folder}/results/{cum_name}_{imd_p}-{imd_s}.mask --mask {mask}")
   if plate_motion:
     print('Cumulated plate motion effect will be removed from the cumulative displacement.')
-    os.system(f"LiCSBAS_cum_plate_motion.py -t {TS_folder} -f {frame_number} -p {imd_m} -s {imd_s} -o {frame_number}.{cum_name}_{imd_m}-{imd_s}.mask.eurasia.tif")
-    os.system(f"LiCSBAS_disp_img.py -i {frame_number}.{cum_name}_{imd_m}-{imd_s}.mask.eurasia.tif -p {dem_par} --cmin -100 --cmax 100 --png {frame_number}.{cum_name}_{imd_m}-{imd_s}.mask.eurasia.png --title {frame_number}.{cum_name}_{imd_m}-{imd_s}.eurasia")
+    os.system(f"LiCSBAS_cum_plate_motion.py -t {TS_folder} -f {frame_number} -p {imd_p} -s {imd_s} -o {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.eurasia.tif")
+    os.system(f"LiCSBAS_disp_img.py -i {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.eurasia.tif -p {dem_par} --cmin -100 --cmax 100 --png {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.eurasia.png --title {frame_number}.{cum_name}_{imd_p}-{imd_s}.eurasia")
   else:
-    os.system(f"LiCSBAS_flt2geotiff.py -i {TS_folder}/results/{cum_name}_{imd_m}-{imd_s}.mask -p {dem_par} -o {frame_number}.{cum_name}_{imd_m}-{imd_s}.mask.tif")
-    os.system(f"LiCSBAS_disp_img.py -i {TS_folder}/results/{cum_name}_{imd_m}-{imd_s}.mask -p {dem_par} --cmin -100 --cmax 100 --png {frame_number}.{cum_name}_{imd_m}-{imd_s}.mask.png --title {frame_number}.{cum_name}_{imd_m}-{imd_s}.mask")
+    os.system(f"LiCSBAS_flt2geotiff.py -i {TS_folder}/results/{cum_name}_{imd_p}-{imd_s}.mask -p {dem_par} -o {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.tif")
+    os.system(f"LiCSBAS_disp_img.py -i {TS_folder}/results/{cum_name}_{imd_p}-{imd_s}.mask -p {dem_par} --cmin -100 --cmax 100 --png {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.png --title {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask")
   # Move the different format files including *.cum *.tif and *.png to their corresponding folders
     
 if __name__ == "__main__":
@@ -61,11 +62,11 @@ if __name__ == "__main__":
     parser.add_argument("-mask", dest="mask", default="mask", help="Path to the mask file.")
     parser.add_argument("-dem", dest="dem_par", default="EQA.dem_par", help="Path to the DEM parameter file. Default=EQA.dem_par")
     parser.add_argument("-f", dest="frame_number", default=os.path.basename(os.getcwd()), help="frame number of naming files")
-    parser.add_argument("-m", dest="imd_m", default=None, help="Start date of cumulative displacement. Default is first date of the cum_filt.h5")
+    parser.add_argument("-p", dest="imd_p", default=None, help="Start date of cumulative displacement. Default is first date of the cum_filt.h5")
     parser.add_argument("-s", dest="imd_s", help="End date of cumulative displacement.")
     parser.add_argument("--plate_motion", action="store_true", help="If set, it will calculate the plate motion effect")
     args = parser.parse_args()
 
-    cum_tiff_png(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame_number, args.imd_m, args.imd_s, args.plate_motion)
+    cum_tiff_png(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame_number, args.imd_p, args.imd_s, args.plate_motion)
     # cum_tiff_png(args.cum_h5, args.mask, args.dem_par)
 

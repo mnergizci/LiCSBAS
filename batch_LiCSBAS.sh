@@ -378,7 +378,7 @@ if [ $start_step -le 11 -a $end_step -ge 11 ];then
   if [ ! -z $p11_unw_thre ];then p11_op="$p11_op -u $p11_unw_thre"; fi
   if [ ! -z $p11_coh_thre ];then p11_op="$p11_op -c $p11_coh_thre"; fi
   if [ ! -z $p11_minbtemp ];then p11_op="$p11_op --minbtemp $p11_minbtemp"; fi
-  if [ ! -z $p11_maxbtemp ];then p11_op="$p11_op --minbtemp $p11_maxbtemp"; fi
+  if [ ! -z $p11_maxbtemp ];then p11_op="$p11_op --maxbtemp $p11_maxbtemp"; fi
   if [ $p11_sbovl == "y" ];then p11_op="$p11_op --sbovl"; fi
   if [ $p11_s_param == "y" ];then p11_op="$p11_op -s"; fi
   if [ $check_only == "y" ];then
@@ -518,42 +518,44 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
 fi
 
 ###TODO I know it is not tidy but I need to call them before step 14 for sbovl processing, MN
-if [ "$p13_sbovl" == "y" ]; then
-  if [ "$sbovl_abs" == "y" ]; then
-    # p131_sbovl_abs='y' #no need anymore, MN
-    extra="-t $TSdir"
-    if [ "$p131_sbovl_model" == "y" ]; then
-      extra="$extra --model"
-    fi
-    # if [ "$p131_sbovl_tide" == "y" ]; then
-    #   extra="$extra --tide"
-    # fi
-    # if [ "$p131_sbovl_iono" == "y" ]; then
-    #   extra="$extra --iono"
-    # fi 
-    if [ "$check_only" == "y" ];then
-      echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
-      echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'
-      echo "LiCSBAS131_boi_absolute.py $extra"
-    else
-      python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"
-      python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"
-      LiCSBAS131_boi_absolute.py $extra
-    fi
-  else
-    if [ "$check_only" == "y" ];then
-      if [ "$p131_sbovl_tide" == "y" ]; then
+if [ $start_step -le 13 -a $end_step -ge 13 ];then
+  if [ "$p13_sbovl" == "y" ]; then
+    if [ "$sbovl_abs" == "y" ]; then
+      # p131_sbovl_abs='y' #no need anymore, MN
+      extra="-t $TSdir"
+      if [ "$p131_sbovl_model" == "y" ]; then
+        extra="$extra --model"
+      fi
+      # if [ "$p131_sbovl_tide" == "y" ]; then
+      #   extra="$extra --tide"
+      # fi
+      # if [ "$p131_sbovl_iono" == "y" ]; then
+      #   extra="$extra --iono"
+      # fi 
+      if [ "$check_only" == "y" ];then
         echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
-      fi
-      if [ "$p131_sbovl_iono" == "y" ]; then  
         echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'
+        echo "LiCSBAS131_boi_absolute.py $extra"
+      else
+        python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"
+        python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"
+        LiCSBAS131_boi_absolute.py $extra
       fi
     else
-      if [ "$p131_sbovl_tide" == "y" ]; then
-        python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"
-      fi
-      if [ "$p131_sbovl_iono" == "y" ]; then
-        python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"
+      if [ "$check_only" == "y" ];then
+        if [ "$p131_sbovl_tide" == "y" ]; then
+          echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"'
+        fi
+        if [ "$p131_sbovl_iono" == "y" ]; then  
+          echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"'
+        fi
+      else
+        if [ "$p131_sbovl_tide" == "y" ]; then
+          python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect = False, sbovl=True)"
+        fi
+        if [ "$p131_sbovl_iono" == "y" ]; then
+          python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000, directcorrect = False, sbovl=True)"
+        fi
       fi
     fi
   fi
@@ -640,9 +642,9 @@ if [ $start_step -le 16 -a $end_step -ge 16 ];then
   if [ ! -z "$p16_range_geo" ];then p16_op="$p16_op --range_geo $p16_range_geo"; fi
   if [ ! -z "$p16_ex_range" ];then p16_op="$p16_op --ex_range $p16_ex_range"; fi
   if [ ! -z "$p16_ex_range_geo" ];then p16_op="$p16_op --ex_range_geo $p16_ex_range_geo"; fi
-  if [ "$p16_interpolate_nans" == "y" ] && [ "$p16_sbovl" != "y" ];then p16_op="$p16_op --interpolate_nans"; fi
+  if [ "$p16_interpolate_nans" == "y" ];then p16_op="$p16_op --interpolate_nans"; fi
   if [ "$p16_sbovl" == "y" ];then 
-    p16_op="$p16_op --sbovl --nofilter";
+    p16_op="$p16_op --sbovl ";
     if [ "$sbovl_abs" == "y" ];then
       p16_op="$p16_op --sbovl_abs ";
     fi 

@@ -199,13 +199,14 @@ if __name__ == "__main__":
     correction_flag = False
     novel_flag = False
     raw_flag = False
+    cum_name = None
 
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity", "raw"])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity", "raw", "cum_name="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -256,6 +257,8 @@ if __name__ == "__main__":
                 novel_flag = True
             elif o == '--raw':
                 raw_flag = True
+            elif o == '--cum_name':
+                cum_name = a
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -416,23 +419,25 @@ if __name__ == "__main__":
             
     # breakpoint()
     if absolute:
-        cum_abs = None
+        cum_abs = cum_name
         vel = None
         # breakpoint()
         # Check for absolute displacement
-        if 'cum_abs_notide_noiono' in cumh5:
-            cum_abs = cumh5['cum_abs_notide_noiono'][()]
-            print('Absolute displacement (cum_abs_notide_noiono) found.')
-        elif 'cum_abs_notide' in cumh5:
-            cum_abs = cumh5['cum_abs_notide'][()]
-            print('Absolute displacement (cum_abs_notide) found.')
-        elif 'cum_abs' in cumh5:
-            cum_abs = cumh5['cum_abs'][()]
-            print('Absolute displacement (cum_abs) found.')
+        if cum_name is None:
+            if 'cum_abs_notide_noiono' in cumh5:
+                cum_abs = cumh5['cum_abs_notide_noiono'][()]
+                print('Absolute displacement (cum_abs_notide_noiono) found.')
+            elif 'cum_abs_notide' in cumh5:
+                cum_abs = cumh5['cum_abs_notide'][()]
+                print('Absolute displacement (cum_abs_notide) found.')
+            elif 'cum_abs' in cumh5:
+                cum_abs = cumh5['cum_abs'][()]
+                print('Absolute displacement (cum_abs) found.')
+            else:
+                cum_abs = cumh5['cum'][()]
+                print('No absolute displacement (cum_abs) found in {}. cum setted.'.format(cumfile))
         else:
-            cum_abs = cumh5['cum'][()]
-            print('No absolute displacement (cum_abs) found in {}. cum setted.'.format(cumfile))
-
+            cum_abs = cumh5[cum_name][()]
         # Check for absolute velocity
         if 'vel_abs_notide_noiono' in cumh5:
             vel = cumh5['vel_abs_notide_noiono']
