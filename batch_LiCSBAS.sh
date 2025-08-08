@@ -170,6 +170,9 @@ p16_TSdir=""    # default: TS_$GEOCmldir
 p16_nomask="n"	# y/n. default: n
 p16_n_para=$n_para   # default: # of usable CPU
 
+##just for sbovl high residual detection
+p13resid_rerun="n" # y/n. default: n
+
 
 # eqoffs
 eqoffs_minmag="0"  # min magnitude of earthquakes to auto-find. 0 means skipping the estimation.
@@ -367,7 +370,15 @@ fi
 done ##1
 
 ### Determine name of TSdir
+if [ $start_step -gt 10 -a $do04op_mask == "y" ]; then
+  # If mask step was done, use the masked GEOCmldir
+  GEOCmldir="${GEOCmldir}mask"
+elif [ $start_step -gt 10 -a $do05op_clip == "y" ]; then
+  # If clip step was done, use the clipped GEOCmldir
+  GEOCmldir="${GEOCmldir}clip"
+fi
 TSdir="TS_$GEOCmldir"
+
 
 
 if [ $start_step -le 11 -a $end_step -ge 11 ];then
@@ -452,6 +463,80 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
       fi
     fi
 fi
+
+####################
+if [ $start_step -le 13 -a $end_step -ge 13 ];then
+  if [ $p13resid_rerun == "y" ];then
+    extra2='-t '$TSdir
+    p13_skippngs="y" # rerunning step 13, so no need to create pngs
+    # getting eq offsets here:
+    if [ "$eqoffs" == "y" -a $eqoffs_minmag -gt 0 ]; then
+      extra='-M '$eqoffs_minmag
+      extra=$extra' -t '$TSdir
+      extra=$extra' -o '$eqoffs_txtfile
+      extra=$extra' --buffer '$eqoffs_buffer
+      if [ "$check_only" == "y" ];then
+        echo "LiCSBAS_get_eqoffsets.py $extra"
+      else
+        LiCSBAS_get_eqoffsets.py $extra
+      fi
+    fi
+    p13_op=""
+    if [ ! -z "$p13_GEOCmldir" ];then p13_op="$p13_op -d $p13_GEOCmldir";
+      else p13_op="$p13_op -d $GEOCmldir"; fi
+    if [ ! -z "$p13_TSdir" ];then p13_op="$p13_op -t $p13_TSdir"; fi
+    if [ ! -z "$p13_inv_alg" ];then p13_op="$p13_op --inv_alg $p13_inv_alg"; fi
+    if [ ! -z "$p13_mem_size" ];then p13_op="$p13_op --mem_size $p13_mem_size"; fi
+    if [ ! -z "$p13_gamma" ];then p13_op="$p13_op --gamma $p13_gamma"; fi
+    if [ ! -z "$p13_n_para" ];then p13_op="$p13_op --n_para $p13_n_para";
+      elif [ ! -z "$n_para" ];then p13_op="$p13_op --n_para $n_para"; fi
+    if [ ! -z "$p13_n_unw_r_thre" ];then p13_op="$p13_op --n_unw_r_thre $p13_n_unw_r_thre"; fi
+    if [ "$p13_keep_incfile" == "y" ];then p13_op="$p13_op --keep_incfile"; fi
+    if [ "$p13_nullify_noloops" == "y" ];then p13_op="$p13_op --nullify_noloops"; fi
+    if [ "$p13_singular" == "y" ];then p13_op="$p13_op --singular"; fi
+    if [ "$sbovl_abs" == "y" ];then p13_op="$p13_op --sbovl_abs";
+      elif [ "$p13_sbovl" == "y" ];then p13_op="$p13_op --sbovl"; fi
+    if [ "$p13_singular_gauss" == "y" ];then p13_op="$p13_op --singular_gauss"; fi
+    if [ "$p13_skippngs" == "y" ];then p13_op="$p13_op --nopngs"; fi
+    if [ "$gpu" == "y" ];then p13_op="$p13_op --gpu"; fi
+
+    if [ "$cometdev" -eq 1 ];then
+        extra='--nopngs'
+        if [ -z "$p13_n_unw_r_thre" ];then extra="$extra --n_unw_r_thre 0.4"; fi
+        extra="$extra --singular_gauss"
+      else
+        extra=''
+    fi
+
+    if [ "$eqoffs" == "y" ]; then
+      touch $eqoffs_txtfile # just in case it would fail earlier
+      extra='--offsets '$eqoffs_txtfile
+    fi
+
+
+    if [ "$check_only" == "y" ];then
+      echo "LiCSBAS13_sb_inv.py $extra $p13_op"
+      echo "LiCSBASresid_check.py $extra2"
+    else
+      LiCSBAS13_sb_inv.py $extra $p13_op 2>&1 | tee -a $log
+      pstat=(${PIPESTATUS[0]})
+      LiCSBASresid_check.py $extra2 2>&1 | tee -a $log
+      pstat2=(${PIPESTATUS[0]})
+
+      if [ "$p12_nullify" == "y" ];then
+        if [ $pstat -ne 0 ];then
+          echo "Fixing the unresolved-yet issue with NaNs in ref area by just rerunning step 13"
+          LiCSBAS13_sb_inv.py $extra $p13_op 2>&1 | tee -a $log
+          pstat=(${PIPESTATUS[0]})
+        fi
+      fi
+
+      if [ $pstat -ne 0 ];then exit 1; fi
+    fi
+  fi
+fi
+
+#####################
 
 if [ $start_step -le 13 -a $end_step -ge 13 ];then
   # getting eq offsets here:
