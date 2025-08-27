@@ -237,11 +237,17 @@ def extract_url_licsar(url):
     if response.status_code == 200:
         return url
     else:
-        url = os.path.dirname(url)
         fname = os.path.basename(url)
+        url = os.path.dirname(url)
+        # transition period - both old and new version exist - try the temporary url:
+        url = url.replace('LiCSAR_products/', 'LiCSAR_products.future/')
         response = requests.get(url)
         if response.status_code != 200:
-            return None # this does not exist
+            # perhaps already after the transition? Getting it back:
+            url = url.replace('LiCSAR_products.future/', 'LiCSAR_products/')
+            response = requests.get(url)
+            if response.status_code != 200:
+                return None # this also does not exist
         response.encoding = response.apparent_encoding  # avoid garble
         html_doc = response.text
         soup = BeautifulSoup(html_doc, "html.parser")
@@ -518,9 +524,9 @@ def get_ifgdates(ifgdir):
     """
     ifgdates = [str(k) for k in sorted(os.listdir(ifgdir))
                 if len(k) == 17
-                and k[0] =='2'
+                and k[0] in ('1', '2')  #JF for ERS starting with 19*
                 and k[8] =='_'
-                and k[9] =='2'
+                and k[9] in ('1', '2') # JF
                 and os.path.isdir(os.path.join(ifgdir, k))]
 
     return ifgdates
