@@ -2,71 +2,312 @@
 
 import argparse
 import os
+import shutil
 import h5py as h5
+import pandas as pd
+import numpy as np
+from datetime import datetime
+import lics_tstools as lts
+import xarray as xr
+import multiprocessing as multi
+import re
+import matplotlib.pyplot as plt
+
 
 """
-v1.0 20250731 Muhammet Nergizci, Uni of Leeds -Adapted from Dr. Yuan Gao and Dr. Pedro Espin Bedon
-
+v1.0 20250731 Muhammet Nergizci, COMET University of Leeds
 
 ========
 Overview
 ========
-This script outputs a tif and png file of cumulative displacement from cum*.h5.
+This script outputs a tif and png file of cumulative displacement from cum*.h5 iterativelly, also calculated the plate_motion and interseismic effect in each epoch.
 
 =====
 Usage
 =====
-LiCSBAS_cum2tif_png.py -T TS_folder -i cum_h5 -m mask -p dem_par -f frame_number -d imd_s -plate_motion
+LiCSBAS_cum2tif.py -i cum_filt_interpolate.h5 --plate_motion --interseismic_motion
 
-  -T  Path to the folder. Default: TS_GEOCml10GACOSmask.
-  -i  Path to the h5 file. Default: cum.h5.
-  -mask  Path to the mask file.
-  -dem  Path to the DEM parameter file. Default: EQA.dem_par
-  -f  frame number of naming files (Default: current working directory name)
-  -p  primary date of cumulative displacement. Default is first date of the cum_filt.h5
-  -s  secondary date of cumulative displacement.
-  --help  Show this help message and exit.
-  --plate_motion  If set, it will calculate the plate motion effect
-
+  -t   Path to TS folder. Default: TS_GEOCml10GACOSmask
+  -i   HDF5 file (cum.h5, cum_filt.h5, or cum_filt_interpolate.h5)  [REQUIRED]
+  -mask  Mask dataset name (under results/). Default: mask
+  -dem   DEM parameter file name under TS folder. Default: EQA.dem_par
+  -f   Frame number for output naming. Default: CWD basename
+  -p   Start date (YYYYMMDD or YYYY-MM-DD). Default: first imdate in H5
+  -s   End date   (YYYYMMDD or YYYY-MM-DD). Required if no
+  --plate_motion         Remove cumulative plate-motion (EU-fixed default)
+  --interseismic_motion  Also remove cumulative interseismic accumulation
+  --n_para <num>         Number of parallel processes to use. Default: 4 #TODO not set yet
 """
+#%%useful function
+def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion,
+                imd_p_dt64, vlos_eurasia_reshaped, vlos_gnss):
+    """
+    Computes corrected cumulative displacement for a single epoch.
+    Assumes the following names exist in the caller scope (main),
+    captured via closure when we re-bind this function inside main:
+      - imd_p_dt64
+      - vlos_eurasia_reshaped (or None)
+      - vlos_gnss            (or None)
+    """
+    #reference_area
+    refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
 
-def cum_tiff_png(TS_folder, cum_h5, mask, dem_par, frame_number, imd_p, imd_s, plate_motion=False):
-  # breakpoint()
+    # parse imdate numpy datetime64[D]
+    im_d = np.datetime64(datetime.strptime(imdate, "%Y%m%d").date(), 'D')
+
+    # years since primary
+    dt_days = (im_d - imd_p_dt64).astype('timedelta64[D]').astype(int)
+    years = dt_days / 365.4
+    
+    # select cumulative at epoch and at primary
+    try:
+        C_t = cumxr['cum'].sel(time=imdate)
+    except Exception:
+        C_t = cumxr['cum'].sel(time=im_d, method='nearest')
+
+    p_str = str(imd_p_dt64).replace('-', '')
+    try:
+        C_0 = cumxr['cum'].sel(time=p_str)
+    except Exception:
+        C_0 = cumxr['cum'].sel(time=imd_p_dt64, method='nearest')
+
+    C_t.values = C_t.values - np.nanmean(C_t.values[refy1:refy2, refx1:refx2])
+    C_0.values = C_0.values - np.nanmean(C_0.values[refy1:refy2, refx1:refx2])
+    cum_base  = (C_t - C_0).copy()  # mm
+    # breakpoint()
+    # plate-motion cumulative removal: v_los * years
+    cum_corr_plate = None
+    if plate_motion and (vlos_eurasia_reshaped is not None) and years != 0:
+        pm_cum = (vlos_eurasia_reshaped * years).interp_like(cum_base, method='nearest')
+        pm_cum.values = pm_cum.values - np.nanmean(pm_cum.values[refy1:refy2, refx1:refx2])
+        tmp = (cum_base - pm_cum)
+        tmp.values = tmp.values - np.nanmean(tmp.values[refy1:refy2, refx1:refx2])
+        cum_corr_plate = tmp  # xr.DataArray
+
+    # interseismic cumulative removal: v_los * years
+    cum_corr_plate_inter = None
+    if interseismic_motion and (vlos_gnss is not None) and years != 0:
+        # start from plate-corrected if available, else from base
+        start_da = cum_corr_plate if cum_corr_plate is not None else cum_base
+        is_cum = (vlos_gnss * years).interp_like(start_da, method='nearest')
+        is_cum.values = is_cum.values - np.nanmean(is_cum.values[refy1:refy2, refx1:refx2])
+        tmp2 = (start_da - is_cum)
+        tmp2.values = tmp2.values - np.nanmean(tmp2.values[refy1:refy2, refx1:refx2])
+        cum_corr_plate_inter = tmp2  # xr.DataArray
+    
+    #finally
+    if cum_corr_plate is not None:
+        cum_corr_plate.values = cum_corr_plate.values - np.nanmean(cum_corr_plate.values[refy1:refy2, refx1:refx2])
+        #exporting tif:
+        lts.export_xr2tif(cum_corr_plate, f'cums/{frame}_{p_str}-{imdate}_corrected.tif', dogdal = False)
+
+    print(f"Processed epoch {imdate} (Δt={years:.4f} yr)")
+    
+    # if interseismic_motion and (vlos_gnss is not None) and years != 0:
+    #   (cum_corr_plate_inter-cum_corr_plate).plot(cmap='RdBu')
+    #   plt.savefig(f'{p_str}_{im_d}_vlos_inter.png')
+    #   plt.close()
+    
+    #   (cum_base-cum_corr_plate).plot(cmap='RdBu')
+    #   plt.savefig(f'{p_str}_{im_d}_vlos_plate.png')
+    #   plt.close()
+    
+    if years == 0:
+        zero_da = xr.zeros_like(cum_base)
+        arr_plate = zero_da.values.astype(np.float32)
+        arr_inter = zero_da.values.astype(np.float32)
+    else:
+        arr_plate = (cum_corr_plate.values.astype(np.float32)
+                    if cum_corr_plate is not None else None)
+        arr_inter = (cum_corr_plate_inter.values.astype(np.float32)
+                    if cum_corr_plate_inter is not None else None)
+
+    return imdate, arr_plate, arr_inter
+
+#%% main function running
+def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn_gnss=None, plate_motion=False, interseismic_motion=False, n_para=4):
+
   cum_name= cum_h5.split('.')[0]
   cum_h5 = os.path.join(TS_folder, cum_h5) 
   GEOC_folder = TS_folder.split('_')[-1]
   dem_par = os.path.join(GEOC_folder, dem_par)
   mask = os.path.join(TS_folder,'results', mask)
+  E_unit=lts.load_tif2xr(f'{frame}.E.geo.tif')
+  N_unit=lts.load_tif2xr(f'{frame}.N.geo.tif')
+  U_unit=lts.load_tif2xr(f'{frame}.U.geo.tif')
+  sbovl = False
+  compress = 'gzip'
+  q = multi.get_context('fork')
   
+  ##reference
+  infodir = os.path.join(TS_folder, 'info')
+  reffile = os.path.join(infodir, '16ref.txt')
+  if not os.path.exists(reffile):
+      print(f"Error: Reference file {reffile} does not exist.")
+      exit(1)
+  else:
+      with open(reffile, "r") as f:
+        refarea = f.read().split()[0]  # str, x1/x2/y1/y2
+    #   refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
+  #breakpoint()  
+  ##cums file creates
+  os.makedirs(os.path.join(TS_folder,'results','cums'), exist_ok=True)
+  os.makedirs('cums', exist_ok=True)
+
   #read cum for the default start
-  cumh55 = h5.File(cum_h5,'r')
+  cumh55 = h5.File(cum_h5,'r+')
   imdates = cumh55['imdates'][()].astype(str).tolist()
   if not imd_p:
-      imd_p = imdates[0]
+    imd_p = imdates[0]
 
-  # breakpoint()
-  os.system(f"LiCSBAS_cum2flt.py -i {cum_h5} -m {imd_p} -d {imd_s} -o {TS_folder}/results/{cum_name}_{imd_p}-{imd_s}.mask --mask {mask}")
+#   breakpoint()
+  cumxr = lts.loadall2cube(cum_h5, extracols = 'cum')
+  
   if plate_motion:
-    print('Cumulated plate motion effect will be removed from the cumulative displacement.')
-    os.system(f"LiCSBAS_cum_plate_motion.py -t {TS_folder} -f {frame_number} -p {imd_p} -s {imd_s} -o {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.eurasia.tif")
-    os.system(f"LiCSBAS_disp_img.py -i {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.eurasia.tif -p {dem_par} --cmin -100 --cmax 100 --png {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.eurasia.png --title {frame_number}.{cum_name}_{imd_p}-{imd_s}.eurasia")
-  else:
-    os.system(f"LiCSBAS_flt2geotiff.py -i {TS_folder}/results/{cum_name}_{imd_p}-{imd_s}.mask -p {dem_par} -o {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.tif")
-    os.system(f"LiCSBAS_disp_img.py -i {TS_folder}/results/{cum_name}_{imd_p}-{imd_s}.mask -p {dem_par} --cmin -100 --cmax 100 --png {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask.png --title {frame_number}.{cum_name}_{imd_p}-{imd_s}.mask")
-  # Move the different format files including *.cum *.tif and *.png to their corresponding folders
+    vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', sboi=sbovl)
+    #reshape
+    vlos_eurasia_reshaped=vlos_eurasia.interp_like(cumxr.vel)
+  if interseismic_motion:
+    if ve_gnss is None or vn_gnss is None:
+        ve_gnss='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/gps_interseismic-eu_kriging/external_drift/ve_interpolated_upsampled.tif'
+        vn_gnss='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/gps_interseismic-eu_kriging/external_drift/vn_interpolated_upsampled.tif'
+        if not os.path.exists(ve_gnss):
+            print(f"Error: GNSS velocity file {ve_gnss} does not exist.")
+            exit(1)
+        if not os.path.exists(vn_gnss):
+            print(f"Error: GNSS velocity file {vn_gnss} does not exist.")
+            exit(1)
+    
+    ve_gnss= lts.load_tif2xr(ve_gnss)
+    vn_gnss= lts.load_tif2xr(vn_gnss)
+    ##reshape
+    ve_gnss_reshaped=ve_gnss.interp_like(E_unit)
+    vn_gnss_reshaped=vn_gnss.interp_like(E_unit)
+    vlos_gnss = ve_gnss_reshaped * E_unit + vn_gnss_reshaped * N_unit 
+    #vlos_gnss
+    
+    
+    # if user gave an end date, restrict to [imd_p, imd_s]; else do all epochs
+    if isinstance(imd_p, str):
+        imd_p_dt64 = (np.datetime64(datetime.strptime(imd_p, "%Y%m%d").date(), 'D')
+                        if len(imd_p) == 8 else
+                        np.datetime64(datetime.strptime(imd_p, "%Y-%m-%d").date(), 'D'))
+    else:
+        imd_p_dt64 = np.datetime64(datetime.strptime(str(imdates[0]), "%Y%m%d").date(), 'D')
+
+    if imd_s is not None:
+        imd_p_i = int(str(imd_p).replace('-', '')) if isinstance(imd_p, str) else int(imdates[0])
+        imd_s_i = int(str(imd_s).replace('-', '')) if isinstance(imd_s, str) else int(imd_s)
+        epochs_to_do = [d for d in imdates if imd_p_i <= int(d) <= imd_s_i]
+    else:
+        epochs_to_do = imdates[:]  # all epochs
+
+    # bind velocity fields (or None) for the wrapper closure
+    vlos_eurasia_reshaped = locals().get('vlos_eurasia_reshaped', None) if plate_motion else None
+    vlos_gnss = locals().get('vlos_gnss', None) if interseismic_motion else None
+
+    # -------- build args_list and run pool --------
+    # args_list = [(cumxr, d, plate_motion, interseismic_motion) for d in epochs_to_do]
+    # build args_list including the constants we computed
+    args_list = [
+        (frame, cumxr, d, plate_motion, refarea, interseismic_motion, imd_p_dt64,
+        vlos_eurasia_reshaped if plate_motion else None,
+        vlos_gnss if interseismic_motion else None)
+        for d in epochs_to_do
+    ]
+    
+    print(f"Testing sequential run on {len(args_list)} epochs...", flush=True)
+    corr_plate_values = []
+    corr_plate_inter_values = []
+    
+    for args in args_list:
+        imd, corr_plate, corr_plate_inter = cum_wrapper(*args)   # set  inside cum_wrapper
+        # print("Result:", imd)
+        corr_plate_values.append(corr_plate)
+        corr_plate_inter_values.append(corr_plate_inter)
+    
+    
+    #%%now build stacks with the same shape as cumxr.cum
+    T_out = len(epochs_to_do)
+    Y, X = cumxr['cum'].isel(time=0).shape
+    imdates_out = np.asarray([int(d) for d in epochs_to_do], dtype=np.int32)
+
+    # Prepare stacks (only if those corrections are relevant)
+    stack_plate = None
+    stack_inter = None
+    if plate_motion:
+        stack_plate = np.full((T_out, Y, X), np.nan, dtype=np.float32)
+    if interseismic_motion:
+        stack_inter = np.full((T_out, Y, X), np.nan, dtype=np.float32)
+
+    # Fill stacks
+    for i, (arr_p, arr_i) in enumerate(zip(corr_plate_values, corr_plate_inter_values)):
+        if stack_plate is not None and arr_p is not None:
+            stack_plate[i, :, :] = arr_p  # already float32
+        if stack_inter is not None and arr_i is not None:
+            stack_inter[i, :, :] = arr_i  # already float32
+    # breakpoint()
+    # --- write to the same HDF5 file (single writer) ---
+    # cumh55 is already opened as h5.File(cum_h5, 'r+')
+    # keep original /imdates and /cum intact; add companions
+    # if 'imdates_corr' in cumh55:
+    #     del cumh55['imdates_corr']
+    # cumh55.create_dataset('imdates_corr', data=imdates_out, dtype=np.int32)
+
+    # breakpoint()
+    if stack_plate is not None:
+        if 'cum_corr_minus_plate' in cumh55:
+            del cumh55['cum_corr_minus_plate']
+        cumh55.create_dataset('cum_corr_minus_plate',
+                            data=stack_plate, dtype=np.float32,
+                            compression='gzip', chunks=True)
+
+    if stack_inter is not None:
+        if 'cum_corr_minus_plate_inter' in cumh55:
+            del cumh55['cum_corr_minus_plate_inter']
+        cumh55.create_dataset('cum_corr_minus_plate_inter',
+                            data=stack_inter, dtype=np.float32,
+                            compression='gzip', chunks=True)
+
+
+    cumh55.flush()
+    cumh55.close()
+    print("Done writing corrected datasets to HDF5.")
+    
+    ##TODO, I can do parallel running.
+    # n_epoch = len(args_list)
+    # if n_epoch > 0:
+    #     if n_para > n_epoch:
+    #         n_para = n_epoch
+
+    #     print('  {} parallel processing...'.format(n_para), flush=True)
+
+    #     # define a local wrapper that captures imd_p_dt64 and velocity rasters by closure
+    #     def _local_wrapper(args):
+    #         # expose names to the top-level cum_wrapper via closure
+    #         nonlocal imd_p_dt64, vlos_eurasia_reshaped, vlos_gnss
+    #         return cum_wrapper(*args)
+
+        # p = q.Pool(n_para)
+        # results = p.map(_local_wrapper, args_list)
+        # p.close()
+        # print(f"Processed {len(results)} epochs.")
+        
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Read the cum.h5 file and output the binary, tif and png file of cumulative dispalcement of each epoch.")
-    parser.add_argument("-T", dest="TS_folder", default="TS_GEOCml10GACOSmask", help="Path to the folder. Default: TS_GEOCml10GACOSmask.")
-    parser.add_argument("-i", dest="cum_h5", default="cum_filt.h5", help="Path to the h5 file. Default:cum.h5.")
+    parser.add_argument("-t", dest="TS_folder", default="TS_GEOCml10GACOSmask", help="Path to the folder. Default: TS_GEOCml10GACOSmask.")
+    parser.add_argument("-i", dest="cum_h5", help="Path to the h5 file. No default must be an input; (cum.h5, cum_filt.h5, cum_filt_interpolate.h5)")
     parser.add_argument("-mask", dest="mask", default="mask", help="Path to the mask file.")
     parser.add_argument("-dem", dest="dem_par", default="EQA.dem_par", help="Path to the DEM parameter file. Default=EQA.dem_par")
-    parser.add_argument("-f", dest="frame_number", default=os.path.basename(os.getcwd()), help="frame number of naming files")
+    parser.add_argument("-f", dest="frame", default=os.path.basename(os.getcwd()), help="frame number of naming files")
     parser.add_argument("-p", dest="imd_p", default=None, help="Start date of cumulative displacement. Default is first date of the cum_filt.h5")
-    parser.add_argument("-s", dest="imd_s", help="End date of cumulative displacement.")
+    parser.add_argument("-s", dest="imd_s", default=None, help="End date of cumulative displacement.")
+    parser.add_argument("-ve_gnss", default=None, help="Path to the GNSS velocity file.")
+    parser.add_argument("-vn_gnss", default=None, help="Path to the GNSS velocity file.")
     parser.add_argument("--plate_motion", action="store_true", help="If set, it will calculate the plate motion effect")
+    parser.add_argument("--interseismic_motion", action="store_true", help="If set, it will calculate the interseismic accumulation")
+    parser.add_argument("--n_para", default=4, type=int, help="Number of parallel processes to use")
     args = parser.parse_args()
 
-    cum_tiff_png(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame_number, args.imd_p, args.imd_s, args.plate_motion)
-    # cum_tiff_png(args.cum_h5, args.mask, args.dem_par)
-
+    main(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame, args.imd_p, args.imd_s, args.ve_gnss, args.vn_gnss, args.plate_motion, args.interseismic_motion, args.n_para)

@@ -200,13 +200,14 @@ if __name__ == "__main__":
     novel_flag = False
     raw_flag = False
     cum_name = None
+    cum_name2 = None
 
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity", "raw", "cum_name="])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity", "raw", "cum_name=", "cum_name2="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -259,6 +260,8 @@ if __name__ == "__main__":
                 raw_flag = True
             elif o == '--cum_name':
                 cum_name = a
+            elif o == '--cum_name2':
+                cum_name2 = a
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -602,6 +605,12 @@ if __name__ == "__main__":
                 label2 = '2: s={:.1f}km, t={:.2f}yr ({}d){}'.format(filtwidth_km2, filtwidth_yr2, filtwidth_day2, deramp2)
             else:
                 label2 = '2: No filter'
+        
+    if cum_name2:
+        cumname2 = cumh5[cum_name2][()]
+        cumname2_ref = cumname2[ix_m, :, :]
+        label3 = 'No interseismic effect' 
+
     # breakpoint()
     #%% Read Mask (1: unmask, 0: mask, nan: no cum data)
     mask_base = np.ones((length, width), dtype=np.float32)
@@ -1040,7 +1049,13 @@ if __name__ == "__main__":
                 if not novel_flag:
                     axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
                     axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
-                    
+            
+            if cum_name2:
+                dcumname2_ref = cumname2_ref[ii, jj]-np.nanmean(cumname2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                dphf = cumname2[:, ii, jj]-np.nanmean(cumname2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcumname2_ref
+                axts.scatter(imdates_dt, dphf, c='orange', label=label3, alpha=0.6, zorder=4)
+                # axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+
             ## gap
             if gap:
                 gap1p = (gap[:, ii, jj]==1) # n_im-1, bool
