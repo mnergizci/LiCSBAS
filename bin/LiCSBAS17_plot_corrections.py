@@ -17,6 +17,7 @@ Usage
 
 Arguments:
  -t    Path to TS_GEOC directory with saved tide, iono, and gacos corrections
+ -i    cum(_filt).h5 file (default cum.h5)
  -o    Output PNG file name (default: <frame>.corrections.png)
  -r   Reference area in lon/lat format (e.g., 30:40/50:60) to subtract mean value
 --sboi Run in SBOI mode to preserve absolute velocity (azimuth instead of LOS)
@@ -66,16 +67,19 @@ def main(argv=None):
     sboi = False
     keep_absolute = False
     refarea = []
+    cumfile = 'cum.h5'
 
     # Argument parsing
     try:
-        opts, _ = getopt.getopt(argv[1:], "ht:o:r:", ["help", "sboi"])
+        opts, _ = getopt.getopt(argv[1:], "ht:i:o:r:", ["help", "sboi"])
         for opt, arg in opts:
             if opt in ('-h', '--help'):
                 print(__doc__)
                 return 0
             elif opt == '-t':
                 tsdir = arg
+            elif opt == '-i':
+                cumfile = arg
             elif opt == '-o':
                 output_file = arg
             elif opt == '-r':
@@ -88,19 +92,22 @@ def main(argv=None):
             raise Usage("No TS_GEOC directory provided. Use -t option.")
         if not os.path.exists(tsdir):
             raise Usage(f"Directory {tsdir} does not exist.")
-        
+        if not os.path.exists(os.path.join(tsdir, cumfile)):
+            raise Usage(f"File {cumfile} does not exist in {tsdir}.")
+
     except Usage as err:
         print(f"\nERROR: {err.msg}\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
 
     # File paths
     workdir = os.getcwd()
-    frame= os.path.basename(workdir)
+    if frame is None:
+        frame = os.path.basename(workdir)
     tide_file = os.path.join(workdir, 'tide.vel')
     iono_file = os.path.join(workdir, 'iono.vel')
     gacos_file = os.path.join(workdir, 'sltd.vel')
     vel_file = os.path.join(workdir, f'{frame}.vel_filt.mskd.eurasia.geo.tif')
-    cum_file = os.path.join(tsdir, 'cum.h5')
+    cum_file = os.path.join(tsdir, cumfile)
 
     if sboi:
         corrections = {

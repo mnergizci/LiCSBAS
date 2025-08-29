@@ -201,13 +201,14 @@ if __name__ == "__main__":
     raw_flag = False
     cum_name = None
     cum_name2 = None
-
+    cum_name3 = None
+    ##--cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity", "raw", "cum_name=", "cum_name2="])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity", "raw", "cum_name=", "cum_name2=", "cum_name3="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -262,6 +263,8 @@ if __name__ == "__main__":
                 cum_name = a
             elif o == '--cum_name2':
                 cum_name2 = a
+            elif o == '--cum_name3':
+                cum_name3 = a
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -389,8 +392,9 @@ if __name__ == "__main__":
             print('No iono correction found in {}. Skip.'.format(cumfile))
         
         # gacos correction
+        # breakpoint()
         try:
-            gacos = cumh5['gacos'][:]
+            gacos = cumh5['sltd'][:] #'gacos'
             label_gacos = 'Gacos correction'
             print('Gacos correction found.')
         except KeyError:
@@ -609,7 +613,12 @@ if __name__ == "__main__":
     if cum_name2:
         cumname2 = cumh5[cum_name2][()]
         cumname2_ref = cumname2[ix_m, :, :]
-        label3 = 'No interseismic effect' 
+        label3 = f'{cum_name2}'
+    
+    if cum_name3:
+        cumname3 = cumh5[cum_name3][()]
+        cumname3_ref = cumname3[ix_m, :, :]
+        label4 = f'{cum_name3}'
 
     # breakpoint()
     #%% Read Mask (1: unmask, 0: mask, nan: no cum data)
@@ -1054,6 +1063,12 @@ if __name__ == "__main__":
                 dcumname2_ref = cumname2_ref[ii, jj]-np.nanmean(cumname2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
                 dphf = cumname2[:, ii, jj]-np.nanmean(cumname2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcumname2_ref
                 axts.scatter(imdates_dt, dphf, c='orange', label=label3, alpha=0.6, zorder=4)
+                # axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+            
+            if cum_name3:
+                dcumname3_ref = cumname3_ref[ii, jj]-np.nanmean(cumname3_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                dphf = cumname3[:, ii, jj]-np.nanmean(cumname3[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcumname3_ref
+                axts.scatter(imdates_dt, dphf, c='purple', label=label4, alpha=0.6, zorder=4)
                 # axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
 
             ## gap

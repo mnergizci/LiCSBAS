@@ -74,7 +74,7 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
     C_t.values = C_t.values - np.nanmean(C_t.values[refy1:refy2, refx1:refx2])
     C_0.values = C_0.values - np.nanmean(C_0.values[refy1:refy2, refx1:refx2])
     cum_base  = (C_t - C_0).copy()  # mm
-    # breakpoint()
+    
     # plate-motion cumulative removal: v_los * years
     cum_corr_plate = None
     if plate_motion and (vlos_eurasia_reshaped is not None) and years != 0:
@@ -125,20 +125,25 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
     return imdate, arr_plate, arr_inter
 
 #%% main function running
-def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn_gnss=None, plate_motion=False, interseismic_motion=False, n_para=4):
+def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn_gnss=None, plate_motion=False, interseismic_motion=False, n_para=4, sbovl=False):
 
   cum_name= cum_h5.split('.')[0]
   cum_h5 = os.path.join(TS_folder, cum_h5) 
   GEOC_folder = TS_folder.split('_')[-1]
   dem_par = os.path.join(GEOC_folder, dem_par)
   mask = os.path.join(TS_folder,'results', mask)
-  E_unit=lts.load_tif2xr(f'{frame}.E.geo.tif')
-  N_unit=lts.load_tif2xr(f'{frame}.N.geo.tif')
-  U_unit=lts.load_tif2xr(f'{frame}.U.geo.tif')
-  sbovl = False
+  if sbovl:
+    E_unit=lts.load_tif2xr(f'{frame}.E.azi.geo.tif')
+    N_unit=lts.load_tif2xr(f'{frame}.N.azi.geo.tif')
+    U_unit=lts.load_tif2xr(f'{frame}.U.azi.geo.tif')
+  else:
+    E_unit=lts.load_tif2xr(f'{frame}.E.geo.tif')
+    N_unit=lts.load_tif2xr(f'{frame}.N.geo.tif')
+    U_unit=lts.load_tif2xr(f'{frame}.U.geo.tif')
+      
   compress = 'gzip'
   q = multi.get_context('fork')
-  
+   
   ##reference
   infodir = os.path.join(TS_folder, 'info')
   reffile = os.path.join(infodir, '16ref.txt')
@@ -149,7 +154,7 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
       with open(reffile, "r") as f:
         refarea = f.read().split()[0]  # str, x1/x2/y1/y2
     #   refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
-  #breakpoint()  
+  
   ##cums file creates
   os.makedirs(os.path.join(TS_folder,'results','cums'), exist_ok=True)
   os.makedirs('cums', exist_ok=True)
@@ -160,7 +165,7 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
   if not imd_p:
     imd_p = imdates[0]
 
-#   breakpoint()
+
   cumxr = lts.loadall2cube(cum_h5, extracols = 'cum')
   
   if plate_motion:
@@ -246,7 +251,7 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
             stack_plate[i, :, :] = arr_p  # already float32
         if stack_inter is not None and arr_i is not None:
             stack_inter[i, :, :] = arr_i  # already float32
-    # breakpoint()
+    # 
     # --- write to the same HDF5 file (single writer) ---
     # cumh55 is already opened as h5.File(cum_h5, 'r+')
     # keep original /imdates and /cum intact; add companions
@@ -254,7 +259,7 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
     #     del cumh55['imdates_corr']
     # cumh55.create_dataset('imdates_corr', data=imdates_out, dtype=np.int32)
 
-    # breakpoint()
+    
     if stack_plate is not None:
         if 'cum_corr_minus_plate' in cumh55:
             del cumh55['cum_corr_minus_plate']
@@ -308,6 +313,7 @@ if __name__ == "__main__":
     parser.add_argument("--plate_motion", action="store_true", help="If set, it will calculate the plate motion effect")
     parser.add_argument("--interseismic_motion", action="store_true", help="If set, it will calculate the interseismic accumulation")
     parser.add_argument("--n_para", default=4, type=int, help="Number of parallel processes to use")
+    parser.add_argument("--sbovl", action="store_true", help="If set, it will use the sbovl dataset")
     args = parser.parse_args()
 
-    main(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame, args.imd_p, args.imd_s, args.ve_gnss, args.vn_gnss, args.plate_motion, args.interseismic_motion, args.n_para)
+    main(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame, args.imd_p, args.imd_s, args.ve_gnss, args.vn_gnss, args.plate_motion, args.interseismic_motion, args.n_para, args.sbovl)
