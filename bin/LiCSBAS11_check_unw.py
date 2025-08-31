@@ -383,6 +383,9 @@ def main(argv=None):
         print(f"WARNING: Baselines file not found. Using dummy values.")
         bperp = np.random.random(len(imdates)).tolist()
 
+    ## Check if bperp values are valid
+    if all(v == 0 for v in bperp):
+        bperp = np.random.random(len(imdates)).tolist()
 
     #%% Identify bad ifgs, link ras and output stats information
     bad_ifgdates = []

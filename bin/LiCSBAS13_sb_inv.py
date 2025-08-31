@@ -620,6 +620,9 @@ def main(argv=None):
         print("WARNING: Baselines file not found. Using dummy values.")
         bperp = np.random.random(len(imdates)).tolist()
         bperp_all = np.random.random(len(imdates_all)).tolist()
+    
+    if all(v == 0 for v in bperp_all):
+        bperp_all = np.random.random(len(imdates_all)).tolist()
 
     pngfile = os.path.join(netdir, 'network13_all.png')
     plot_lib.plot_network(ifgdates_all, bperp_all, [], pngfile)
