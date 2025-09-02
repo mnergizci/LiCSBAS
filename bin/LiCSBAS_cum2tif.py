@@ -103,14 +103,37 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
 
     print(f"Processed epoch {imdate} (Δt={years:.4f} yr)")
     
-    # if interseismic_motion and (vlos_gnss is not None) and years != 0:
-    #   (cum_corr_plate_inter-cum_corr_plate).plot(cmap='RdBu')
-    #   plt.savefig(f'{p_str}_{im_d}_vlos_inter.png')
-    #   plt.close()
+    # breakpoint()
+    if interseismic_motion and (vlos_gnss is not None) and years != 0 and im_d == np.datetime64('2024-12-30'):
+      (cum_corr_plate_inter-cum_corr_plate).plot(cmap='RdBu')
+      plt.savefig(f'{p_str}_{im_d}_vlos_inter.png')
+      plt.close()
     
-    #   (cum_base-cum_corr_plate).plot(cmap='RdBu')
-    #   plt.savefig(f'{p_str}_{im_d}_vlos_plate.png')
-    #   plt.close()
+      (cum_base-cum_corr_plate).plot(cmap='RdBu')
+      plt.savefig(f'{p_str}_{im_d}_vlos_plate.png')
+      plt.close()
+      
+      ##lastone
+      fig, axes = plt.subplots(1, 3, figsize=(18, 6))  # 1 row, 3 columns
+      vmin=-100
+      vmax=100
+      # 1. Original cumulative
+      im1 = cum_base.plot(cmap='RdBu', ax=axes[0], add_colorbar=False, vmin=vmin, vmax=vmax)
+      axes[0].set_title("cum")  
+      # 2. Plate-corrected
+      im2 = cum_corr_plate.plot(cmap='RdBu', ax=axes[1], add_colorbar=False, vmin=vmin, vmax=vmax)
+      axes[1].set_title("cum_corr_plate")  
+      # 3. Plate+interseismic corrected
+      im3 = cum_corr_plate_inter.plot(cmap='RdBu', ax=axes[2], add_colorbar=False, vmin=vmin, vmax=vmax)
+      axes[2].set_title("cum_corr_plate_inter")  
+      # Add one shared colorbar for all three
+      cbar = fig.colorbar(im1, ax=axes, orientation="horizontal", fraction=0.05, pad=0.2)
+      cbar.set_label("Displacement (mm)")  # or unit you want  
+      #plt.tight_layout()
+      plt.savefig(f"{p_str}_{im_d}_cum_plate_inter_subplot.png")
+      plt.close()
+        
+      
     
     if years == 0:
         zero_da = xr.zeros_like(cum_base)
