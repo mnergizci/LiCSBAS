@@ -99,7 +99,7 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
     if cum_corr_plate is not None:
         cum_corr_plate.values = cum_corr_plate.values - np.nanmean(cum_corr_plate.values[refy1:refy2, refx1:refx2])
         #exporting tif:
-        lts.export_xr2tif(cum_corr_plate, f'cums/{frame}_{p_str}-{imdate}_corrected.tif', dogdal = False)
+        lts.export_xr2tif(cum_corr_plate, f'cums/{frame}.{imdate}.corrected.tif', dogdal = False)
 
     print(f"Processed epoch {imdate} (Δt={years:.4f} yr)")
     
