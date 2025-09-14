@@ -423,9 +423,9 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
 
   if [ $p120_sbovl != "y" ]; then
       p12_op=""
-      if [ $cometdev -eq 1 ]; then
-         p12_nullify="y"
-      fi
+      # if [ $cometdev -eq 1 ]; then
+      #    p12_nullify="y"
+      # fi
       if [ ! -z $p12_GEOCmldir ];then p12_op="$p12_op -d $p12_GEOCmldir"; 
         else p12_op="$p12_op -d $GEOCmldir"; fi
       if [ ! -z $p12_TSdir ];then p12_op="$p12_op -t $p12_TSdir"; fi
