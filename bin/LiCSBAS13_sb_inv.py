@@ -377,6 +377,7 @@ def main(argv=None):
     bad_ifg11file = os.path.join(infodir, '11bad_ifg.txt')
     bad_ifg12file = os.path.join(infodir, '12bad_ifg.txt')
     bad_ifg120file = os.path.join(infodir, '120bad_ifg.txt')
+    bad_ifg12candidatefile = os.path.join(infodir, '12bad_ifg_cand.txt') 
     # if ref point selected using LiCSBAS120:
     reffile = os.path.join(infodir, '120ref.txt')
     if not os.path.exists(reffile):
@@ -492,12 +493,20 @@ def main(argv=None):
             print('adding also ifgs listed as bad in the optional 120 step')
             bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
             bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
+        if os.path.exists(bad_ifg12candidatefile):
+            print('adding also ifgs listed as bad candidates')
+            bad_ifg12candidate = io_lib.read_ifg_list(bad_ifg12candidatefile)
+            bad_ifg12 = list(set(bad_ifg12 + bad_ifg12candidate))
     else:
         bad_ifg12=[]
         if os.path.exists(bad_ifg120file):
             print('adding also ifgs listed as bad in the optional 120 step')
             bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
             bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
+        if os.path.exists(bad_ifg12candidatefile):
+            print('adding also ifgs listed as bad candidates')
+            bad_ifg12candidate = io_lib.read_ifg_list(bad_ifg12candidatefile)
+            bad_ifg12 = list(set(bad_ifg12 + bad_ifg12candidate))
     if nullify_noloops:
         # adding also noloop_ifgs as ifgs to skip
         print('skipping noloop_ifgs')
