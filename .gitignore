@@ -112,7 +112,6 @@ venv.bak/
 ##mnergizci
 *test_LiCSBAS*
 *tif
-*ipynb
 .vscode/
 bin/LiCSBAS_plot_ts_differences.py
 bin/LiCSBAS_correction_comparison.py
