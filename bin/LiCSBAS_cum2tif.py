@@ -132,9 +132,28 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
       #plt.tight_layout()
       plt.savefig(f"{p_str}_{im_d}_cum_plate_inter_subplot.png")
       plt.close()
-        
       
-    
+    if years != 0 and im_d == np.datetime64('2024-12-30'):
+        (cum_base-cum_corr_plate).plot(cmap='RdBu')
+        plt.savefig(f'{p_str}_{im_d}_vlos_plate.png')
+        plt.close()
+        
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))  # 1 row, 2 columns
+        vmin=-100
+        vmax=100
+        # 1. Original cumulative
+        im1 = cum_base.plot(cmap='RdBu', ax=axes[0], add_colorbar=False, vmin=vmin, vmax=vmax)
+        axes[0].set_title("cum")  
+        # 2. Plate-corrected
+        im2 = cum_corr_plate.plot(cmap='RdBu', ax=axes[1], add_colorbar=False, vmin=vmin, vmax=vmax)
+        axes[1].set_title("cum_corr_plate")  
+        # Add one shared colorbar for all three
+        cbar = fig.colorbar(im1, ax=axes, orientation="horizontal", fraction=0.05, pad=0.2)
+        cbar.set_label("Displacement (mm)")  # or unit you want  
+        #plt.tight_layout()
+        plt.savefig(f"{p_str}_{im_d}_cum_plate_subplot.png")
+        plt.close()
+
     if years == 0:
         zero_da = xr.zeros_like(cum_base)
         arr_plate = zero_da.values.astype(np.float32)
@@ -150,70 +169,71 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
 #%% main function running
 def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn_gnss=None, plate_motion=False, interseismic_motion=False, n_para=4, sbovl=False):
 
-  cum_name= cum_h5.split('.')[0]
-  cum_h5 = os.path.join(TS_folder, cum_h5) 
-  GEOC_folder = TS_folder.split('_')[-1]
-  dem_par = os.path.join(GEOC_folder, dem_par)
-  mask = os.path.join(TS_folder,'results', mask)
-  if sbovl:
-    E_unit=lts.load_tif2xr(f'{frame}.E.azi.geo.tif')
-    N_unit=lts.load_tif2xr(f'{frame}.N.azi.geo.tif')
-    U_unit=lts.load_tif2xr(f'{frame}.U.azi.geo.tif')
-  else:
-    E_unit=lts.load_tif2xr(f'{frame}.E.geo.tif')
-    N_unit=lts.load_tif2xr(f'{frame}.N.geo.tif')
-    U_unit=lts.load_tif2xr(f'{frame}.U.geo.tif')
+    cum_name= cum_h5.split('.')[0]
+    cum_h5 = os.path.join(TS_folder, cum_h5) 
+    GEOC_folder = TS_folder.split('_')[-1]
+    dem_par = os.path.join(GEOC_folder, dem_par)
+    mask = os.path.join(TS_folder,'results', mask)
+    if sbovl:
+        E_unit=lts.load_tif2xr(f'{frame}.E.azi.geo.tif')
+        N_unit=lts.load_tif2xr(f'{frame}.N.azi.geo.tif')
+        U_unit=lts.load_tif2xr(f'{frame}.U.azi.geo.tif')
+    else:
+        E_unit=lts.load_tif2xr(f'{frame}.E.geo.tif')
+        N_unit=lts.load_tif2xr(f'{frame}.N.geo.tif')
+        U_unit=lts.load_tif2xr(f'{frame}.U.geo.tif')
       
-  compress = 'gzip'
-  q = multi.get_context('fork')
-   
-  ##reference
-  infodir = os.path.join(TS_folder, 'info')
-  reffile = os.path.join(infodir, '16ref.txt')
-  if not os.path.exists(reffile):
-      print(f"Error: Reference file {reffile} does not exist.")
-      exit(1)
-  else:
-      with open(reffile, "r") as f:
-        refarea = f.read().split()[0]  # str, x1/x2/y1/y2
-    #   refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
-  
-  ##cums file creates
-  os.makedirs(os.path.join(TS_folder,'results','cums'), exist_ok=True)
-  os.makedirs('cums', exist_ok=True)
-
-  #read cum for the default start
-  cumh55 = h5.File(cum_h5,'r+')
-  imdates = cumh55['imdates'][()].astype(str).tolist()
-  if not imd_p:
-    imd_p = imdates[0]
-
-
-  cumxr = lts.loadall2cube(cum_h5, extracols = 'cum')
-  
-  if plate_motion:
-    vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', sboi=sbovl)
-    #reshape
-    vlos_eurasia_reshaped=vlos_eurasia.interp_like(cumxr.vel)
-  if interseismic_motion:
-    if ve_gnss is None or vn_gnss is None:
-        ve_gnss='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/gps_interseismic-eu_kriging/external_drift/ve_interpolated_upsampled.tif'
-        vn_gnss='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/gps_interseismic-eu_kriging/external_drift/vn_interpolated_upsampled.tif'
-        if not os.path.exists(ve_gnss):
-            print(f"Error: GNSS velocity file {ve_gnss} does not exist.")
-            exit(1)
-        if not os.path.exists(vn_gnss):
-            print(f"Error: GNSS velocity file {vn_gnss} does not exist.")
-            exit(1)
+    compress = 'gzip'
+    q = multi.get_context('fork')
     
-    ve_gnss= lts.load_tif2xr(ve_gnss)
-    vn_gnss= lts.load_tif2xr(vn_gnss)
-    ##reshape
-    ve_gnss_reshaped=ve_gnss.interp_like(E_unit)
-    vn_gnss_reshaped=vn_gnss.interp_like(E_unit)
-    vlos_gnss = ve_gnss_reshaped * E_unit + vn_gnss_reshaped * N_unit 
-    #vlos_gnss
-    
+    ##reference
+    infodir = os.path.join(TS_folder, 'info')
+    reffile = os.path.join(infodir, '16ref.txt')
+    if not os.path.exists(reffile):
+        print(f"Error: Reference file {reffile} does not exist.")
+        exit(1)
+    else:
+        with open(reffile, "r") as f:
+            refarea = f.read().split()[0]  # str, x1/x2/y1/y2
+        #   refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
+  
+    ##cums file creates
+    os.makedirs(os.path.join(TS_folder,'results','cums'), exist_ok=True)
+    os.makedirs('cums', exist_ok=True)
+
+    #read cum for the default start
+    cumh55 = h5.File(cum_h5,'r+')
+    imdates = cumh55['imdates'][()].astype(str).tolist()
+    if not imd_p:
+        imd_p = imdates[0]
+
+
+    cumxr = lts.loadall2cube(cum_h5)#, extracols = 'cum')
+  
+    if plate_motion:
+        vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', sboi=sbovl)
+        #reshape
+        vlos_eurasia_reshaped=vlos_eurasia.interp_like(cumxr.vel)
+    if interseismic_motion:
+        if ve_gnss is None or vn_gnss is None:
+            ve_gnss='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/gps_interseismic-eu_kriging/external_drift/ve_interpolated_upsampled.tif'
+            vn_gnss='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/gps_interseismic-eu_kriging/external_drift/vn_interpolated_upsampled.tif'
+            if not os.path.exists(ve_gnss):
+                print(f"Error: GNSS velocity file {ve_gnss} does not exist.")
+                exit(1)
+            if not os.path.exists(vn_gnss):
+                print(f"Error: GNSS velocity file {vn_gnss} does not exist.")
+                exit(1)
+                
+            ve_gnss= lts.load_tif2xr(ve_gnss)
+            vn_gnss= lts.load_tif2xr(vn_gnss)
+            ##reshape
+            ve_gnss_reshaped=ve_gnss.interp_like(E_unit)
+            vn_gnss_reshaped=vn_gnss.interp_like(E_unit)
+            vlos_gnss = ve_gnss_reshaped * E_unit + vn_gnss_reshaped * N_unit 
+            #vlos_gnss
+    else:
+        print("No interseismic motion calculation requested.")
     
     # if user gave an end date, restrict to [imd_p, imd_s]; else do all epochs
     if isinstance(imd_p, str):
@@ -243,18 +263,18 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
         vlos_gnss if interseismic_motion else None)
         for d in epochs_to_do
     ]
-    
+
     print(f"Testing sequential run on {len(args_list)} epochs...", flush=True)
     corr_plate_values = []
     corr_plate_inter_values = []
-    
+
     for args in args_list:
         imd, corr_plate, corr_plate_inter = cum_wrapper(*args)   # set  inside cum_wrapper
         # print("Result:", imd)
         corr_plate_values.append(corr_plate)
         corr_plate_inter_values.append(corr_plate_inter)
-    
-    
+
+
     #%%now build stacks with the same shape as cumxr.cum
     T_out = len(epochs_to_do)
     Y, X = cumxr['cum'].isel(time=0).shape
@@ -282,7 +302,7 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
     #     del cumh55['imdates_corr']
     # cumh55.create_dataset('imdates_corr', data=imdates_out, dtype=np.int32)
 
-    
+
     if stack_plate is not None:
         if 'cum_corr_minus_plate' in cumh55:
             del cumh55['cum_corr_minus_plate']
@@ -301,7 +321,7 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
     cumh55.flush()
     cumh55.close()
     print("Done writing corrected datasets to HDF5.")
-    
+
     ##TODO, I can do parallel running.
     # n_epoch = len(args_list)
     # if n_epoch > 0:
@@ -338,5 +358,4 @@ if __name__ == "__main__":
     parser.add_argument("--n_para", default=4, type=int, help="Number of parallel processes to use")
     parser.add_argument("--sbovl", action="store_true", help="If set, it will use the sbovl dataset")
     args = parser.parse_args()
-
     main(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame, args.imd_p, args.imd_s, args.ve_gnss, args.vn_gnss, args.plate_motion, args.interseismic_motion, args.n_para, args.sbovl)

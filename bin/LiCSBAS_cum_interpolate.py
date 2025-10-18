@@ -130,7 +130,7 @@ def main(argv=None):
     )
     
     #%%linear interpolation
-    interp= da.interp(time=csv_dt, method="linear")
+    interp= da.interp(time=csv_dt, method="linear")  ##TODO: the method can be changed later if needed, e.g. quadratic but I get some issues with that now.
 
     ##Linear extrapolation
     t_days = da.time.values.astype("datetime64[D]").astype(int)
