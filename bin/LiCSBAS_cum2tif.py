@@ -95,15 +95,21 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
         tmp2.values = tmp2.values - np.nanmean(tmp2.values[refy1:refy2, refx1:refx2])
         cum_corr_plate_inter = tmp2  # xr.DataArray
     
-    #finally
-    if cum_corr_plate is not None:
+    # saving
+    if cum_corr_plate_inter is not None:
+        print("Saving plate+interseismic corrected tif...")
+        cum_corr_plate_inter.values = cum_corr_plate_inter.values - np.nanmean(cum_corr_plate_inter.values[refy1:refy2, refx1:refx2])
+        lts.export_xr2tif(cum_corr_plate_inter, f'cums/{frame}.{imdate}.corrected.tif', dogdal=False)
+        
+    elif cum_corr_plate is not None:
+        print("Saving plate-corrected tif...")
         cum_corr_plate.values = cum_corr_plate.values - np.nanmean(cum_corr_plate.values[refy1:refy2, refx1:refx2])
         #exporting tif:
         lts.export_xr2tif(cum_corr_plate, f'cums/{frame}.{imdate}.corrected.tif', dogdal = False)
 
     print(f"Processed epoch {imdate} (Δt={years:.4f} yr)")
     
-    # breakpoint()
+    # 
     if interseismic_motion and (vlos_gnss is not None) and years != 0 and im_d == np.datetime64('2024-12-30'):
       (cum_corr_plate_inter-cum_corr_plate).plot(cmap='RdBu')
       plt.savefig(f'{p_str}_{im_d}_vlos_inter.png')
@@ -209,28 +215,36 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
 
 
     cumxr = lts.loadall2cube(cum_h5)#, extracols = 'cum')
-  
+    
     if plate_motion:
         vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', sboi=sbovl)
         #reshape
         vlos_eurasia_reshaped=vlos_eurasia.interp_like(cumxr.vel)
     if interseismic_motion:
+        
         if ve_gnss is None or vn_gnss is None:
-            ve_gnss='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/gps_interseismic-eu_kriging/external_drift/ve_interpolated_upsampled.tif'
-            vn_gnss='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/gps_interseismic-eu_kriging/external_drift/vn_interpolated_upsampled.tif'
-            if not os.path.exists(ve_gnss):
-                print(f"Error: GNSS velocity file {ve_gnss} does not exist.")
+            ve_gnss_nc='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/decomp3d.nc'
+            vn_gnss_nc='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/velmap_insars29_sbois0_scalar.nc'
+            if not os.path.exists(ve_gnss_nc):
+                print(f"Error: GNSS velocity file {ve_gnss_nc} does not exist.")
                 exit(1)
-            if not os.path.exists(vn_gnss):
-                print(f"Error: GNSS velocity file {vn_gnss} does not exist.")
+            if not os.path.exists(vn_gnss_nc):
+                print(f"Error: GNSS velocity file {vn_gnss_nc} does not exist.")
                 exit(1)
-                
-            ve_gnss= lts.load_tif2xr(ve_gnss)
-            vn_gnss= lts.load_tif2xr(vn_gnss)
+
+            ve_gnss= xr.load_dataset(ve_gnss_nc).Ve
+            vn_gnss= xr.load_dataset(vn_gnss_nc).Vn
+            ve_gnss_velmap= xr.load_dataset(vn_gnss_nc).Ve
+
             ##reshape
             ve_gnss_reshaped=ve_gnss.interp_like(E_unit)
             vn_gnss_reshaped=vn_gnss.interp_like(E_unit)
-            vlos_gnss = ve_gnss_reshaped * E_unit + vn_gnss_reshaped * N_unit 
+            
+            ve_gnss_velmap_reshaped=ve_gnss_velmap.interp_like(E_unit)
+            ve_gnss_filled = ve_gnss_reshaped.fillna(ve_gnss_velmap_reshaped)
+            
+            
+            vlos_gnss = ve_gnss_filled * E_unit + vn_gnss_reshaped * N_unit 
             #vlos_gnss
     else:
         print("No interseismic motion calculation requested.")
@@ -358,4 +372,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_para", default=4, type=int, help="Number of parallel processes to use")
     parser.add_argument("--sbovl", action="store_true", help="If set, it will use the sbovl dataset")
     args = parser.parse_args()
+    args.interseismic_motion = True
+    if args.sbovl == True:
+        args.TS_folder = 'TS_GEOCml10mask'
     main(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame, args.imd_p, args.imd_s, args.ve_gnss, args.vn_gnss, args.plate_motion, args.interseismic_motion, args.n_para, args.sbovl)
