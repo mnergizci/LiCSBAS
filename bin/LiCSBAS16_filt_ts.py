@@ -390,10 +390,14 @@ def main(argv=None):
         if not sbovl_abs: 
             infodir = os.path.join(tsadir, 'info')
             ref13file = os.path.join(infodir, '13ref.txt')
+            ref12file = os.path.join(infodir, '12ref.txt')
             with open(ref13file, "r") as f:
                 ref13area = f.read().split()[0]  # str, x1/x2/y1/y2
+            with open(ref12file, "r") as f:
+                ref12area = f.read().split()[0]  # str, x1/x2/y1/y2
 
             ref13x1, ref13x2, ref13y1, ref13y2 = [int(s) for s in re.split('[:/]', ref13area)]
+            ref12x1, ref12x2, ref12y1, ref12y2 = [int(s) for s in re.split('[:/]', ref12area)]
 
             # --- Reference: Cumulative displacement ---
             refpoint_cum_org = np.nanmean(cum_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
@@ -445,6 +449,8 @@ def main(argv=None):
             # --- Reference: Ionospheric correction ---
             if iono:
                 refpoint_iono = np.nanmean(iono_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
+                if np.any(np.isnan(refpoint_iono)):
+                    refpoint_iono =np.nanmean(iono_org[:, ref12y1:ref12y2, ref12x1:ref12x2], axis=(1,2))
                 if np.any(np.isnan(refpoint_iono)):
                     print("Some NaNs detected in refpoint_iono — replacing with nanmedian across all pixels.")
                     refpoint_iono = np.where(
