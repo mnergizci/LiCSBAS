@@ -378,10 +378,15 @@ def main(argv=None):
                 fig.basemap(projection="M3c", region=region, frame=True)
             
             # pygmt.makecpt(cmap="gray", series=[-200, 10000, 3000], continuous=True, reverse=True)
-            pygmt.makecpt(cmap="gray", series=[-9000, 9000, 3000], continuous=True)
+            pygmt.makecpt(cmap="gray", series=[-200, 10000, 3000], continuous=True, reverse=True)
             fig.grdimage(grid=dem,cmap=True,region=region,shading=True,frame=False)
             pygmt.makecpt(cmap="vik", series=cmap_range)
-            fig.grdimage(grid=grid, cmap=True, nan_transparent=True)
+            decomp3d_Vn_xyz='sboi.xyz'
+            plot_lib.da_to_xyz(grid, decomp3d_Vn_xyz,varname="Vn")
+            # PlOT dsc_file
+            fig.plot(data=decomp3d_Vn_xyz, style="c0.05c", fill="+z", cmap=True)
+            os.system(f'rm {decomp3d_Vn_xyz}')
+            # fig.grdimage(grid=grid, cmap=True, nan_transparent=True)
             fig.coast(shorelines="black", water="skyblue")
             pygmt.config(MAP_FRAME_TYPE="plain")
             fig.colorbar(position="JBC+o-0c/0.2c+w1.75c/0.25c+ml+h+e", truncate=cmap_range,
