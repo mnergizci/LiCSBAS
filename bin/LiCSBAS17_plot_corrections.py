@@ -248,9 +248,10 @@ def main(argv=None):
 
     #prepareing dem for figure
     ###demfile
+    RR_used = [1, 80, 25, 60]  # [minlon, maxlon, minlat, maxlat]
     dem_file='earth_relief_fullAHB_30s.nc'
     # Upload data
-    batchdir = '/work/scratch-pw2/licsar/mnergiz/batchdir'
+    batchdir = os.environ.get("BATCH_CACHE_DIR")
     dem = os.path.join(batchdir, dem_file)
     dem_resolution='30s'
     merged_dir = '/home/users/mnergiz/1.gmt_workout/2.turkey_paper/merged_track_polys'
@@ -303,7 +304,7 @@ def main(argv=None):
                 cmap_range = [round(v[0], 1), round(v[1], 1)]
             
             if i == 0 or i == 5:
-                cmap_range = [-10, 10]
+                cmap_range = [-100, 100]
             
             pygmt.makecpt(cmap="vik", series=cmap_range)
             if i == 0 or i == 5:
@@ -369,7 +370,7 @@ def main(argv=None):
                 cmap_range = [round(v[0], 1), round(v[1], 1)]
             
             if i == 0 or i == 4:
-                cmap_range = [-10, 10]
+                cmap_range = [-100, 100]
 
             pygmt.makecpt(cmap="vik", series=cmap_range)
             if i == 0 or i == 4:
