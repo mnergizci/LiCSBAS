@@ -110,7 +110,7 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
     print(f"Processed epoch {imdate} (Δt={years:.4f} yr)")
     
     # 
-    if interseismic_motion and (vlos_gnss is not None) and years != 0 and im_d == np.datetime64('2024-12-30'):
+    if interseismic_motion and (vlos_gnss is not None) and years != 0 and im_d == np.datetime64('2024-12-21'):
       (cum_corr_plate_inter-cum_corr_plate).plot(cmap='RdBu')
       plt.savefig(f'{p_str}_{im_d}_vlos_inter.png')
       plt.close()
@@ -139,7 +139,7 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
       plt.savefig(f"{p_str}_{im_d}_cum_plate_inter_subplot.png")
       plt.close()
       
-    if years != 0 and im_d == np.datetime64('2024-12-30'):
+    if years != 0 and im_d == np.datetime64('2024-12-21'):
         (cum_base-cum_corr_plate).plot(cmap='RdBu')
         plt.savefig(f'{p_str}_{im_d}_vlos_plate.png')
         plt.close()
