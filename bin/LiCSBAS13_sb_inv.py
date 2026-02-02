@@ -69,7 +69,7 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --mem_size   Max memory size for each patch in MB. (Default: 8000)
  --gamma      Gamma value for NSBAS inversion (Default: 0.0001)
  --n_para     Number of parallel processing (Default: # of usable CPU)
- --sbovl      Inversion of sbovl mm and cc values 
+ --sbovl      Inversion of (s)bovl mm and cc values. Note, no referencing is done for (s)bovl data.
  --n_unw_r_thre
      Threshold of n_unw (number of used unwrap data)
      (Note this value is ratio to the number of images (epochs); i.e., 1.5*n_im)
@@ -765,7 +765,6 @@ def main(argv=None):
                 for i in nanserror:
                     print('{}'.format(i), file=f)
             return 1
-
     #%% Open cum.h5 for output
     ### Decide here what to do re. cumh5file and reloading patches. Need to check that stored cumh5 file is the right size etc
     print('store_patches:', store_patches)
@@ -1262,9 +1261,40 @@ def main(argv=None):
     print('\nFind stable reference point...', flush=True)
     ### Compute RMS of time series with reference to all points
     sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
+    update_epochs_i = []
     for i in range(n_im):
-        sumsq_cum_wrt_med = sumsq_cum_wrt_med + (cum[i, :, :]-np.nanmedian(cum[i, :, :]))**2
+        nonancount = np.count_nonzero(~np.isnan(cum[i,:,:]))
+        if nonancount<=1:
+            print('WARNING - all cum values for epoch '+imdates[i]+' are NaNs. Removing this epoch')
+            update_epochs_i.append(i)
+        else:
+            sumsq_cum_wrt_med_test = sumsq_cum_wrt_med + (cum[i, :, :]-np.nanmedian(cum[i, :, :]))**2
+        if np.count_nonzero(~np.isnan(sumsq_cum_wrt_med_test))<=1:
+            print('WARNING - epoch '+imdates[i]+' is not consistent with previous epochs in coverage (nullified?) - removing this epoch.')
+            update_epochs_i.append(i)
+        else:
+            sumsq_cum_wrt_med = sumsq_cum_wrt_med_test
+    if update_epochs_i:
+        update_epochs_i.sort(reverse=True)   # need to pop last ones first
+        for i in update_epochs_i:
+            _ = imdates.pop(i)
+            _ = bperp.pop(i)
+            if not save_mem:
+                cum = np.delete(cum, i, 0)
+        n_im=len(imdates)
+        if save_mem:
+            print('removing listed epochs from h5 file')
+            update_epochs_i.sort() # probably not needed
+            remove_indices_from_dataset(cumh5, 'cum', update_epochs_i)
+        if 'imdates' in cumh5:
+            del cumh5['imdates']
+            cumh5.create_dataset('imdates', data=[np.int32(imd) for imd in imdates])
+        if 'bperp' in cumh5:
+            del cumh5['bperp']
+            cumh5.create_dataset('bperp', data=bperp)
+
     rms_cum_wrt_med = np.sqrt(sumsq_cum_wrt_med/n_im)
+
 
     ### Mask by minimum n_gap
     n_gap = io_lib.read_img(os.path.join(resultsdir, 'n_gap'), length, width)
@@ -1512,6 +1542,10 @@ def inc_png_wrapper(imx, sbovl=False):
     ## Comparison of increment and daisy chain pair
     ifgd = '{}_{}'.format(imd, imdates[imx+1])
     incfile = os.path.join(incdir, '{}.inc'.format(ifgd))
+    if not os.path.exists(incfile):
+        print('the increment file '+incfile+' does not exist (probably the image '+str(imdates[imx+1])+' has been removed due to nans in ref area?)')
+        return
+
     if sbovl:
         unwfile = os.path.join(ifgdir, ifgd, '{}.sbovldiff.adf.mm'.format(ifgd))
     else:

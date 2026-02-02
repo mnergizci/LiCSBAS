@@ -12,13 +12,14 @@ Finally, note it expects you to have the filtered masked velocity calculated, i.
 =====
 Usage
 =====
-LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--vstd_fix] [--keep_absolute]
+LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--vstd_fix] [--keep_absolute] [--azimuth]
 
  -t TS_GEOC_dir  TS folder with finished processing including step 16 (mandatory)
  -f frame_ID  In case your GEOC folder does not contain ENU tif files, provide frame ID
  -o  Output tif file (Default: vel_pmm_fixed.tif)
  --vstd_fix  Would also perform reference fix in vstd
  --keep_absolute  Do not fix to a reference point
+ --azimuth   Use ENU files for azimuth directions (for sbovls)
 
 Note it will use the final output, i.e. masked filtered velocity after step 16.
 """
@@ -139,11 +140,11 @@ def main(argv=None):
     cmd = 'LiCSBAS_flt2geotiff.py -i {0}/results/{1} -p {0}/info/EQA.dem_par -o {0}/results/vel.filt.mskd.tif'.format(tsdir, input)
     os.system(cmd)
     if not os.path.exists(vel_tiffile):
-        print('ERROR, cannot generate vlos tif file')
+        print('ERROR, cannot generate '+vel_tiffile)
         exit()
 
-    vlos = lts.load_tif2xr(vel_tiffile)
-    vlos_eurasia_reshaped = vlos_eurasia.interp_like(vlos)
+    vel = lts.load_tif2xr(vel_tiffile)
+    vel_eurasia_reshaped = vel_eurasia.interp_like(vel)
 
     vlos.values = vlos.values - vlos_eurasia_reshaped.values
     # breakpoint()
@@ -153,7 +154,7 @@ def main(argv=None):
         reffile = os.path.join(infodir, '16ref.txt')
         if not os.path.exists(reffile):
             print('ERROR, no 16ref.txt file exists! Referring to the median of whole scene instead \n')
-            vlos = vlos - vlos.where(vlos != 0).median()
+            vel = vel - vel.where(vel != 0).median()
         else:
             with open(reffile, "r") as f:
                 refarea = f.read().split()[0]  # str, x1/x2/y1/y2

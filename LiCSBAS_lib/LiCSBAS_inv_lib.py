@@ -566,7 +566,11 @@ def censored_lstsq_slow_para_wrapper(i):
     if np.mod(i, 100) == 0:
         print('  Running {0:6}/{1:6}th point...'.format(i, unw_tmp.shape[1]), flush=True)
     m = mask[:,i] # drop rows where mask is zero
-    X = np.linalg.lstsq(Gall[m], unw_tmp[m, i], rcond=None)[0]
+    try:
+        X = np.linalg.lstsq(Gall[m], unw_tmp[m, i], rcond=None)[0]
+    except:
+        print('WARNING: error inverting point ' + str(i) + '. Setting nan')
+        X = np.nan
     return X
 
 '''
@@ -1081,7 +1085,11 @@ def censored_lstsq_slow(A, B, M):
              print('\r  Running {0:6}/{1:6}th point...'.format(i, B.shape[1]), end='', flush=True)
 
         m = M[:,i] # drop rows where mask is zero
-        X[:, i] = np.linalg.lstsq(A[m], B[m, i], rcond=None)[0]
+        try:
+            X[:, i] = np.linalg.lstsq(A[m], B[m, i], rcond=None)[0]
+        except:
+            print('WARNING: error inverting point '+str(i)+'. Setting nan')
+            X[:, i] = np.nan
     return X
 
 '''
