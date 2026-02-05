@@ -57,7 +57,7 @@ try:
     from sklearn.linear_model import RANSACRegressor
 except:
     print('not loading RANSAC (optional experimental function)')
-from sklearn.utils import resample
+# from sklearn.utils import resample
 
 #debugmode = True
 #print('inversion runs in debug mode - please inform Milan if this works now')
