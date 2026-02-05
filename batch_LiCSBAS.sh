@@ -155,6 +155,7 @@ p120_ignoreconncomp="n" # y/n
 p12_GEOCmldir=""        # default: $GEOCmldir
 p12_TSdir=""    # default: TS_$GEOCmldir
 p12_n_para=$n_para	# default: # of usable CPU
+p12_nullify_fix_ref='' # y/n
 p13_GEOCmldir=""        # default: $GEOCmldir
 p13_TSdir=""    # default: TS_$GEOCmldir
 p13_inv_alg=""	# LS (default) or WLS
@@ -435,6 +436,7 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
       if [ ! -z $p12_loop_thre ];then p12_op="$p12_op -l $p12_loop_thre"; fi
       if [ $p12_multi_prime == "y" ];then p12_op="$p12_op --multi_prime"; fi
       if [ $p12_nullify == "y" ];then p12_op="$p12_op --nullify"; fi
+      if [ $p12_nullify_fix_ref == "y" ]; then p12_op="$p12_op --nullify_fix_ref"; fi
       if [ $p12_skippngs == "y" ];then p12_op="$p12_op --nopngs"; fi
       if [ ! -z $p12_rm_ifg_list ];then p12_op="$p12_op --rm_ifg_list $p12_rm_ifg_list"; fi
       if [ ! -z $p12_n_para ];then p12_op="$p12_op --n_para $p12_n_para";
