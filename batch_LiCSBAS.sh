@@ -466,7 +466,11 @@ if [ $start_step -le 12 -a $end_step -ge 12 ];then
     fi
 fi
 
-####################
+# This section is for step 13 rerun if the user sets p13resid_rerun to "y".
+# This is necessary for the SBOI rerun to identify problematic interferogram pairs
+# to remove in the first iterative step, and then rerun step 13 after removing
+# high-RMS interferograms.
+
 if [ $start_step -le 13 -a $end_step -ge 13 ];then
   if [ $p13resid_rerun == "y" ];then
     extra2='-t '$TSdir
@@ -503,7 +507,7 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
     if [ "$gpu" == "y" ];then p13_op="$p13_op --gpu"; fi
 
     if [ "$cometdev" -eq 1 ];then
-        # extra='--nopngs'
+        extra='--nopngs'
         if [ -z "$p13_n_unw_r_thre" ];then extra="$extra --n_unw_r_thre 0.4"; fi
         extra="$extra --singular_gauss"
       else
@@ -575,7 +579,7 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
   if [ "$gpu" == "y" ];then p13_op="$p13_op --gpu"; fi
 
   if [ "$cometdev" -eq 1 ];then
-      # extra='--nopngs'
+      extra='--nopngs'
       if [ -z "$p13_n_unw_r_thre" ];then extra="$extra --n_unw_r_thre 0.4"; fi
       extra="$extra --singular_gauss"
     else
