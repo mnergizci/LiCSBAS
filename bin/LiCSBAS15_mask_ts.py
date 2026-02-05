@@ -335,7 +335,7 @@ def main(argv=None):
         if (not 'n_loop_err' in thre_dict) and ('n_loop_err' in names): thre_dict['n_loop_err'] = 1
         if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 10
     if wavelength < 0.2: ## C-band
-        if not 'coh_avg' in thre_dict: thre_dict['coh_avg'] = 0.2
+        if not 'coh_avg' in thre_dict: thre_dict['coh_avg'] = 0.15
         if not 'n_unw_r' in thre_dict: thre_dict['n_unw_r'] = 1.5
         if not 'vstd' in thre_dict: thre_dict['vstd'] = 100
         if not 'n_gap' in thre_dict: thre_dict['n_gap'] = 10
