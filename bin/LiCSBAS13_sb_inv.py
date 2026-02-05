@@ -87,7 +87,7 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --offsets eqoffsets.txt  Estimate offsets read from external txt file - must have lines in the form of either yyyymmdd or yyyy-mm-dd
  --nullify_noloops   Nullifies data from ifgs not included in any loop, both ifg and pixel based noloop_ifgs. Uses data before nullification (optional step 12)
  --nullify_noloops_use_data_after_nullification  This would nullify noloop_ifgs after the nullification (usually not recommended)
-  --sbovl running the inversion on sbovl data (input is in mm)
+ --sbovl running the inversion on sbovl data (input is in mm)
  --sbovl_abs running the inversion on sbovl data, and use absolute values of sbovl data, not referenced to the reference point
  --ignore_nullification  Use of unwrapped data before the unwrapping error nullification (step 12) if performed.
 """
