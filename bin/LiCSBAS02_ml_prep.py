@@ -146,7 +146,7 @@ def main(argv=None):
     cmap_cc = cmc.batlow #SCM.batlow
     cycle = 3 #default of ifg, (75 for sbovl)
     n_valid_thre = 0.5
-    coh_thre = 0.2
+    coh_thre = 0.15
     q = multi.get_context('fork')
     
 
