@@ -79,6 +79,7 @@ LiCSBAS12_loop_closure.py -d ifgdir [-t tsadir] [-l loop_thre] [--multi_prime]
  --nopngs Do not generate png previews of loop closures (often takes long)
  --nullify_skip_backup  Do not save original ifgs (before nullification) - by default: save them. Note, skipping this backup would affect no-loop-ifg number (step 13)
  --nullify_threshold Threshold to detect phase loop closure errors (Default: pi) [rad]
+ --nullify_fix_ref Additional nullification control flag - preferring major connected components (solves unreliable reference point)
 """
 # %% Change log
 '''
@@ -159,7 +160,7 @@ def main(argv=None):
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
-    global Aloop, resultsdir, ifgdates, ifgdir, length, width, loop_pngdir, cycle, nullify_threshold, save_ori_unw, \
+    global Aloop, resultsdir, ifgdates, ifgdir, length, width, loop_pngdir, cycle, nullify_threshold, save_ori_unw, nullify_fix_ref, \
         multi_prime, bad_ifg, noref_ifg, bad_ifg_all, refy1, refy2, refx1, refx2, cmap_noise_r  ## for parallel processing
 
     # %% Set default
@@ -169,6 +170,7 @@ def main(argv=None):
     multi_prime = False
     rm_ifg_list = []
     nullify = False
+    nullify_fix_ref = False
     ref_approx = False
     do_pngs = True
     save_ori_unw = True
@@ -188,7 +190,7 @@ def main(argv=None):
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hd:t:l:",
-                                       ["help", "multi_prime", "nullify", "skip_pngs", "nopngs",
+                                       ["help", "multi_prime", "nullify", "nullify_fix_ref", "skip_pngs", "nopngs",
                                         "rm_ifg_list=", "n_para=", "ref_approx=", "nullify_skip_backup", "nullify_threshold="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -210,6 +212,8 @@ def main(argv=None):
                 n_para = int(a)
             elif o == '--nullify':
                 nullify = True
+            elif o == '--nullify_fix_ref':
+                nullify_fix_ref = True
             elif o == '--skip_pngs' or o == '--nopngs':
                 do_pngs = False
             elif o == '--ref_approx':
@@ -1278,8 +1282,10 @@ def loop_closure_4th(args, da):
         ## Calculate loop phase taking into account ref phase
         loop_ph = unw12 + unw23 - unw13 - (ref_unw12 + ref_unw23 - ref_unw13)
         # once referred to point that is considered ok (high coh == probably no phase bias), check for unw error of ref
-        peaks, k = np.histogram(loop_ph/2/np.pi, np.arange(-3.5, 4.5, 1)) # searching for k>=-3 to k<=+3 where k is the integer number of phase ambiguity
-        loop_ph = loop_ph - round(k[np.argmax(peaks)]+0.1)*(2*np.pi)
+        if nullify_fix_ref:
+            # 2026/02 ML: allowing skipping this option, as this would result in aligning to the 'major connected component' that may not be the one we focus on
+            peaks, k = np.histogram(loop_ph/2/np.pi, np.arange(-3.5, 4.5, 1)) # searching for k>=-3 to k<=+3 where k is the integer number of phase ambiguity
+            loop_ph = loop_ph - round(k[np.argmax(peaks)]+0.1)*(2*np.pi)
         #
         one_array_loop = one_array.copy()
         one_array_loop[np.isnan(loop_ph)] = 0
