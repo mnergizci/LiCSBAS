@@ -8,6 +8,7 @@ This script downloads GeoTIFF files in the specified frame ID from COMET-LiCS we
 By default, unw (unwrapped interferogram) and cc (coherence) files are downloaded
 The -f option is not necessary when the frame ID can be automatically identified from the name of the working directory.
 GACOS data can also be downloaded if available. Existing GeoTIFF files are not re-downloaded to save time, i.e., only the newly available data will be downloaded.
+ERA5 data can also be downloaded if available (Firts need to run in Jasmin ICAMS to download for each frame)
 
 ============
 Output files
@@ -52,7 +53,7 @@ LiCSBAS01_get_geotiff.py [-f frameID] [-s yyyymmdd] [-e yyyymmdd] [--get_gacos] 
 '''
 2025-08-22 ML: fixes for the 'future' LiCSAR HTMLs
 20241001 P. Espin
- - DOwnload ERA5 data fro LiCSAR epoch
+ - Download ERA5 data fro LiCSAR epoch
 20241107 ML, UoL
  - added min/max btemp to download data
 v1.14.2 20230608 Milan Lazecky, UoL
@@ -125,6 +126,8 @@ def main(argv=None):
     get_mli = False
     get_pha = False
     get_era5 = False
+    get_tides = False
+    get_iono = False
     sbovl = False
     n_para = 4
     minbtemp = 0
@@ -135,7 +138,9 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hf:s:e:", ["help", "get_gacos", "get_mli", "get_pha", "get_era5", "n_para=", "minbtemp=", "maxbtemp=", "sbovl"])
+            opts, args = getopt.getopt(argv[1:], "hf:s:e:", ["help", "get_gacos", "get_mli", "get_pha",
+                                                             "get_iono", "get_tides", "get_era5",
+                                                             "n_para=", "minbtemp=", "maxbtemp=", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -156,6 +161,12 @@ def main(argv=None):
                 get_pha = True
             elif o == '--get_era5':
                 get_era5 = True
+            elif o == '--get_iono':
+                get_iono = True
+                print('WARNING, getting iono corrections is not implemented yet')
+            elif o == '--get_tides':
+                get_tides = True
+                print('WARNING, getting tides is not implemented yet')
             elif o == '--n_para':
                 n_para = int(a)
             elif o == '--sbovl':

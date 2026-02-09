@@ -11,7 +11,7 @@ Input & output files
 
 Inputs in GEOCml*/ :
  - yyyymmdd_yyyymmdd/
-   - yyyymmdd_yyyymmdd_orig*.unw
+   - yyyymmdd_yyyymmdd.unw.ori
    - yyyymmdd_yyyymmdd.unw
 
 =====
@@ -21,6 +21,7 @@ LiCSBAS_reset_nulls.py [-h] [-d GEOC_DIR] [--reset_all] [--reset_NoLoop] [--rese
 """
 #%% Change log
 '''
+PEB: fix paths
 v1.0 20230803 Jack McGrath
  - Original implementation
  
@@ -121,8 +122,9 @@ def reset_all():
 
     for ifg in ifglist:
         ifgd = re.split('/', ifg)[-1]
-        if os.path.exists(os.path.join(ifg, ifgd + '_orig.unw')):
-            shutil.move(os.path.join(ifg, ifgd + '_orig.unw'), os.path.join(ifg, ifgd + '.unw'))
+        if os.path.exists(os.path.join(ifg, ifgd + '.unw.ori')):
+            shutil.move(os.path.join(ifg, ifgd + '.unw.ori'), os.path.join(ifg, ifgd + '.unw'))
+            shutil.move(os.path.join(ifg, ifgd + '.unw.ori.png'), os.path.join(ifg, ifgd + '.unw.png'))
             for backup in glob.glob(os.path.join(ifg, '*orig*')):
                 if os.path.islink(backup):
                     os.unlink(backup)
@@ -130,11 +132,13 @@ def reset_all():
                     os.remove(backup)
         elif os.path.exists(os.path.join(ifg, ifgd + '.unw')):
             if ifgd not in bad_ifg_list:
-                print('CAUTION: NO {}_orig.unw exists to backup from!'.format(ifgd))
+                print('CAUTION: NO {}.unw.ori exists to backup from!'.format(ifgd))
             else:
-                print('CAUTION: {0} identified as a bad by step 11. No nulling occurred, so no {0}_orig.unw exists to backup from!'.format(ifgd))
+                print(
+                    'CAUTION: {0} identified as a bad by step 11. No nulling occurred, so no {0}.unw.ori exists to backup from!'.format(
+                        ifgd))
         else:
-            print('WARNING: NO {0}.unw OR {0}_orig.unw EXISTS in {1}!'.format(ifgd, os.path.dirname(ifgdir)))
+            print('WARNING: NO {0}.unw OR {0}.unw.ori EXISTS in {1}!'.format(ifgd, os.path.dirname(ifgdir)))
 
 def reset_null():
     if args.reset_LoopErr:
@@ -153,9 +157,9 @@ def reset_null():
 
     for ifg in ifglist:
         ifgd = re.split('/', ifg)[-1]        
-        backups = glob.glob(os.path.join(ifg, ifgd + '_orig*{}.unw'.format(resetcode)))
+        backups = glob.glob(os.path.join(ifg, ifgd + '{}.unw.ori'.format(resetcode)))
         if len(backups) == 0:
-            print('WARNING: No backup \'_orig*{}.unw\' files found in {}! Skipping.....'.format(resetcode, ifgd))
+            print('WARNING: No backup \'{}.unw.ori\' files found in {}! Skipping.....'.format(resetcode, ifgd))
         elif len(backups) > 1:
             print('WARNING: Ambiguous as to which file is the last backup in {}! Skipping.....'.format(ifgd))
         else:
@@ -164,7 +168,8 @@ def reset_null():
             if os.path.islink(backup):
                 # Remove symlink, reset with _orig.unw
                 os.unlink(backup)
-                shutil.move(os.path.join(ifg, ifgd + '_orig.unw'), os.path.join(ifg, ifgd + '.unw'))
+                shutil.move(os.path.join(ifg, ifgd + '.unw.ori'), os.path.join(ifg, ifgd + '.unw'))
+                shutil.move(os.path.join(ifg, ifgd + '.unw.ori.png'), os.path.join(ifg, ifgd + '.unw.png'))
             else:
                 shutil.move(backup, os.path.join(ifg, ifgd + '.unw'))
 

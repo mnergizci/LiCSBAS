@@ -38,7 +38,7 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
  -T  Threshold of maxTlen (max time length of connected network (year))
  -g  Threshold of n_gap (number of gaps in network)
  -s  Threshold of stc (spatio-temporal consistency (mm))
- -i  Threshold of n_ifg_noloop (number of ifgs with no loop)
+ -i  Threshold of n_ifg_noloop (number of pixels from ifgs with no loop)
  -l  Threshold of n_loop_err (number of loop_err) - in case of nullification in step 12, this will apply the threshold on n_nullify
  NOTE: we now test and will update the -l parameter to be a ratio (<=1 where 1 means all bad). Future: default: 0.7
  -L  Threshold of n_loop_err_ratio (number of loop_err divided by number of loops). Use number 0-1. (preferred solution)

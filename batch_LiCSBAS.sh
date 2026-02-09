@@ -6,6 +6,7 @@
 #                                         03: LiCSBAS03op_GACOS.py (optional)
 #                                         04: LiCSBAS04op_mask_unw.py (optional)
 #                                         05: LiCSBAS05op_clip_unw.py (optional)
+#  06: LiCSBAS03op_ERA5.py (optional)
 #  11: LiCSBAS11_check_unw.py
 #  (optional) 120: LiCSBAS120_choose_reference.py   - RECOMMENDED, especially if nullification is used, thus added to cometdev
 #  12: LiCSBAS12_loop_closure.py
@@ -40,11 +41,12 @@ freq="" # default: 5.405e9 Hz
 ### Running the updated pipelines:
 run_reunwrapping='n' # y/n. default: 'n'. Reunwrapping would use 02to05 script instead of the original 02[,03,04,05]
 
-### Optional steps (03-05) ###
-order_op03_05="03 04 05"	# can change order e.g., 05 03 04
+### Optional steps (03-06) ###
+order_op03_05="03 04 05 06"	# can change order e.g., 05 03 04
 do03op_GACOS="n"	# y/n
 do04op_mask="n"	# y/n
 do05op_clip="n"	# y/n
+do06op_ERA5="n" #"y"	# ERA5 apply if icams files in LiCSAR
 p04_mask_coh_thre_avg=""	# e.g. 0.2
 p04_mask_coh_thre_ifg=""	# e.g. 0.2
 p04_mask_range=""	# e.g. 10:100/20:200 (ix start from 0)
@@ -137,6 +139,11 @@ p04_n_para=$n_para   # default: # of usable CPU
 p05_inGEOCmldir=""      # default: $GEOCmldir
 p05_outGEOCmldir_suffix="" # default: clip
 p05_n_para=$n_para   # default: # of usable CPU
+p06_fillhole="y"	# y/n. default: n
+p06_era5dir="ERA5"	# default: ERA5
+p06_n_para=""   # default: # of usable CPU
+p06_inGEOCmldir=""      # default: $GEOCmldir
+p06_outGEOCmldir_suffix="ERA5" # default: ERA5
 p11_GEOCmldir=""	# default: $GEOCmldir
 p11_TSdir=""	# default: TS_$GEOCmldir
 p11_minbtemp=""  # default: 0 (not use)
@@ -350,6 +357,31 @@ if [ $step -eq 05 -a $start_step -le 05 -a $end_step -ge 05 ];then
       echo "LiCSBAS05op_clip_unw.py $p05_op"
     else
       LiCSBAS05op_clip_unw.py $p05_op 2>&1 | tee -a $log
+      if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
+    fi
+    ### Update GEOCmldir to be used for following steps
+    GEOCmldir="$outGEOCmldir"
+  fi
+fi
+
+if [ $step -eq 06 -a $start_step -le 06 -a $end_step -ge 06 ];then
+  if [ $do06op_ERA5 == "y" ]; then
+    p06_op=""
+    if [ ! -z $p06_inGEOCmldir ];then inGEOCmldir="$p06_inGEOCmldir";
+      else inGEOCmldir="$GEOCmldir"; fi
+    p06_op="$p06_op -i $inGEOCmldir"
+    if [ ! -z $p06_outGEOCmldir_suffix ];then outGEOCmldir="$inGEOCmldir$p06_outGEOCmldir_suffix";
+      else outGEOCmldir="${inGEOCmldir}ERA5"; fi
+    p06_op="$p06_op -o $outGEOCmldir"
+    if [ ! -z $p06_era5dir ];then p06_op="$p06_op -g $p06_era5dir"; fi
+    if [ $p06_fillhole == "y" ];then p06_op="$p06_op --fillhole"; fi
+    if [ ! -z $p06_n_para ];then p06_op="$p06_op --n_para $p06_n_para";
+    elif [ ! -z $n_para ];then p06_op="$p06_op --n_para $n_para";fi
+
+    if [ $check_only == "y" ];then
+      echo "LiCSBAS03op_ERA5.py $p06_op"
+    else
+      LiCSBAS03op_ERA5.py $p06_op 2>&1 | tee -a $log
       if [ ${PIPESTATUS[0]} -ne 0 ];then exit 1; fi
     fi
     ### Update GEOCmldir to be used for following steps
