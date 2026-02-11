@@ -1135,7 +1135,7 @@ def main(argv=None):
                 cum_patch[1:, :] = np.cumsum(inc_patch, axis=0)
 
                 ## 2025/09: keep the nans between connections
-                print('Setting NaNs to cum values that were not measured by interferograms')
+                print('Returning NaNs to epochs that were not measured by any interferogram')
                 try:
                     cum_tmp = cum_patch[:, ix_unnan_pt]  # cum_patch is of shape (epochs, ALL pixels)
                     for indexpx in range(unwpatch.shape[0]):   # unwpatch is of shape (UNNAN pixels, unw data)
