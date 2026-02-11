@@ -67,6 +67,10 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
  --from_model path/to/model.h5  Use externally calculated model to perform residual-based filtering (in dev further. see LiCSBAS_cum2vel.py to generate this)
  --interpolate_nans   This will use the filter to fill nan values (in unmasked data). If temporal filtering is disabled, it will use linear interpolation in space instead.
  --nopngs     Avoid generating some (unnecessary) PNG previews of increment residuals etc.
+ --sbovl    SBOI mode: use the sbovl stragey for the spatio-temporal filter (currently tide and iono correction in azimuth direction applied here before the filtering)
+ --tide     solid earth tide correction in azi
+ --iono     ionospheric correction in azi
+ --sbovl_abs sboi absolute running, closing the referencing but this is in the testing so please ask if you need to use #MN
 
 Note: Spatial filter consume large memory. If the processing is stacked, try
  - --n_para 1
@@ -76,6 +80,8 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
 """
 #%% Change log
 '''
+20250211 MN
+ - added sbovl, tide and iono flags for Burst overlap interferometry in LiCSBAS.
 20241107 ML
  - added interpolate_nans and updated masking of final cum_filt data
 20241029 Milan Lazecky
@@ -322,7 +328,7 @@ def main(argv=None):
         if not sbovl:
             cycle = 3 # 3*2pi/cycle for comparison png
         else:
-            cycle = 3
+            cycle = 3  #TODO must be around 75?? because of the SBOI? I need to check MN
 
     filtincdir = os.path.join(tsadir, '16filt_increment')
     if os.path.exists(filtincdir): shutil.rmtree(filtincdir)
@@ -420,7 +426,7 @@ def main(argv=None):
                     print("WARNING: Not enough valid points in refpoint_cum_org to interpolate.")
                     refpoint_cum_org[:] = 0
 
-
+            breakpoint()
             # --- Reference: Tide correction ---
             if tide:
                 refpoint_tide = np.nanmean(tide_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
@@ -431,6 +437,7 @@ def main(argv=None):
                         np.nanmedian(tide_org, axis=(1,2)),
                         refpoint_tide
                     )
+                # refpoint_tide = np.nanmedian(tide_org, axis=(1, 2)) #median here #MN maybe we can open this in the future. 
                 if np.any(np.isnan(refpoint_tide)):
                     print("Still NaNs in refpoint_tide — interpolating over time.")
                     time_idx = np.arange(refpoint_tide.shape[0])
@@ -449,8 +456,8 @@ def main(argv=None):
             # --- Reference: Ionospheric correction ---
             if iono:
                 refpoint_iono = np.nanmean(iono_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
-                if np.any(np.isnan(refpoint_iono)):
-                    refpoint_iono =np.nanmean(iono_org[:, ref12y1:ref12y2, ref12x1:ref12x2], axis=(1,2))
+                # if np.any(np.isnan(refpoint_iono)):
+                #     refpoint_iono =np.nanmean(iono_org[:, ref12y1:ref12y2, ref12x1:ref12x2], axis=(1,2))
                 if np.any(np.isnan(refpoint_iono)):
                     print("Some NaNs detected in refpoint_iono — replacing with nanmedian across all pixels.")
                     refpoint_iono = np.where(
@@ -458,6 +465,7 @@ def main(argv=None):
                         np.nanmedian(iono_org, axis=(1,2)),
                         refpoint_iono
                     )
+                # refpoint_iono = np.nanmedian(iono_org, axis=(1, 2)) #median here #MN
                 if np.any(np.isnan(refpoint_iono)):
                     print("Still NaNs in refpoint_iono — interpolating over time.")
                     time_idx = np.arange(refpoint_iono.shape[0])
@@ -472,9 +480,8 @@ def main(argv=None):
             else:
                 refpoint_iono = None
 
-
             # --- Reference each dataset ---
-            # breakpoint()
+            breakpoint()
             for i in range(n_im):
                 cum_org[i, :, :] -= refpoint_cum_org[i]
                 if tide:
@@ -814,7 +821,7 @@ def main(argv=None):
         del cum_model
         modelh5.close()
 
-    ### Rerferencing cumulative displacement to new stable ref
+    ### Referencing cumulative displacement to new stable ref
     if not sbovl_abs:
         for i in range(n_im):
             cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]

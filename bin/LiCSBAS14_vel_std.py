@@ -30,7 +30,8 @@ LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac
  --ransac     Recalculate velocity free from outliers (use RANSAC algorithm)
  --skipexisting  Skip if exists
  --sbovl      sbovl option
- --sbovl_abs  sbovl option for recalculate the absolute velocity.
+ --sbovl_abs  sbovl option for recalculate the absolute velocity, this is skip for referecing step for sbovl
+ --bootnum    Number of bootstrap iterations (Default: 100)
 """
 #%% Change log
 '''

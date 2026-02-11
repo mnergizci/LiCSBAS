@@ -50,6 +50,11 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
                   (Default: they are masked by stc)
  --noautoadjust  Do not auto adjust threshold when all pixels are masked
                  (Default: do auto adjust)
+ --sbovl  use the sbovl masking thresholds and indices
+ --sbovl_abs  use the sbovl abs results from previous step like bootvel_abs_notide_noiono
+ --tide use tide corrected results (if exist) like bootvel_abs_notide
+ --iono use iono corrected results (if exist) like bootvel_abs_notide_noiono  ##TODO the corrections applied in the step 16 for the sboi before spatio-temporal filter, these flag was open to testing absolute sense of boi and its correction, need to be removed/organized after better testing. #MN
+ 
 
  Default thresholds:
    C-band : -c 0.05 -u 1.5 -v 100 -T 1 -g 10 -s 5  -i 50 -l 5 -r 2
@@ -169,8 +174,8 @@ def main(argv=None):
     cmap_vel = cmc.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
-    tide = False
-    iono = False
+    # tide = False
+    # iono = False
     
     #%% Read options
     try:
@@ -225,10 +230,10 @@ def main(argv=None):
             elif o == '--sbovl_abs':
                 sbovl = True
                 sbovl_abs = True
-            elif o == '--tide':
-                tide = True
-            elif o == '--iono':
-                iono = True
+            # elif o == '--tide':
+            #     tide = True
+            # elif o == '--iono':
+            #     iono = True
 
         if not tsadir:
             raise Usage('No tsa directory given, -t is not optional!')
