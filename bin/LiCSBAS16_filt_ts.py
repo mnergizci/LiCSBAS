@@ -303,7 +303,7 @@ def main(argv=None):
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
 
-    # breakpoint()
+    # 
     #%% Directory and file setting
     tsadir = os.path.abspath(tsadir)
     cumfile = os.path.join(tsadir, cumname)
@@ -426,7 +426,7 @@ def main(argv=None):
                     print("WARNING: Not enough valid points in refpoint_cum_org to interpolate.")
                     refpoint_cum_org[:] = 0
 
-            breakpoint()
+            
             # --- Reference: Tide correction ---
             if tide:
                 refpoint_tide = np.nanmean(tide_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
@@ -481,7 +481,7 @@ def main(argv=None):
                 refpoint_iono = None
 
             # --- Reference each dataset ---
-            breakpoint()
+            
             for i in range(n_im):
                 cum_org[i, :, :] -= refpoint_cum_org[i]
                 if tide:
@@ -516,7 +516,7 @@ def main(argv=None):
     cumffile = os.path.join(tsadir, f'cum_filt.h5') #s{filtwidth_km}_t{int(filtwidth_yr*365.25)} MN
     if os.path.exists(cumffile): os.remove(cumffile)
     cumfh5 = h5.File(cumffile,'w') #open cum_filt.h5 to write filtered data
-    # breakpoint()
+    # 
 
     ### Save dates and other info into cumf
     cumfh5.create_dataset('imdates', data=cumh5['imdates'])
@@ -632,7 +632,7 @@ def main(argv=None):
         print('range: {}'.format(range_str), file=f)
         print('ex_range: {}'.format(ex_range_str), file=f)
 
-    # breakpoint()
+    # 
     #%% Load Mask (1: unmask, 0: mask, nan: no cum data)
     if maskflag:
         maskfile = os.path.join(resultsdir, 'mask')
@@ -781,7 +781,7 @@ def main(argv=None):
         # not filtering
         cum_filt = cum
 
-    # breakpoint()
+    # 
     #%% Find stable ref point
     if not sbovl_abs: 
         print('\nFind stable reference point...', flush=True)
@@ -799,7 +799,7 @@ def main(argv=None):
         mask_n_gap = np.float32(n_gap==min_n_gap)
         mask_n_gap[mask_n_gap==0] = np.nan
         rms_cum_wrt_med = rms_cum_wrt_med*mask_n_gap
-        #breakpoint()
+        #
         #TODO I have closed here as I get some nan errors for SBOI rms_cum_wrt_med = nan,  refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index IndexError: index 0 is out of bounds for axis 0 with size 0
         ### Find stable reference
         min_rms = np.nanmin(rms_cum_wrt_med)
@@ -891,7 +891,7 @@ def main(argv=None):
     if maskflag:
         print('\n(masked version)', flush=True)
         cum_filt = cum_filt * mask[np.newaxis, :, :]
-    # breakpoint()
+    # 
     if sbovl_abs:
         cumfh5.create_dataset('vel' + sbovl_suffix, data=vel.reshape(length, width)*mask, compression=compress)
         cumfh5.create_dataset('vintercept' + sbovl_suffix, data=vconst.reshape(length, width)*mask, compression=compress)
@@ -931,7 +931,7 @@ def main(argv=None):
     cumh5.close()
     cumfh5.close()
 
-    # breakpoint()
+    # 
     #%% Output image
     if sbovl_abs:
         pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.png')
