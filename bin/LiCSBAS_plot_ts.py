@@ -49,12 +49,21 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_d
               (Default: 99 %)
  --ylen       Y Length of time series plot in mm (Default: auto)
  --ts_png     Output png file of time series plot (not display interactive viewers)
-
+ --corrections Show corrections (tide, iono, gacos, etc.) if exist in cum file in another subplot of time series plot
+ --cum_name, cum_name2, cum_name3  Dataset name in cum hdf5 file for cumulative displacement to show in time series plot (Default: cum or cum_model). If --corrections is specified, you can specify the dataset name for the corrections to show. For example, if you have tide correction data in your cum hdf5 file, you can specify --cum_name2 tide to show the time series of tide correction. You can specify up to 3 datasets with these options. The labels of the time series plot will be set to the dataset names.
+ 
+ ##TODO here is testing for absolute referencign and plotting, so please contact developers if you want to use or modify these options #MN
+ --abs       Show absolute cumulative displacement and velocity if exist in cum file. If not exist, show cum and vel but set title and color range based on absolute values. This is for the scenario like SBOI where the cumulative displacement and velocity are already corrected for plate motion and show the absolute values. In this scenario, the relative cumulative displacement and velocity (i.e., not corrected for plate motion) can be shown by specifying the cum file with relative values with --i2 option.
+ --novelocity  Not show velocity in title and not use velocity for color range setting
+ --raw         Show raw cumulative displacement without mask and reference area (Default: show filtered cumulative displacement with mask and reference area) for sbovl absolute senario
+ --
 
 example:  LiCSBAS_plot_ts.py -i TS_GEOCml10GACOSmask/cum_filt_interpolate.h5 --cum_name cum --cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
 """
 #%% Change log
 '''
+20260211 Muhammet Nergizci, COMET University of Leeds
+ - adding the show corrections option to show the corrections in the time series plot, and cum_name options to specify the dataset name for the cumulative displacement and corrections to show in the time series plot
 v1.13.4 20210910 Yu Morishita, GSI
  - Avoid error for refarea in bytes
 v1.13.3 20210205 Yu Morishita, GSI
@@ -197,20 +206,22 @@ if __name__ == "__main__":
     vmax = None
     cmap_name = "cmc.roma_r"
     auto_crange = 99.0
-    absolute= False
     correction_flag = False
-    novel_flag = False
-    raw_flag = False
     cum_name = None
     cum_name2 = None
     cum_name3 = None
+    
+    #TODO here is testing for absolute referencign and plotting, so please contact developers if you want to use or modify these options #MN
+    absolute= False
+    novel_flag = False
+    raw_flag = False
     ##--cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "novelocity", "raw", "cum_name=", "cum_name2=", "cum_name3="])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "cum_name=", "cum_name2=", "cum_name3=", "novelocity", "raw"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:

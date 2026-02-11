@@ -122,7 +122,6 @@ functions_for_report.py
 ipynb_test/dazes_021D.csv
 ipynb_test/daz_trial.py
 bin/cum2tif_png.py
-bin/LiCSBAS_cum_plate_motion.py
 environment2.yml
 ipynb_test/decomp3d_postseismic_Vn_temp.xyz
 ipynb_test/range_014_cum_geocoded.nc
