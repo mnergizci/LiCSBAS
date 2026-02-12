@@ -109,4 +109,19 @@ venv.bak/
 .idea/vcs.xml
 .idea/workspace.xml
 
+##mnergizci
+*test_LiCSBAS*
+*tif
+*ipynb
 .vscode/
+bin/LiCSBAS_plot_ts_differences.py
+bin/LiCSBAS_correction_comparison.py
+*pkl
+*.png
+functions_for_report.py
+ipynb_test/dazes_021D.csv
+ipynb_test/daz_trial.py
+bin/cum2tif_png.py
+environment2.yml
+ipynb_test/decomp3d_postseismic_Vn_temp.xyz
+ipynb_test/range_014_cum_geocoded.nc

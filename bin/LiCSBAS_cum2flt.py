@@ -51,6 +51,7 @@ import cmcrameri.cm as cmc
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_plot_lib as plot_lib
+from datetime import datetime
 
 class Usage(Exception):
     """Usage context manager"""
@@ -73,6 +74,7 @@ def main(argv=None):
 
     #%% Set default
     imd_s = []
+    # breakpoint()
     cumfile = 'cum_filt.h5'
     outfile = []
     imd_m = []
@@ -165,8 +167,23 @@ def main(argv=None):
 
     ### Check date
     if not imd_s in imdates:
-        print('\nERROR: No date of {} exist in {}!'.format(imd_s, cumfile), file=sys.stderr)
-        return 2
+        # print('\nERROR: No date of {} exist in {}, selecting nearest date'.format(imd_s, cumfile), file=sys.stderr)
+        # return 2
+        
+        # Convert imd_s to datetime
+        imd_s_dt = datetime.strptime(imd_s, "%Y%m%d")
+        
+        # Convert imdates to datetime list
+        imdates_dt = [datetime.strptime(d, "%Y%m%d") for d in imdates]
+        
+        # Find the nearest date
+        nearest_dt = min(imdates_dt, key=lambda d: abs(d - imd_s_dt))
+        
+        # Convert back to string
+        imd_s = nearest_dt.strftime("%Y%m%d")
+        
+        print(f'\nWARNING: Date {imd_s_dt.strftime("%Y%m%d")} not found in {cumfile}, using nearest date {imd_s}', file=sys.stderr) 
+        
     if not imd_m in imdates:
         print('\nERROR: No date of {} exist in {}!'.format(imd_m, cumfile), file=sys.stderr)
         return 2

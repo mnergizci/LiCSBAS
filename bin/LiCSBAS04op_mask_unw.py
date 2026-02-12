@@ -111,6 +111,7 @@ def main(argv=None):
     ex_range_str = []
     ex_range_file = []
     poly_file = []
+    sbovl = False
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -119,12 +120,12 @@ def main(argv=None):
     cmap_noise = 'viridis'
     cmap_wrap = cmc.romaO
     q = multi.get_context('fork')
-
+    # breakpoint()
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:c:r:f:p:s:", ["help", "n_para="])
+            opts, args = getopt.getopt(argv[1:], "hi:o:c:r:f:p:s:", ["help", "n_para=", "sbovl"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -145,6 +146,8 @@ def main(argv=None):
                 ex_range_file = a
             elif o == '-p':
                 poly_file = a
+            elif o == '--sbovl':
+                sbovl = True
             elif o == '--n_para':
                 n_para = int(a)
 
@@ -167,7 +170,7 @@ def main(argv=None):
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
 
-    
+    # breakpoint()
     #%% Read info and make dir
     in_dir = os.path.abspath(in_dir)
     out_dir = os.path.abspath(out_dir)
@@ -186,6 +189,9 @@ def main(argv=None):
         cycle = 1.5  # 2pi/cycle for png
     else: ## C-band
         cycle = 3  # 2pi*3/cycle for png
+    
+    if sbovl:
+        cycle = 75
 
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
@@ -284,7 +290,10 @@ def main(argv=None):
     ifgdates2 = []
     for ifgix, ifgd in enumerate(ifgdates): 
         out_dir1 = os.path.join(out_dir, ifgd)
-        unwfile_m = os.path.join(out_dir1, ifgd+'.unw')
+        if sbovl:
+            unwfile_m = os.path.join(out_dir1, ifgd+'.sbovldiff.adf.mm')
+        else:
+            unwfile_m = os.path.join(out_dir1, ifgd+'.unw')
         ccfile_m = os.path.join(out_dir1, ifgd+'.cc')
         if not (os.path.exists(unwfile_m) and os.path.exists(ccfile_m)):
             ifgdates2.append(ifgd)
@@ -300,7 +309,9 @@ def main(argv=None):
             
         print('  {} parallel processing...'.format(n_para), flush=True)
         p = q.Pool(n_para)
-        p.map(mask_wrapper, range(n_ifg2))
+        args_list = [(ifgix, sbovl) for ifgix in range(n_ifg2)] 
+        # p.starmap(mask_wrapper, range(n_ifg2))
+        p.starmap(mask_wrapper, args_list)
         p.close()
 
     print("", flush=True)
@@ -329,13 +340,16 @@ def main(argv=None):
 
 
 #%%
-def mask_wrapper(ifgix):
+def mask_wrapper(ifgix, sbovl=False):
     ifgd = ifgdates2[ifgix]
     if np.mod(ifgix, 100) == 0:
         print("  {0:3}/{1:3}th unw...".format(ifgix, len(ifgdates2)), flush=True)
 
     # Construct file paths
-    unwfile = os.path.join(in_dir, ifgd, ifgd + '.unw')
+    if sbovl:
+        unwfile = os.path.join(in_dir, ifgd, ifgd + '.sbovldiff.adf.mm')
+    else:
+        unwfile = os.path.join(in_dir, ifgd, ifgd + '.unw')
     ccfile = os.path.join(in_dir, ifgd, ifgd + '.cc')
 
     # Check if the unw file exists
@@ -369,14 +383,20 @@ def mask_wrapper(ifgix):
         os.mkdir(out_dir1)
 
     # Save masked unw file
-    unw.tofile(os.path.join(out_dir1, ifgd + '.unw'))
+    if sbovl:
+        unw.tofile(os.path.join(out_dir1, ifgd + '.sbovldiff.adf.mm'))
+    else:
+        unw.tofile(os.path.join(out_dir1, ifgd + '.unw'))
 
     # Create symbolic link for cc file
     if not os.path.exists(os.path.join(out_dir1, ifgd + '.cc')):
         os.symlink(os.path.relpath(ccfile, out_dir1), os.path.join(out_dir1, ifgd + '.cc'))
 
     # Generate PNG for masked unw
-    pngfile = os.path.join(out_dir1, ifgd + '.unw.png')
+    if sbovl:
+        pngfile = os.path.join(out_dir1, ifgd + '.sbovldiff.adf.mm.png')
+    else:
+        pngfile = os.path.join(out_dir1, ifgd + '.unw.png')
     title = '{} ({}pi/cycle)'.format(ifgd, cycle * 2)
     plot_lib.make_im_png(np.angle(np.exp(1j * unw / cycle) * cycle), pngfile, cmap_wrap, title, -np.pi, np.pi, cbar=False)
 #%% main
