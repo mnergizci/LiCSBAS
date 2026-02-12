@@ -737,6 +737,9 @@ def main(argv=None):
                 unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
             else:
                 unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+                if ignore_nullification:
+                    if os.path.exists(unwfile + '.ori'):
+                        unwfile = unwfile + '.ori'
             f = open(unwfile, 'rb')
             f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd path, 4 means byte
 
