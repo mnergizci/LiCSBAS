@@ -223,8 +223,8 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
     if interseismic_motion:
         
         if ve_gnss is None or vn_gnss is None:
-            ve_gnss_nc='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/decomp3d.nc'
-            vn_gnss_nc='/gws/nopw/j04/nceo_geohazards_vol1/projects/COMET/mnergizci/1.second_paper/interseismic/velmap_insars29_sbois0_scalar.nc'
+            ve_gnss_nc='/gws/ssde/j25a/nceo_geohazards/vol1/projects/COMET/mnergizci/1.second_paper/interseismic/decomp3d.nc'
+            vn_gnss_nc='/gws/ssde/j25a/nceo_geohazards/vol1/projects/COMET/mnergizci/1.second_paper/interseismic/velmap_insars29_sbois0_scalar.nc'
             if not os.path.exists(ve_gnss_nc):
                 print(f"Error: GNSS velocity file {ve_gnss_nc} does not exist.")
                 exit(1)
