@@ -376,7 +376,30 @@ def main(argv=None):
             if tide:
                 tide_org = cumh5['tide'][()]
             if iono:
-                iono_org = cumh5['iono'][()]    
+                iono_org = cumh5['iono'][()]
+                
+    
+    #%% If tide/iono are all-NaN for an epoch, set that correction epoch to 0 (skip correction), separately for each
+    if sbovl:
+        #tide
+        if tide:
+            tide_allnan = np.all(np.isnan(tide_org), axis=(1, 2))
+            if np.any(tide_allnan):
+                bad_ix = np.where(tide_allnan)[0]
+                bad_dates = [imdates[i] for i in bad_ix]
+                print(f"WARNING: Tide is full-NaN for {len(bad_ix)} epochs. "
+                    f"Skipping tide (set to 0) on: {bad_dates}", flush=True)
+                tide_org[tide_allnan, :, :] = 0.0
+        #iono
+        if iono:
+            iono_allnan = np.all(np.isnan(iono_org), axis=(1, 2))
+            if np.any(iono_allnan):
+                bad_ix = np.where(iono_allnan)[0]
+                bad_dates = [imdates[i] for i in bad_ix]
+                print(f"WARNING: Iono is full-NaN for {len(bad_ix)} epochs. "
+                    f"Skipping iono (set to 0) on: {bad_dates}", flush=True)
+                iono_org[iono_allnan, :, :] = 0.0
+
     n_im, length, width = cum_org.shape
 
     #%% tide and iono removal for sboi before filtering
@@ -866,7 +889,7 @@ def main(argv=None):
     vel_tmp = np.zeros(n_pt_unnan, dtype=np.float32)*np.nan
 
     bool_nonan_pt = np.all(~np.isnan(cum_pt), axis=0)
-
+    
     ### First, calc vel point without nan
     print('  First, solving {0:6}/{1:6}th points with full cum...'.format(bool_nonan_pt.sum(), n_pt_unnan), flush=True)
     vconst_tmp[bool_nonan_pt], vel_tmp[bool_nonan_pt] = np.linalg.lstsq(G, cum_pt[:, bool_nonan_pt], rcond=None)[0]
@@ -992,7 +1015,10 @@ def main(argv=None):
     print('Output: {}\n'.format(os.path.relpath(cumffile)), flush=True)
 
     print('To plot the time-series:')
-    print('LiCSBAS_plot_ts.py -i {} &\n'.format(os.path.relpath(cumffile)))
+    if tide and iono:
+        print('LiCSBAS_plot_ts.py -i {} --corrections &\n'.format(os.path.relpath(cumffile)))
+    else:
+        print('LiCSBAS_plot_ts.py -i {} &\n'.format(os.path.relpath(cumffile)))
 
 
 #%%
