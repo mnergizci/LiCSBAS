@@ -898,7 +898,7 @@ def main(argv=None):
     vel_tmp = np.zeros(n_pt_unnan, dtype=np.float32)*np.nan
 
     bool_nonan_pt = np.all(~np.isnan(cum_pt), axis=0)
-    breakpoint()
+    
     ### First, calc vel point without nan
     print('  First, solving {0:6}/{1:6}th points with full cum...'.format(bool_nonan_pt.sum(), n_pt_unnan), flush=True)
     vconst_tmp[bool_nonan_pt], vel_tmp[bool_nonan_pt] = np.linalg.lstsq(G, cum_pt[:, bool_nonan_pt], rcond=None)[0]
