@@ -376,7 +376,39 @@ def main(argv=None):
             if tide:
                 tide_org = cumh5['tide'][()]
             if iono:
-                iono_org = cumh5['iono'][()]    
+                iono_org = cumh5['iono'][()]
+                
+    
+    #%% drop the epochs if all NaN for cum, tide or iono
+    if sbovl:
+        # Identify epochs where correction grids are entirely NaN
+        bad = np.zeros(cum_org.shape[0], dtype=bool)
+
+        if tide:
+            tide_allnan = np.all(np.isnan(tide_org), axis=(1, 2))
+            bad |= tide_allnan
+
+        if iono:
+            iono_allnan = np.all(np.isnan(iono_org), axis=(1, 2))
+            bad |= iono_allnan
+
+        if np.any(bad):
+            bad_ix = np.where(bad)[0]
+            bad_dates = [imdates[i] for i in bad_ix]
+            print(f"WARNING: Dropping {bad.sum()} epochs with all-NaN tide/iono: {bad_dates}", flush=True)
+
+            keep = ~bad
+
+            # Drop from time series arrays
+            cum_org = cum_org[keep, :, :]
+            if tide:
+                tide_org = tide_org[keep, :, :]
+            if iono:
+                iono_org = iono_org[keep, :, :]
+
+            # Drop from date list
+            imdates = [d for d, k in zip(imdates, keep) if k]
+
     n_im, length, width = cum_org.shape
 
     #%% tide and iono removal for sboi before filtering
@@ -866,7 +898,7 @@ def main(argv=None):
     vel_tmp = np.zeros(n_pt_unnan, dtype=np.float32)*np.nan
 
     bool_nonan_pt = np.all(~np.isnan(cum_pt), axis=0)
-
+    breakpoint()
     ### First, calc vel point without nan
     print('  First, solving {0:6}/{1:6}th points with full cum...'.format(bool_nonan_pt.sum(), n_pt_unnan), flush=True)
     vconst_tmp[bool_nonan_pt], vel_tmp[bool_nonan_pt] = np.linalg.lstsq(G, cum_pt[:, bool_nonan_pt], rcond=None)[0]
