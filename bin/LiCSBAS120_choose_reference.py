@@ -331,7 +331,7 @@ def plot_ref_proxies():
     ax[1, 1].scatter(refx, refy, s=3, c='red')
     ax[1, 2].scatter(refx, refy, s=3, c='red')
 
-    fig.savefig(reference_png, dpi=300, bbox_inches='tight')
+    fig.savefig(reference_png, dpi=300, bbox_inches=None) #'tight')
     plt.close()
 
 
