@@ -187,7 +187,7 @@ def main(argv=None):
     if not sboi:
         gacos = np.fromfile(gacos_file, dtype='float32').reshape(shape)
     vlos = lts.load_tif2xr(vel_file)
-    vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', sboi=sboi).interp_like(vlos)
+    vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', azi=sboi).interp_like(vlos)
 
     # Reference area subtraction if needed
     if not keep_absolute:
@@ -262,7 +262,7 @@ def main(argv=None):
         print('DEM is downloading please wait! After downloading, the process will be faster!')
         try:
             # Download the earth relief data and save it to a file
-            grid = pygmt.datasets.load_earth_relief(resolution=dem_resolution, region=RR_used)
+            grid = pygmt.datasets.load_earth_relief(resolution=dem_resolution, region=[25,50,25,50])
             # Saving the grid to a NetCDF file
             grid.to_netcdf(dem)
             print(f"Data successfully downloaded and saved to {dem}")
