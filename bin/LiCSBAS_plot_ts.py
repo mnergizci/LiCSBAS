@@ -1100,7 +1100,6 @@ if __name__ == "__main__":
             ### Legend
             axts.legend()
             #
-            matplotlib.dates as mdates
             locator = mdates.AutoDateLocator()
             axts.xaxis.set_major_locator(locator)
             axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
