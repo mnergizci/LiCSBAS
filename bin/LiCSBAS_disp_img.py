@@ -194,7 +194,11 @@ if __name__ == "__main__":
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         sys.exit(2)
 
+    # fix in updated versions:
+    if cmap_name.startswith(r'SCM.'):
+        cmap_name = 'cmc.'+cmap_name.split('.')[1]
 
+    
     #%% Get info and Read data
     if gdal.IdentifyDriver(infile): ## If Geotiff or grd
         geotiff = gdal.Open(infile)

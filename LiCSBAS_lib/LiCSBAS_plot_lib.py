@@ -353,7 +353,7 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True, label_nam
 
     ### Save
     try:
-        plt.savefig(pngfile, bbox_inches='tight')
+        plt.savefig(pngfile) #, bbox_inches='tight')
     except:
         print('WARNING, generating network plot failed - new matplotlib changes?')
     plt.close()
@@ -463,7 +463,7 @@ def plot_corrected_network(ifgdates, bperp, corrected_ifgdates, pngfile, plot_co
     plt.legend()
 
     ### Save
-    plt.savefig(pngfile, bbox_inches='tight')
+    plt.savefig(pngfile) #, bbox_inches='tight')
     plt.close()
 
     return len(ixs_inc_gap)
@@ -546,7 +546,7 @@ def plot_coloured_network(ifgdates, bperp, perc_list, pngfile):
     plt.legend()
 
     ### Save
-    plt.savefig(pngfile, bbox_inches='tight')
+    plt.savefig(pngfile) #, bbox_inches='tight')
     plt.close()
 
 
@@ -649,7 +649,7 @@ def plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_c
     plt.legend()
 
     ### Save
-    plt.savefig(pngfile, bbox_inches='tight')
+    plt.savefig(pngfile) #, bbox_inches='tight')
     plt.close()
 
     return
