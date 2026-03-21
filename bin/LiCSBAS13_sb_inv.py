@@ -1392,15 +1392,14 @@ def main(argv=None):
             p.starmap(inc_png_wrapper, args_list)
 
 
-        
-        ### Residual for each ifg. png and txt.
-        with open(restxtfile, "w") as f:
-            print('# RMS of residual (mm)', file=f)
-        _n_para = n_ifg if n_para > n_ifg else n_para
-        print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
-        p = q.Pool(_n_para)
-        p.map(resid_png_wrapper, range(n_ifg))
-        p.close()
+    ### Residual for each ifg. png and txt.
+    with open(restxtfile, "w") as f:
+        print('# RMS of residual (mm)', file=f)
+    _n_para = n_ifg if n_para > n_ifg else n_para
+    print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
+    p = q.Pool(_n_para)
+    p.map(resid_png_wrapper, range(n_ifg))
+    p.close()
 
     ### Velocity and noise indices
     cmins = [None, None, None, None, None, None]
