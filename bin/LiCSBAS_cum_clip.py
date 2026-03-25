@@ -69,9 +69,9 @@ def main(argv=None):
                 print(__doc__)
                 return 0
             elif o == '-i':
-                in_dir = a
+                inh5 = a
             elif o == '-o':
-                out_dir = a
+                outh5 = a
             elif o == '-r':
                 range_str = a
             elif o == '-g':
