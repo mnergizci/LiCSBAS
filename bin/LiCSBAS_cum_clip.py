@@ -6,13 +6,16 @@ This script clips a specified rectangular area of interest from cum h5.
 =====
 Usage
 =====
-LiCSBAS_cum_clip.py -i cum.h5 -o cum_clipped.h5 [-r x1:x2/y1:y2] [-g lon1/lon2/lat1/lat2]
+LiCSBAS_cum_clip.py -i cum.h5 -o cum_clipped.h5 [-r x1:x2/y1:y2] [-g lon1/lon2/lat1/lat2] [--origtsdir TS_GEOCml10] [--outtsdir clipped/TS_GEOCml10]
 
  -i  orig cum.h5
  -o  clipped output
  -r  Range to be clipped. Index starts from 0.
      0 for x2/y2 means all. (i.e., 0:0/0:0 means whole area).
  -g  Range to be clipped in geographical coordinates (deg).
+ --origtsdir  Optional. Only used if --outtsdir provided as well.
+ --outtsdir   Optional. If provided, some additional files will be clipped (e.g. for data2json.py)
+  (note the extra clipping checks for landmask.nc inside the current folder, not inside origtsdir - but will save it inside outtsdir)
 
 """
 #%% Change log
@@ -57,11 +60,12 @@ def main(argv=None):
     outh5 = []
     range_str = []
     range_geo_str = []
-
+    origtsdir = []
+    cliptsdir = []
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:r:g:", ["help"])
+            opts, args = getopt.getopt(argv[1:], "hi:o:r:g:", ["help", "origtsdir", "cliptsdir", "outtsdir"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -76,6 +80,10 @@ def main(argv=None):
                 range_str = a
             elif o == '-g':
                 range_geo_str = a
+            elif o == '--cliptsdir' or o == '--outtsdir':
+                cliptsdir = a
+            elif o == '--origtsdir':
+                origtsdir = a
 
         if not inh5:
             raise Usage('No input file given, -i is not optional!')
@@ -85,6 +93,11 @@ def main(argv=None):
             raise Usage('No clip area given, use either-g or -r')
         if range_str and range_geo_str:
             raise Usage('Both -r and -g given, use either -r or -g not both!')
+        if origtsdir:
+            if not os.path.exists(origtsdir):
+                raise Usage('Provided --origtsdir does not exist (you can still clip the cum.h5 without this directory..)')
+            elif not os.path.exists(os.path.join(origtsdir, 'results')):
+                raise Usage('The original TS folder does not contain folder with results - this will not work')
 
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
@@ -98,7 +111,7 @@ def main(argv=None):
     
     # Reading the file
     a = xr.open_dataset(inh5)
-    width, length = a['coh_avg'].shape
+    length, width = a['coh_avg'].shape
     postlat = float(a.data_vars['post_lat'].values)
     postlon = float(a.data_vars['post_lon'].values)
     lat1 = float(a.data_vars['corner_lat'].values)
@@ -146,6 +159,43 @@ def main(argv=None):
     b['corner_lon'].values = np.array(cornerlon)
     b['corner_lat'].values = np.array(cornerlat)
     b.to_netcdf(outh5) #, engine="h5netcdf")
+
+    # optionally clip the other files needed for data2json.py script
+    origresdir = os.path.join(origtsdir, 'results')
+    if not os.path.exists(cliptsdir):
+        os.system('mkdir -p '+cliptsdir)
+    else:
+        print('WARNING - the output directory already exists - we will not overwrite existing clipped data')
+    if not os.path.exists(cliptsdir):
+        print('WARNING - cannot create the output directory (permissions?) - clipping procedure will finish now')
+        return
+    clipresdir = os.path.join(cliptsdir, 'results')
+    if not os.path.exists(clipresdir):
+        os.mkdir(clipresdir)
+    landmask = 'landmask.nc'
+    if os.path.exists(landmask) and range_geo_str:
+        outfile = os.path.join(cliptsdir, landmask)
+        if not os.path.exists(outfile):
+            print('clipping landmask.nc to '+outfile)
+            lm = xr.open_dataset(landmask)
+            # clip it
+            lon_w, lon_e, lat_s, lat_n = [float(s) for s in range_str.split('/')]
+            if 'lon' in lm.coords:
+                lm = lm.sel(lon=slice(lon_w, lon_e), lat=slice(lat_n, lat_s))
+            else:
+                lm = lm.sel(x=slice(lon_w, lon_e), y=slice(lat_n, lat_s))
+            if lm.shape != (y2-y1, x2-x1):
+                print('WARNING - after clipping, the landmask has different shape - expect issue, ask Milan if something..')
+            lm.to_netcdf(outfile)
+    #
+    for toclip in ['coh_avg', 'mask', 'hgt']:
+        infile = os.path.join(origresdir, toclip)
+        outfile = os.path.join(clipresdir, toclip)
+        if not os.path.exists(outfile):
+            print('clipping '+toclip)
+            data = np.fromfile(infile, dtype=np.float32).reshape((length, width))
+            data = data[y1:y2, x1:x2]
+            data.tofile(outfile)
 
 
 #%% main
