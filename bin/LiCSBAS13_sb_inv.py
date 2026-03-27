@@ -17,7 +17,6 @@ Inputs in GEOCml*/ :
    - yyyymmdd_yyyymmdd.cc
    
    - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
-   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (if --sbovl is used)
  - EQA.dem_par
  - slc.mli.par
  - baselines (may be dummy)
@@ -58,7 +57,7 @@ Outputs in TS_GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs] [--sbovl]
+LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs] [--sbovl] [--sbovl_abs]
                  [--no_storepatches] [--load_patches] [--nullify_noloops] [--offsets eqoffsets.txt]
 
  -d  Path to the GEOCml* dir containing stack of unw data
@@ -88,6 +87,8 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --offsets eqoffsets.txt  Estimate offsets read from external txt file - must have lines in the form of either yyyymmdd or yyyy-mm-dd
  --nullify_noloops   Nullifies data from ifgs not included in any loop, both ifg and pixel based noloop_ifgs. Uses data before nullification (optional step 12)
  --nullify_noloops_use_data_after_nullification  This would nullify noloop_ifgs after the nullification (usually not recommended)
+ --sbovl running the inversion on sbovl data (input is in mm)
+ --sbovl_abs running the inversion on sbovl data, and use absolute values of sbovl data, not referenced to the reference point
  --ignore_nullification  Use of unwrapped data before the unwrapping error nullification (step 12) if performed.
 """
 '''
@@ -220,6 +221,7 @@ def main(argv=None):
     nullify_noloops = False
     nullify_noloops_use_data_after_nullification = False
     sbovl = False
+    sbovl_abs = False ##No need to set this to True if sbovl is not set MN
     
     try:
         n_para = len(os.sched_getaffinity(0))
@@ -253,7 +255,7 @@ def main(argv=None):
                                        ["help",  "mem_size=", "input_units=", "gamma=",
                                         "n_unw_r_thre=", "keep_incfile", "nopngs", "nullify_noloops", "nullify_noloops_use_data_after_nullification",
                                         "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches",
-                                        "offsets=", "sbovl", "ignore_nullification"])
+                                        "offsets=", "sbovl", "sbovl_abs", "ignore_nullification"])
                                       #  "step_events="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -305,6 +307,9 @@ def main(argv=None):
                 load_patches = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--sbovl_abs':
+                sbovl = True
+                sbovl_abs = True
             elif o == '--offsets':
                 offsetsfile = a
                 offsetsflag = True
@@ -376,6 +381,7 @@ def main(argv=None):
     bad_ifg11file = os.path.join(infodir, '11bad_ifg.txt')
     bad_ifg12file = os.path.join(infodir, '12bad_ifg.txt')
     bad_ifg120file = os.path.join(infodir, '120bad_ifg.txt')
+    bad_ifg12candidatefile = os.path.join(infodir, '12bad_ifg_cand.txt') 
     # if ref point selected using LiCSBAS120:
     reffile = os.path.join(infodir, '120ref.txt')
     if not os.path.exists(reffile):
@@ -425,7 +431,7 @@ def main(argv=None):
         refarea = f.read().split()[0]  #str, x1/x2/y1/y2
     refx1, refx2, refy1, refy2 = [int(s) for s in re.split('[:/]', refarea)]
 
-
+    # breakpoint()
     #%% Read data information
     ### Get size
     mlipar = os.path.join(ifgdir, 'slc.mli.par')
@@ -491,12 +497,20 @@ def main(argv=None):
             print('adding also ifgs listed as bad in the optional 120 step')
             bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
             bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
+        if os.path.exists(bad_ifg12candidatefile):
+            print('adding also ifgs listed as bad candidates')
+            bad_ifg12candidate = io_lib.read_ifg_list(bad_ifg12candidatefile)
+            bad_ifg12 = list(set(bad_ifg12 + bad_ifg12candidate))
     else:
         bad_ifg12=[]
         if os.path.exists(bad_ifg120file):
             print('adding also ifgs listed as bad in the optional 120 step')
             bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
             bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
+        if os.path.exists(bad_ifg12candidatefile):
+            print('adding also ifgs listed as bad candidates')
+            bad_ifg12candidate = io_lib.read_ifg_list(bad_ifg12candidatefile)
+            bad_ifg12 = list(set(bad_ifg12 + bad_ifg12candidate))
     if nullify_noloops:
         # adding also noloop_ifgs as ifgs to skip
         print('skipping noloop_ifgs')
@@ -519,10 +533,11 @@ def main(argv=None):
             ep1 = int(ifgd[:8])
             ep2 = int(ifgd[-8:])
             for skep in offsets:
-                if (ep1 < int(skep)) and (ep2 > int(skep)):
+                skep_int = int(skep.replace("-", ""))
+                if (ep1 < int(skep_int)) and (ep2 > int(skep_int)):
                     coseismifgs.append(ifgd)
-                elif ep1 == int(skep) or ep2 == int(skep):
-                    print('WARNING, the offset '+str(skep)+' is the same date as the acquisition. Skipping '+ifgd)
+                elif ep1 == int(skep_int) or ep2 == int(skep_int):
+                    print('WARNING, the offset '+str(skep_int)+' is the same date as the acquisition. Skipping '+ifgd)
                     coseismifgs.append(ifgd)
         print('\n .. identified '+str(len(coseismifgs))+' coseismic ifgs \n')
         bad_ifg_all = list(set(bad_ifg_all + coseismifgs))
@@ -553,7 +568,7 @@ def main(argv=None):
         n_coh_freq = np.zeros((length, width), dtype=np.int16)
         ii = 0
         for ifgd in ifgdates:
-            ccfile = os.path.join(ifgdir, ifgd, ifgd + '.sbovldiff.adf.cc')
+            ccfile = os.path.join(ifgdir, ifgd, ifgd + '.cc')
             if os.path.getsize(ccfile) == length * width:
                 coh = io_lib.read_img(ccfile, length, width, np.uint8)
                 coh = coh.astype(np.float32) / 255
@@ -624,6 +639,9 @@ def main(argv=None):
     else:  # Generate dummy baselines if file doesn't exist
         print("WARNING: Baselines file not found. Using dummy values.")
         bperp = np.random.random(len(imdates)).tolist()
+        bperp_all = np.random.random(len(imdates_all)).tolist()
+    
+    if all(v == 0 for v in bperp_all):
         bperp_all = np.random.random(len(imdates_all)).tolist()
 
     pngfile = os.path.join(netdir, 'network13_all.png')
@@ -708,17 +726,20 @@ def main(argv=None):
 
 
     #%% Ref phase for inversion
-    if not sbovl:
+    if not sbovl_abs:
         lengththis = refy2-refy1
         countf = width*refy1
         countl = width*lengththis # Number to be read
         ref_unw = []
         nanserror = []
         for i, ifgd in enumerate(ifgdates):
-            unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
-            if ignore_nullification:
-                if os.path.exists(unwfile + '.ori'):
-                    unwfile = unwfile + '.ori'
+            if sbovl:
+                unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
+            else:
+                unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
+                if ignore_nullification:
+                    if os.path.exists(unwfile + '.ori'):
+                        unwfile = unwfile + '.ori'
             f = open(unwfile, 'rb')
             f.seek(countf*4, os.SEEK_SET) #Seek for >=2nd path, 4 means byte
 
@@ -747,8 +768,6 @@ def main(argv=None):
                 for i in nanserror:
                     print('{}'.format(i), file=f)
             return 1
-    #else:
-    #    print('SBOVL: no reference phase set up??')
     #%% Open cum.h5 for output
     ### Decide here what to do re. cumh5file and reloading patches. Need to check that stored cumh5 file is the right size etc
     print('store_patches:', store_patches)
@@ -845,6 +864,7 @@ def main(argv=None):
             print("  Reading {0} ifg's unw data...".format(n_ifg), flush=True)
             countf = width*rows[0]
             countl = width*lengththis
+            printed_sbovl_warning = False ##This helps to print the warning only once
             for i, ifgd in enumerate(ifgdates):
                 if sbovl:
                     unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
@@ -859,19 +879,17 @@ def main(argv=None):
                 ### Read unw data (mm) at patch area
                 unw = np.fromfile(f, dtype=np.float32, count=countl).reshape((lengththis, width))*coef_r2m
                 unw[unw == 0] = np.nan # Fill 0 with nan
-                if not sbovl:
-                    unw = unw - ref_unw[i]
-                #else:
-                #    print('SBOVL: no reference removal set up??')
+                if not sbovl_abs:
+                    unw = unw - ref_unw[i] ## Remove reference phase
+                elif not printed_sbovl_warning:
+                    print('SBOVL_abs: no reference removal set up as you set the sbovl_abs!')
+                    printed_sbovl_warning = True  ##This helps to print the warning only once
                 unwpatch[i] = unw
                 f.close()
 
                 ### Read coh file at patch area for WLS
                 if inv_alg == 'WLS':
-                    if sbovl:
-                        cohfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.cc')
-                    else:
-                        cohfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
+                    cohfile = os.path.join(ifgdir, ifgd, ifgd+'.cc')
                     f = open(cohfile, 'rb')
 
                     if os.path.getsize(cohfile) == length*width: ## uint8 format
@@ -1135,7 +1153,7 @@ def main(argv=None):
                 cum_patch[1:, :] = np.cumsum(inc_patch, axis=0)
 
                 ## 2025/09: keep the nans between connections
-                print('Setting NaNs to cum values that were not measured by interferograms')
+                print('Returning NaNs to epochs that were not measured by any interferogram')
                 try:
                     cum_tmp = cum_patch[:, ix_unnan_pt]  # cum_patch is of shape (epochs, ALL pixels)
                     for indexpx in range(unwpatch.shape[0]):   # unwpatch is of shape (UNNAN pixels, unw data)
@@ -1296,13 +1314,13 @@ def main(argv=None):
     print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
 
     ### Rerferencing cumulative displacement  and vel to new stable ref
-    if not sbovl:
+    if not sbovl_abs:
         for i in range(n_im):
             cum[i, :, :] = cum[i, :, :] - cum[i, refy1s, refx1s]
         vel = vel - vel[refy1s, refx1s]
         vconst = vconst - vconst[refy1s, refx1s]
     else:
-        print('  Skip referencing cumulative displacement and velocity for sbovl data.', flush=True)
+        print('  Skip referencing cumulative displacement and velocity for sbovl_abs data', flush=True)
         
     ### Save image
     rms_cum_wrt_med_file = os.path.join(infodir, '13rms_cum_wrt_med')
@@ -1542,10 +1560,10 @@ def inc_png_wrapper(imx, sbovl=False):
     try:
         unw = io_lib.read_img(unwfile, length, width)*coef_r2m
         ix_ifg = ifgdates.index(ifgd)
-        if not sbovl:
+        if not sbovl_abs:
             unw = unw - ref_unw[ix_ifg]
-        else:
-            print('  Skip subtracting reference for sbovl data.', flush=True)
+        # else:
+        #     print('  Skip subtracting reference for sbovl data.', flush=True) ##to get rid of texting scrreen
     except:
         unw = np.zeros((length, width), dtype=np.float32)*np.nan
 

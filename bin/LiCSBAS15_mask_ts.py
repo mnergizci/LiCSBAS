@@ -38,7 +38,7 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
  -T  Threshold of maxTlen (max time length of connected network (year))
  -g  Threshold of n_gap (number of gaps in network)
  -s  Threshold of stc (spatio-temporal consistency (mm))
- -i  Threshold of n_ifg_noloop (number of ifgs with no loop)
+ -i  Threshold of n_ifg_noloop (number of pixels from ifgs with no loop)
  -l  Threshold of n_loop_err (number of loop_err) - in case of nullification in step 12, this will apply the threshold on n_nullify
  NOTE: we now test and will update the -l parameter to be a ratio (<=1 where 1 means all bad). Future: default: 0.7
  -L  Threshold of n_loop_err_ratio (number of loop_err divided by number of loops). Use number 0-1. (preferred solution)
@@ -50,11 +50,16 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
                   (Default: they are masked by stc)
  --noautoadjust  Do not auto adjust threshold when all pixels are masked
                  (Default: do auto adjust)
+ --sbovl  use the sbovl masking thresholds and indices
+ --sbovl_abs  use the sbovl abs results from previous step like bootvel_abs_notide_noiono
+ --tide use tide corrected results (if exist) like bootvel_abs_notide
+ --iono use iono corrected results (if exist) like bootvel_abs_notide_noiono  ##TODO the corrections applied in the step 16 for the sboi before spatio-temporal filter, these flag was open to testing absolute sense of boi and its correction, need to be removed/organized after better testing. #MN
+ 
 
- Default thresholds for L-band:
+ Default thresholds:
    C-band : -c 0.05 -u 1.5 -v 100 -T 1 -g 10 -s 5  -i 50 -l 5 -r 2
    L-band : -c 0.01 -u 1   -v 200 -T 1 -g 1  -s 10 -i 50 -l 1 -r 10
- 
+   SBOI   : -c 0.05 -u 0.5 -g 50 -s 10 -r 15 -i 1000 -L 0.5   
 """
 #%% Change log
 '''
@@ -165,14 +170,17 @@ def main(argv=None):
     auto_adjust = True
     n_gap_use_merged = False
     sbovl = False
+    sbovl_abs = False
     cmap_vel = cmc.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
+    # tide = False
+    # iono = False
     
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged","sbovl"])
+            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged","sbovl", "sbovl_abs", "tide", "iono"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -219,6 +227,13 @@ def main(argv=None):
                 n_gap_use_merged = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--sbovl_abs':
+                sbovl = True
+                sbovl_abs = True
+            # elif o == '--tide':
+            #     tide = True
+            # elif o == '--iono':
+            #     iono = True
 
         if not tsadir:
             raise Usage('No tsa directory given, -t is not optional!')
@@ -325,7 +340,7 @@ def main(argv=None):
         if (not 'n_loop_err' in thre_dict) and ('n_loop_err' in names): thre_dict['n_loop_err'] = 1
         if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 10
     if wavelength < 0.2: ## C-band
-        if not 'coh_avg' in thre_dict: thre_dict['coh_avg'] = 0.05
+        if not 'coh_avg' in thre_dict: thre_dict['coh_avg'] = 0.15
         if not 'n_unw_r' in thre_dict: thre_dict['n_unw_r'] = 1.5
         if not 'vstd' in thre_dict: thre_dict['vstd'] = 100
         if not 'n_gap' in thre_dict: thre_dict['n_gap'] = 10
@@ -339,7 +354,28 @@ def main(argv=None):
         thre_dict['n_gap_merged'] = thre_dict.pop('n_gap')
     
     #%% Read data
-    velfile = os.path.join(resultsdir,'vel')
+    # breakpoint()
+    if sbovl_abs:
+        # velfile = os.path.join(resultsdir,'vel_ransac_abs_notide_noiono')
+        if tide and iono:
+            velfile = os.path.join(resultsdir,'bootvel_abs_notide_noiono')
+        elif tide and not iono:
+            velfile = os.path.join(resultsdir,'bootvel_abs_notide')
+        elif not tide and iono:
+            velfile = os.path.join(resultsdir,'bootvel_abs_noiono') 
+        elif not tide and not iono:
+            velfile = os.path.join(resultsdir,'bootvel_abs')
+        #not exist velfile, so use vel
+        if not os.path.exists(velfile):
+            velfile = os.path.join(resultsdir,'vel')
+        print(f'Using {velfile}')
+    else:
+        velfile = os.path.join(resultsdir,'vel')
+        print(f'Using {velfile}')
+
+    if not os.path.exists(velfile):
+        raise FileNotFoundError(f"Velocity file not found: {velfile}")
+    
     vel = io_lib.read_img(velfile, length, width)
     bool_nan = np.isnan(vel)
     bool_nan[vel==0] = True ## Ref point. Unmask later
@@ -524,7 +560,7 @@ def main(argv=None):
 
     
     #%% Output vel.mskd and mask
-    velmskdfile = os.path.join(resultsdir,'vel.mskd')
+    velmskdfile = velfile + '.mskd'
     vel_mskd.tofile(velmskdfile)
 
     pngfile = velmskdfile+'.png'

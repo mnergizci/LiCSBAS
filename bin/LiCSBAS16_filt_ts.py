@@ -15,7 +15,7 @@ Inputs in TS_GEOCml*/ :
  - info/13parameters.txt
 
 Outputs in TS_GEOCml*/ :
- - cum_filt.h5
+ - cum_filt_s{spatial_kernel_size(km)}_t{temporal_width(day)}.h5
  - 16filt_cum/
    - yyyymmdd_filt.png
   [- yyyymmdd_deramp.png]     (if -r option is used)
@@ -67,6 +67,10 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
  --from_model path/to/model.h5  Use externally calculated model to perform residual-based filtering (in dev further. see LiCSBAS_cum2vel.py to generate this)
  --interpolate_nans   This will use the filter to fill nan values (in unmasked data). If temporal filtering is disabled, it will use linear interpolation in space instead.
  --nopngs     Avoid generating some (unnecessary) PNG previews of increment residuals etc.
+ --sbovl    SBOI mode: use the sbovl stragey for the spatio-temporal filter (currently tide and iono correction in azimuth direction applied here before the filtering)
+ --tide     solid earth tide correction in azi
+ --iono     ionospheric correction in azi
+ --sbovl_abs sboi absolute running, closing the referencing but this is in the testing so please ask if you need to use #MN
 
 Note: Spatial filter consume large memory. If the processing is stacked, try
  - --n_para 1
@@ -76,6 +80,8 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
 """
 #%% Change log
 '''
+20250211 MN
+ - added sbovl, tide and iono flags for Burst overlap interferometry in LiCSBAS.
 20241107 ML
  - added interpolate_nans and updated masking of final cum_filt data
 20241029 Milan Lazecky
@@ -139,6 +145,9 @@ import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
 import LiCSBAS_inv_lib as inv_lib
 import LiCSBAS_plot_lib as plot_lib
+import re
+from scipy.interpolate import interp1d
+
 
 class Usage(Exception):
     """Usage context manager"""
@@ -179,6 +188,9 @@ def main(argv=None):
     interpolateflag = False
     gpu = False
     sbovl = False
+    sbovl_abs = False
+    tide = False
+    iono = False
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -209,7 +221,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl"])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl", "sbovl_abs", "tide", "iono"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -254,6 +266,13 @@ def main(argv=None):
                 nopngs = True
             elif o == '--sbovl':
                 sbovl = True
+            elif o == '--sbovl_abs':
+                sbovl = True
+                sbovl_abs = True
+            elif o == '--tide':
+                tide = True
+            elif o == '--iono':
+                iono = True
             elif o == '--from_model':
                 modelfile = a
                 inputresidflag = True
@@ -284,7 +303,7 @@ def main(argv=None):
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
 
-
+    # 
     #%% Directory and file setting
     tsadir = os.path.abspath(tsadir)
     cumfile = os.path.join(tsadir, cumname)
@@ -309,7 +328,7 @@ def main(argv=None):
         if not sbovl:
             cycle = 3 # 3*2pi/cycle for comparison png
         else:
-            cycle = 3
+            cycle = 3  #TODO must be around 75?? because of the SBOI? I need to check MN
 
     filtincdir = os.path.join(tsadir, '16filt_increment')
     if os.path.exists(filtincdir): shutil.rmtree(filtincdir)
@@ -318,21 +337,192 @@ def main(argv=None):
     if os.path.exists(filtcumdir): shutil.rmtree(filtcumdir)
     os.mkdir(filtcumdir)
 
-    cumffile = os.path.join(tsadir, 'cum_filt.h5')
+   
 
+    #standard format
     vconstfile = os.path.join(resultsdir, 'vintercept.filt')
     velfile = os.path.join(resultsdir, 'vel.filt')
 
-    cumh5 = h5.File(cumfile,'r')
-
-    if os.path.exists(cumffile): os.remove(cumffile)
-    cumfh5 = h5.File(cumffile,'w')
-
+    cumh5 = h5.File(cumfile,'r')  ##open cum.h5 to read non-filtered data
 
     #%% Dates
     imdates = cumh5['imdates'][()].astype(str).tolist()
-    cum_org = cumh5['cum'][()]
+    if sbovl_abs:
+        print('SBOI mode activated.')
+        if 'cum_abs_notide_noiono' in cumh5 and tide and iono:
+            cum_org = cumh5['cum_abs_notide_noiono'][()]
+            sbovl_suffix = '_abs_notide_noiono'
+        elif 'cum_abs_notide' in cumh5 and tide:
+            cum_org = cumh5['cum_abs_notide'][()]
+            sbovl_suffix = '_abs_notide'
+        elif 'cum_abs_noiono' in cumh5 and iono:
+            cum_org = cumh5['cum_abs_noiono'][()]
+            sbovl_suffix = '_abs_noiono'
+        elif 'cum_abs' in cumh5:
+            cum_org = cumh5['cum_abs'][()]
+            sbovl_suffix = '_abs'
+        else:
+            cum_org = cumh5['cum'][()]
+            sbovl_suffix = ''
+        print(f'suffix for sbovl_abs: {sbovl_suffix}')
+        ##redefine the output files
+        # vconstfile = os.path.join(resultsdir, f'vintercept_ransac{sbovl_suffix}.filt')
+        # velfile = os.path.join(resultsdir, f'vel_ransac{sbovl_suffix}.filt')
+        vconstfile = os.path.join(resultsdir, f'vintercept{sbovl_suffix}.filt')
+        velfile = os.path.join(resultsdir, f'vel{sbovl_suffix}.filt')
+    else:
+        cum_org = cumh5['cum'][()]
+        if sbovl:
+            if tide:
+                tide_org = cumh5['tide'][()]
+            if iono:
+                iono_org = cumh5['iono'][()]
+                
+    
+    #%% If tide/iono are all-NaN for an epoch, set that correction epoch to 0 (skip correction), separately for each
+    if sbovl:
+        #tide
+        if tide:
+            tide_allnan = np.all(np.isnan(tide_org), axis=(1, 2))
+            if np.any(tide_allnan):
+                bad_ix = np.where(tide_allnan)[0]
+                bad_dates = [imdates[i] for i in bad_ix]
+                print(f"WARNING: Tide is full-NaN for {len(bad_ix)} epochs. "
+                    f"Skipping tide (set to 0) on: {bad_dates}", flush=True)
+                tide_org[tide_allnan, :, :] = 0.0
+        #iono
+        if iono:
+            iono_allnan = np.all(np.isnan(iono_org), axis=(1, 2))
+            if np.any(iono_allnan):
+                bad_ix = np.where(iono_allnan)[0]
+                bad_dates = [imdates[i] for i in bad_ix]
+                print(f"WARNING: Iono is full-NaN for {len(bad_ix)} epochs. "
+                    f"Skipping iono (set to 0) on: {bad_dates}", flush=True)
+                iono_org[iono_allnan, :, :] = 0.0
+
     n_im, length, width = cum_org.shape
+
+    #%% tide and iono removal for sboi before filtering
+    if sbovl:
+        if maskflag:
+            maskfile = os.path.join(resultsdir, 'mask')
+            mask = io_lib.read_img(maskfile, length, width)
+            mask[mask==0] = np.nan ## 0->nan
+            # if mask is involved, apply to cum already:
+            # cum_org = cum_org * mask[np.newaxis,:,:]
+            # 20240711: no, we will always want to filter through everthing and only then apply mask at the end..
+            # if this is not the case and you want to really drop pixels that are inputs to the filter, please uncomment the line above
+        else:
+            mask = np.ones((length, width), dtype=np.float32)
+            mask[np.isnan(cum_org[0, :, :])] = np.nan
+        
+        if not sbovl_abs: 
+            infodir = os.path.join(tsadir, 'info')
+            ref13file = os.path.join(infodir, '13ref.txt')
+            ref12file = os.path.join(infodir, '12ref.txt')
+            with open(ref13file, "r") as f:
+                ref13area = f.read().split()[0]  # str, x1/x2/y1/y2
+            with open(ref12file, "r") as f:
+                ref12area = f.read().split()[0]  # str, x1/x2/y1/y2
+
+            ref13x1, ref13x2, ref13y1, ref13y2 = [int(s) for s in re.split('[:/]', ref13area)]
+            ref12x1, ref12x2, ref12y1, ref12y2 = [int(s) for s in re.split('[:/]', ref12area)]
+
+            # --- Reference: Cumulative displacement ---
+            refpoint_cum_org = np.nanmean(cum_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
+            if np.any(np.isnan(refpoint_cum_org)):
+                print("Some NaNs detected in refpoint_cum_org — replacing with nanmedian across all pixels.")
+                refpoint_cum_org = np.where(
+                    np.isnan(refpoint_cum_org),
+                    np.nanmedian(cum_org, axis=(1,2)),
+                    refpoint_cum_org
+                )
+            if np.any(np.isnan(refpoint_cum_org)):
+                print("Still NaNs in refpoint_cum_org — interpolating over time.")
+                time_idx = np.arange(refpoint_cum_org.shape[0])
+                valid = ~np.isnan(refpoint_cum_org)
+                if np.sum(valid) >= 2:
+                    f_interp = interp1d(time_idx[valid], refpoint_cum_org[valid], kind='linear',
+                                        bounds_error=False, fill_value='extrapolate')
+                    refpoint_cum_org = f_interp(time_idx)
+                else:
+                    print("WARNING: Not enough valid points in refpoint_cum_org to interpolate.")
+                    refpoint_cum_org[:] = 0
+
+            
+            # --- Reference: Tide correction ---
+            if tide:
+                refpoint_tide = np.nanmean(tide_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
+                if np.any(np.isnan(refpoint_tide)):
+                    print("Some NaNs detected in refpoint_tide — replacing with nanmedian across all pixels.")
+                    refpoint_tide = np.where(
+                        np.isnan(refpoint_tide),
+                        np.nanmedian(tide_org, axis=(1,2)),
+                        refpoint_tide
+                    )
+                # refpoint_tide = np.nanmedian(tide_org, axis=(1, 2)) #median here #MN maybe we can open this in the future. 
+                if np.any(np.isnan(refpoint_tide)):
+                    print("Still NaNs in refpoint_tide — interpolating over time.")
+                    time_idx = np.arange(refpoint_tide.shape[0])
+                    valid = ~np.isnan(refpoint_tide)
+                    if np.sum(valid) >= 2:
+                        f_interp = interp1d(time_idx[valid], refpoint_tide[valid], kind='linear',
+                                            bounds_error=False, fill_value='extrapolate')
+                        refpoint_tide = f_interp(time_idx)
+                    else:
+                        print("WARNING: Not enough valid points in refpoint_tide to interpolate.")
+                        refpoint_tide[:] = 0
+            else:
+                refpoint_tide = None
+
+
+            # --- Reference: Ionospheric correction ---
+            if iono:
+                refpoint_iono = np.nanmean(iono_org[:, ref13y1:ref13y2, ref13x1:ref13x2], axis=(1,2))
+                # if np.any(np.isnan(refpoint_iono)):
+                #     refpoint_iono =np.nanmean(iono_org[:, ref12y1:ref12y2, ref12x1:ref12x2], axis=(1,2))
+                if np.any(np.isnan(refpoint_iono)):
+                    print("Some NaNs detected in refpoint_iono — replacing with nanmedian across all pixels.")
+                    refpoint_iono = np.where(
+                        np.isnan(refpoint_iono),
+                        np.nanmedian(iono_org, axis=(1,2)),
+                        refpoint_iono
+                    )
+                # refpoint_iono = np.nanmedian(iono_org, axis=(1, 2)) #median here #MN
+                if np.any(np.isnan(refpoint_iono)):
+                    print("Still NaNs in refpoint_iono — interpolating over time.")
+                    time_idx = np.arange(refpoint_iono.shape[0])
+                    valid = ~np.isnan(refpoint_iono)
+                    if np.sum(valid) >= 2:
+                        f_interp = interp1d(time_idx[valid], refpoint_iono[valid], kind='linear',
+                                            bounds_error=False, fill_value='extrapolate')
+                        refpoint_iono = f_interp(time_idx)
+                    else:
+                        print("WARNING: Not enough valid points in refpoint_iono to interpolate.")
+                        refpoint_iono[:] = 0
+            else:
+                refpoint_iono = None
+
+            # --- Reference each dataset ---
+            
+            for i in range(n_im):
+                cum_org[i, :, :] -= refpoint_cum_org[i]
+                if tide:
+                    tide_org[i, :, :] -= refpoint_tide[i]
+                if iono:
+                    iono_org[i, :, :] -= refpoint_iono[i]
+
+            # --- Finally, remove full tide and iono (already referenced) from cumulative
+            if tide:
+                cum_org -= tide_org
+            if iono:
+                cum_org -= iono_org
+
+            # --- Else case for sbovl_abs (presumably)
+            else:
+                print('Skipping back referencing to stable point for SBOI + daz mode')
+
+
 
     if n_para > n_im:
         n_para = n_im
@@ -340,6 +530,16 @@ def main(argv=None):
     ### Calc dt in year
     imdates_dt = ([dt.datetime.strptime(imd, '%Y%m%d').toordinal() for imd in imdates])
     dt_cum = np.float32((np.array(imdates_dt)-imdates_dt[0])/365.25)
+
+    ### temporal filter width
+    if not filtwidth_yr and filtwidth_yr != 0:
+        filtwidth_yr = np.diff(dt_cum).mean() * 3  #dt_cum[-1]/(n_im-1)*3 ## avg interval*3
+
+    ####define the cum_filt file
+    cumffile = os.path.join(tsadir, f'cum_filt.h5') #s{filtwidth_km}_t{int(filtwidth_yr*365.25)} MN
+    if os.path.exists(cumffile): os.remove(cumffile)
+    cumfh5 = h5.File(cumffile,'w') #open cum_filt.h5 to write filtered data
+    # 
 
     ### Save dates and other info into cumf
     cumfh5.create_dataset('imdates', data=cumh5['imdates'])
@@ -361,9 +561,6 @@ def main(argv=None):
     else: ## not geocoded
         print('No latlon field found in {}. Skip.'.format(cumname))
 
-    ### temporal filter width
-    if not filtwidth_yr and filtwidth_yr != 0:
-        filtwidth_yr = np.diff(dt_cum).mean() * 3  #dt_cum[-1]/(n_im-1)*3 ## avg interval*3
 
     ### hgt_linear
     if hgt_linearflag:
@@ -382,10 +579,13 @@ def main(argv=None):
     else:
         hgt = []
 
-        ### demerr
+    ### demerr
     if demerrflag:
         bperp = np.float32(np.array(cumh5['bperp'][()].tolist()))
         demerrfile = os.path.join(resultsdir, 'demerr')
+        
+
+    
     #%% --range[_geo] and --ex_range[_geo]
     if range_str: ## --range
         if not tools_lib.read_range(range_str, width, length):
@@ -455,7 +655,7 @@ def main(argv=None):
         print('range: {}'.format(range_str), file=f)
         print('ex_range: {}'.format(ex_range_str), file=f)
 
-
+    # 
     #%% Load Mask (1: unmask, 0: mask, nan: no cum data)
     if maskflag:
         maskfile = os.path.join(resultsdir, 'mask')
@@ -469,11 +669,11 @@ def main(argv=None):
         mask = np.ones((length, width), dtype=np.float32)
         mask[np.isnan(cum_org[0, :, :])] = np.nan
 
-
+    
     #%% First, deramp and hgt-linear if indicated
     cum = np.zeros(cum_org.shape, dtype=np.float32)*np.nan
     if not deg_ramp and not hgt_linearflag:
-        cum = cum_org
+        cum = cum_org  #TODO check here again.
         del cum_org
     else:
         if not deg_ramp:
@@ -604,33 +804,36 @@ def main(argv=None):
         # not filtering
         cum_filt = cum
 
+    # 
     #%% Find stable ref point
-    print('\nFind stable reference point...', flush=True)
-    ### Compute RMS of time series with reference to all points
-    sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
-    for i in range(n_im):
-        sumsq_cum_wrt_med = sumsq_cum_wrt_med + (cum_filt[i, :, :]-np.nanmedian(cum_filt[i, :, :]))**2
-        ### we do not want ref point to contain nans
-        sumsq_cum_wrt_med[np.isnan(cum[i, :, :])] = np.nan
-    rms_cum_wrt_med = np.sqrt(sumsq_cum_wrt_med/n_im)*mask
+    if not sbovl_abs: 
+        print('\nFind stable reference point...', flush=True)
+        ### Compute RMS of time series with reference to all points
+        sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
+        for i in range(n_im):
+            sumsq_cum_wrt_med = sumsq_cum_wrt_med + (cum_filt[i, :, :]-np.nanmedian(cum_filt[i, :, :]))**2
+            ### we do not want ref point to contain nans
+            sumsq_cum_wrt_med[np.isnan(cum[i, :, :])] = np.nan
+        rms_cum_wrt_med = np.sqrt(sumsq_cum_wrt_med/n_im)*mask
 
-    ### Mask by minimum n_gap
-    n_gap = io_lib.read_img(os.path.join(resultsdir, 'n_gap'), length, width)
-    min_n_gap = np.nanmin(n_gap)
-    mask_n_gap = np.float32(n_gap==min_n_gap)
-    mask_n_gap[mask_n_gap==0] = np.nan
-    rms_cum_wrt_med = rms_cum_wrt_med*mask_n_gap
+        ### Mask by minimum n_gap
+        n_gap = io_lib.read_img(os.path.join(resultsdir, 'n_gap'), length, width)
+        min_n_gap = np.nanmin(n_gap)
+        mask_n_gap = np.float32(n_gap==min_n_gap)
+        mask_n_gap[mask_n_gap==0] = np.nan
+        rms_cum_wrt_med = rms_cum_wrt_med*mask_n_gap
+        #
+        #TODO I have closed here as I get some nan errors for SBOI rms_cum_wrt_med = nan,  refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index IndexError: index 0 is out of bounds for axis 0 with size 0
+        ### Find stable reference
+        min_rms = np.nanmin(rms_cum_wrt_med)
+        refy1s, refx1s = np.where(rms_cum_wrt_med==min_rms)
+        refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index
+        refy2s, refx2s = refy1s+1, refx1s+1
+        print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
 
-    ### Find stable reference
-    min_rms = np.nanmin(rms_cum_wrt_med)
-    refy1s, refx1s = np.where(rms_cum_wrt_med==min_rms)
-    refy1s, refx1s = refy1s[0], refx1s[0] ## Only first index
-    refy2s, refx2s = refy1s+1, refx1s+1
-    print('Selected ref: {}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), flush=True)
-
-    # Cleaning memory - means need to get the refpoint_cum_org first
-    refpoint_cum_org = cum[:, refy1s, refx1s]
-    del cum
+        # Cleaning memory - means need to get the refpoint_cum_org first
+        refpoint_cum_org = cum[:, refy1s, refx1s]
+        del cum
 
     # adding back model to the filtered residuals
     if inputresidflag:
@@ -642,31 +845,31 @@ def main(argv=None):
         modelh5.close()
 
     ### Referencing cumulative displacement to new stable ref
-    if not sbovl:
+    if not sbovl_abs:
         for i in range(n_im):
             cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
-    #else:
-    #    print('Skipping back referencing to stable point for SBOI?')
+    else:
+        print('Skipping back referencing to stable point for SBOI + daz mode')
 
-    ### Save image
-    rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
-    with open(rms_cum_wrt_med_file, 'w') as f:
-        rms_cum_wrt_med.tofile(f)
+    if not sbovl_abs: ##TODO I have closed here as I get some nan errors for SBOI 
+        ### Save image
+        rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
+        with open(rms_cum_wrt_med_file, 'w') as f:
+            rms_cum_wrt_med.tofile(f)
+        pngfile = os.path.join(infodir, '16rms_cum_wrt_med.png')
+        plot_lib.make_im_png(rms_cum_wrt_med, pngfile, cmap_noise_r, 'RMS of cum wrt median (mm)', np.nanpercentile(rms_cum_wrt_med, 1), np.nanpercentile(rms_cum_wrt_med, 99))
 
-    pngfile = os.path.join(infodir, '16rms_cum_wrt_med.png')
-    plot_lib.make_im_png(rms_cum_wrt_med, pngfile, cmap_noise_r, 'RMS of cum wrt median (mm)', np.nanpercentile(rms_cum_wrt_med, 1), np.nanpercentile(rms_cum_wrt_med, 99))
+        ### Save ref
+        cumfh5.create_dataset('refarea', data='{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s))
+        refsfile = os.path.join(infodir, '16ref.txt')
+        with open(refsfile, 'w') as f:
+            print('{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), file=f)
 
-    ### Save ref
-    cumfh5.create_dataset('refarea', data='{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s))
-    refsfile = os.path.join(infodir, '16ref.txt')
-    with open(refsfile, 'w') as f:
-        print('{}:{}/{}:{}'.format(refx1s, refx2s, refy1s, refy2s), file=f)
-
-    if 'corner_lat' in list(cumh5.keys()): ## Geocoded
-        ### Make ref_stable.kml
-        reflat = lat1+dlat*refy1s
-        reflon = lon1+dlon*refx1s
-        io_lib.make_point_kml(reflat, reflon, os.path.join(infodir, '16ref.kml'))
+        if 'corner_lat' in list(cumh5.keys()): ## Geocoded
+            ### Make ref_stable.kml
+            reflat = lat1+dlat*refy1s
+            reflon = lon1+dlon*refx1s
+            io_lib.make_point_kml(reflat, reflon, os.path.join(infodir, '16ref.kml'))
 
 
     #%% Calc filtered velocity
@@ -686,7 +889,7 @@ def main(argv=None):
     vel_tmp = np.zeros(n_pt_unnan, dtype=np.float32)*np.nan
 
     bool_nonan_pt = np.all(~np.isnan(cum_pt), axis=0)
-
+    
     ### First, calc vel point without nan
     print('  First, solving {0:6}/{1:6}th points with full cum...'.format(bool_nonan_pt.sum(), n_pt_unnan), flush=True)
     vconst_tmp[bool_nonan_pt], vel_tmp[bool_nonan_pt] = np.linalg.lstsq(G, cum_pt[:, bool_nonan_pt], rcond=None)[0]
@@ -711,10 +914,15 @@ def main(argv=None):
     if maskflag:
         print('\n(masked version)', flush=True)
         cum_filt = cum_filt * mask[np.newaxis, :, :]
-
-    cumfh5.create_dataset('vel', data=vel.reshape(length, width)*mask, compression=compress)
-    cumfh5.create_dataset('vintercept', data=vconst.reshape(length, width)*mask, compression=compress)
-    cumfh5.create_dataset('cum', data=cum_filt, compression=compress)
+    # 
+    if sbovl_abs:
+        cumfh5.create_dataset('vel' + sbovl_suffix, data=vel.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('vintercept' + sbovl_suffix, data=vconst.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('cum' + sbovl_suffix, data=cum_filt, compression=compress)
+    else:
+        cumfh5.create_dataset('vel', data=vel.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('vintercept', data=vconst.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('cum', data=cum_filt, compression=compress)
 
 
     #%% Add info and close
@@ -746,16 +954,22 @@ def main(argv=None):
     cumh5.close()
     cumfh5.close()
 
-
+    # 
     #%% Output image
-    pngfile = os.path.join(resultsdir,'vel.filt.png')
+    if sbovl_abs:
+        pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.png')
+    else:
+        pngfile = os.path.join(resultsdir,'vel.filt.png')
     title = 'Filtered velocity (mm/yr)'
     vmin = np.nanpercentile(vel, 1)
     vmax = np.nanpercentile(vel, 99)
     plot_lib.make_im_png(vel, pngfile, cmap_vel, title, vmin, vmax)
 
     ## vintercept
-    pngfile = os.path.join(resultsdir,'vintercept.filt.png')
+    if sbovl_abs:
+        pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.png')
+    else:
+        pngfile = os.path.join(resultsdir,'vintercept.filt.png')
     title = 'Intercept of filtered velocity (mm)'
     vmin = np.nanpercentile(vconst, 1)
     vmax = np.nanpercentile(vconst, 99)
@@ -770,14 +984,20 @@ def main(argv=None):
 
 
     if maskflag:
-        pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
+        if sbovl_abs:
+            pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.mskd.png')
+        else:
+            pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
         title = 'Masked filtered velocity (mm/yr)'
         vmin = np.nanpercentile(vel_mskd, 1)
         vmax = np.nanpercentile(vel_mskd, 99)
         plot_lib.make_im_png(vel_mskd, pngfile, cmap_vel, title, vmin, vmax)
 
         ## vintercept
-        pngfile = os.path.join(resultsdir,'vintercept.filt.mskd.png')
+        if sbovl_abs:
+            pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.mskd.png')
+        else:
+            pngfile = os.path.join(resultsdir,'vintercept.filt.mskd.png')
         title = 'Masked intercept of filtered velocity (mm)'
         vmin = np.nanpercentile(vconst_mskd, 1)
         vmax = np.nanpercentile(vconst_mskd, 99)
@@ -795,7 +1015,10 @@ def main(argv=None):
     print('Output: {}\n'.format(os.path.relpath(cumffile)), flush=True)
 
     print('To plot the time-series:')
-    print('LiCSBAS_plot_ts.py -i {} &\n'.format(os.path.relpath(cumffile)))
+    if tide and iono:
+        print('LiCSBAS_plot_ts.py -i {} --corrections &\n'.format(os.path.relpath(cumffile)))
+    else:
+        print('LiCSBAS_plot_ts.py -i {} &\n'.format(os.path.relpath(cumffile)))
 
 
 #%%
@@ -886,6 +1109,7 @@ def filter_wrapper(i):
 
     ### Second, HP in time
     if filtwidth_yr == 0.0:
+        # print('No temporal filter applied', flush=True)
         cum_hpt = cum[i, :, :] ## No temporal filter
     else:
         time_diff_sq = (dt_cum[i]-dt_cum)**2

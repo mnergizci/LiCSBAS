@@ -97,6 +97,33 @@ def make_im_png(data, pngfile, cmap, title, vmin=None, vmax=None, cbar=True, ref
     
     return
 
+def da_to_xyz(da, out_path, varname=None):
+    # Standardize coord names
+    if "x" in da.dims: da = da.rename({"x": "lon"})
+    if "y" in da.dims: da = da.rename({"y": "lat"})
+    if "longitude" in da.dims: da = da.rename({"longitude": "lon"})
+    if "latitude" in da.dims:  da = da.rename({"latitude":  "lat"})
+
+    name = varname or (da.name if da.name else "z")
+    da = da.rename(name)
+
+    # Flatten -> DataFrame (lon, lat, value)
+    df = (
+        da.stack(pt=("lat", "lon"))
+          .to_series()
+          .dropna()
+          .reset_index()
+          .rename(columns={name: "value"})
+          [ ["lon", "lat", "value"] ]
+    )
+
+    # Create parent dir only if one was provided
+    parent = os.path.dirname(out_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    # Write XYZ (space-separated, no header)
+    df.to_csv(out_path, sep=" ", header=False, index=False)
 
 #%%
 def make_3im_png(data3, pngfile, cmap, title3, vmin=None, vmax=None, cbar=True):
@@ -326,7 +353,7 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True, label_nam
 
     ### Save
     try:
-        plt.savefig(pngfile, bbox_inches='tight')
+        plt.savefig(pngfile) #, bbox_inches='tight')
     except:
         print('WARNING, generating network plot failed - new matplotlib changes?')
     plt.close()
@@ -436,7 +463,7 @@ def plot_corrected_network(ifgdates, bperp, corrected_ifgdates, pngfile, plot_co
     plt.legend()
 
     ### Save
-    plt.savefig(pngfile, bbox_inches='tight')
+    plt.savefig(pngfile) #, bbox_inches='tight')
     plt.close()
 
     return len(ixs_inc_gap)
@@ -519,7 +546,7 @@ def plot_coloured_network(ifgdates, bperp, perc_list, pngfile):
     plt.legend()
 
     ### Save
-    plt.savefig(pngfile, bbox_inches='tight')
+    plt.savefig(pngfile) #, bbox_inches='tight')
     plt.close()
 
 
@@ -622,7 +649,7 @@ def plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_c
     plt.legend()
 
     ### Save
-    plt.savefig(pngfile, bbox_inches='tight')
+    plt.savefig(pngfile) #, bbox_inches='tight')
     plt.close()
 
     return

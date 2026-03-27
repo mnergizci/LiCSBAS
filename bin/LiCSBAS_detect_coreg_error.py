@@ -42,7 +42,7 @@ if __name__ == "__main__":
     frame = args.frame
 
     track = str(int(frame[0:3]))
-    input_dir = "/gws/nopw/j04/nceo_geohazards_vol1/public/LiCSAR_products/{}/{}/interferograms/".format(track, frame)
+    input_dir = "/gws/ssde/j25a/nceo_geohazards/vol1/public/LiCSAR_products/{}/{}/interferograms/".format(track, frame)
     output_dir = frame
     Path(frame).mkdir(parents=True, exist_ok=True)
     Path(frame+"/png").mkdir(parents=True, exist_ok=True)
