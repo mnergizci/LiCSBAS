@@ -65,7 +65,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:r:g:", ["help", "origtsdir", "cliptsdir", "outtsdir"])
+            opts, args = getopt.getopt(argv[1:], "hi:o:r:g:", ["help", "origtsdir=", "cliptsdir=", "outtsdir="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -161,41 +161,42 @@ def main(argv=None):
     b.to_netcdf(outh5) #, engine="h5netcdf")
 
     # optionally clip the other files needed for data2json.py script
-    origresdir = os.path.join(origtsdir, 'results')
-    if not os.path.exists(cliptsdir):
-        os.system('mkdir -p '+cliptsdir)
-    else:
-        print('WARNING - the output directory already exists - we will not overwrite existing clipped data')
-    if not os.path.exists(cliptsdir):
-        print('WARNING - cannot create the output directory (permissions?) - clipping procedure will finish now')
-        return
-    clipresdir = os.path.join(cliptsdir, 'results')
-    if not os.path.exists(clipresdir):
-        os.mkdir(clipresdir)
-    landmask = 'landmask.nc'
-    if os.path.exists(landmask) and range_geo_str:
-        outfile = os.path.join(cliptsdir, landmask)
-        if not os.path.exists(outfile):
-            print('clipping landmask.nc to '+outfile)
-            lm = xr.open_dataset(landmask)
-            # clip it
-            lon_w, lon_e, lat_s, lat_n = [float(s) for s in range_str.split('/')]
-            if 'lon' in lm.coords:
-                lm = lm.sel(lon=slice(lon_w, lon_e), lat=slice(lat_n, lat_s))
-            else:
-                lm = lm.sel(x=slice(lon_w, lon_e), y=slice(lat_n, lat_s))
-            if lm.shape != (y2-y1, x2-x1):
-                print('WARNING - after clipping, the landmask has different shape - expect issue, ask Milan if something..')
-            lm.to_netcdf(outfile)
-    #
-    for toclip in ['coh_avg', 'mask', 'hgt']:
-        infile = os.path.join(origresdir, toclip)
-        outfile = os.path.join(clipresdir, toclip)
-        if not os.path.exists(outfile):
-            print('clipping '+toclip)
-            data = np.fromfile(infile, dtype=np.float32).reshape((length, width))
-            data = data[y1:y2, x1:x2]
-            data.tofile(outfile)
+    if cliptsdir:
+        origresdir = os.path.join(origtsdir, 'results')
+        if not os.path.exists(cliptsdir):
+            os.system('mkdir -p '+cliptsdir)
+        else:
+            print('WARNING - the output directory already exists - we will not overwrite existing clipped data')
+        if not os.path.exists(cliptsdir):
+            print('WARNING - cannot create the output directory (permissions?) - clipping procedure will finish now')
+            return
+        clipresdir = os.path.join(cliptsdir, 'results')
+        if not os.path.exists(clipresdir):
+            os.mkdir(clipresdir)
+        landmask = 'landmask.nc'
+        if os.path.exists(landmask) and range_geo_str:
+            outfile = os.path.join(cliptsdir, landmask)
+            if not os.path.exists(outfile):
+                print('clipping landmask.nc to '+outfile)
+                lm = xr.open_dataset(landmask)
+                # clip it
+                lon_w, lon_e, lat_s, lat_n = [float(s) for s in range_str.split('/')]
+                if 'lon' in lm.coords:
+                    lm = lm.sel(lon=slice(lon_w, lon_e), lat=slice(lat_n, lat_s))
+                else:
+                    lm = lm.sel(x=slice(lon_w, lon_e), y=slice(lat_n, lat_s))
+                if lm.shape != (y2-y1, x2-x1):
+                    print('WARNING - after clipping, the landmask has different shape - expect issue, ask Milan if something..')
+                lm.to_netcdf(outfile)
+        #
+        for toclip in ['coh_avg', 'mask', 'hgt']:
+            infile = os.path.join(origresdir, toclip)
+            outfile = os.path.join(clipresdir, toclip)
+            if not os.path.exists(outfile):
+                print('clipping '+toclip)
+                data = np.fromfile(infile, dtype=np.float32).reshape((length, width))
+                data = data[y1:y2, x1:x2]
+                data.tofile(outfile)
 
 
 #%% main
