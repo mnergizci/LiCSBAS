@@ -27,3 +27,4 @@ dependencies:
   - ipympl
   - lmfit
   - usgs-libcomcat
+  - utm
