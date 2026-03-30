@@ -25,6 +25,5 @@ dependencies:
   - cmcrameri
   - pygmt
   - ipympl
-  - lmfit
   - usgs-libcomcat
   - utm
