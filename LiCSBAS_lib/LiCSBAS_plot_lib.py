@@ -325,9 +325,12 @@ def plot_network(ifgdates, bperp, rm_ifgdates, pngfile, plot_bad=True, label_nam
                    zorder=1, label='Gap', alpha=0.6, colors='k', linewidth=3)
         
     ### Locater        
-    loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    # loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
     try:  # Only support from Matplotlib 3.1
-        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
+        # locator.axis = ax.xaxis # not sure if this needed?
+        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
     except:
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
         for label in ax.get_xticklabels():
@@ -436,9 +439,11 @@ def plot_corrected_network(ifgdates, bperp, corrected_ifgdates, pngfile, plot_co
                    zorder=1, label='Gap', alpha=0.6, colors='k', linewidth=3)
 
     ### Locater
-    loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    # loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
     try:  # Only support from Matplotlib 3.1
-        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
+        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
     except:
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
         for label in ax.get_xticklabels():
@@ -519,9 +524,11 @@ def plot_coloured_network(ifgdates, bperp, perc_list, pngfile):
                    zorder=1, label='Gap', alpha=0.6, colors='k', linewidth=3)
 
     ### Locater
-    loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    #loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
     try:  # Only support from Matplotlib 3.1
-        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
+        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
     except:
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
         for label in ax.get_xticklabels():
@@ -622,9 +629,11 @@ def plot_strong_weak_cuts_network(ifgdates, bperp, weak_links, edge_cuts, node_c
 
 
     ### Locater
-    loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    # loc = ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
     try:  # Only support from Matplotlib 3.1
-        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc))
+        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
     except:
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
         for label in ax.get_xticklabels():

@@ -12,11 +12,13 @@ Finally, note it expects you to have the filtered masked velocity calculated, i.
 =====
 Usage
 =====
-LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--vstd_fix] [--keep_absolute] [--azimuth]
+LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--plate Eurasia] [--vstd_fix] [--keep_absolute] [--azimuth]
 
  -t TS_GEOC_dir  TS folder with finished processing including step 16 (mandatory)
  -f frame_ID  In case your GEOC folder does not contain ENU tif files, provide frame ID
  -o  Output tif file (Default: vel_pmm_fixed.tif)
+ --plate  Fix to given plate (Default: Eurasia) - must be one of:
+  ['Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia', 'Pacific', 'SouthAmerica', 'Somalia']
  --vstd_fix  Would also perform reference fix in vstd
  --keep_absolute  Do not fix to a reference point
  --azimuth   Use ENU files for azimuth directions (for sbovls)
@@ -68,10 +70,11 @@ def main(argv=None):
     sbovl = False
     sbovl_abs = False  # if True, absolute velocity will be kept, otherwise it will be fixed to the reference area selected at step 16
     input = 'vel.filt.mskd'
+    plate = 'Eurasia'
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:f:o:", ["help", "vstd_fix", "keep_absolute", "sbovl", "sbovl_abs", "input="])
+            opts, args = getopt.getopt(argv[1:], "ht:f:o:", ["help", "vstd_fix", "keep_absolute", "plate=", "sbovl", "sbovl_abs", "input="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -90,6 +93,8 @@ def main(argv=None):
                 outfile = a
             elif o == '--sbovl':
                 sbovl= True
+            elif o == '--plate':
+                plate = a
             elif o == '--sbovl_abs':
                 sbovl = True
                 sbovl_abs = True
@@ -117,7 +122,9 @@ def main(argv=None):
                     raise Usage(f'Error, the {input} file does not exist - please check SBOI processing.')
             else:
                 raise Usage('Error, the vel_filt.mskd file does not exist - please finish processing incl step 16')
-        
+        plates = ['Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia', 'Pacific', 'SouthAmerica', 'Somalia']
+        if plate not in plates:
+            raise Usage('Error, please choose one of plates: '+plates)
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
         print("  "+str(err.msg), file=sys.stderr)
@@ -127,14 +134,12 @@ def main(argv=None):
     print(f'{input} will be processed for plate motion correction')
     #%%
     #vfilt_file = tsdir+'/results/vel_filt.mskd'
+    platesm = plate.lower()
     if sbovl:
-        vel_eurfile = tsdir+'/results/vel_eurasia_azi.tif'
+        vel_platefile = tsdir+'/results/vel_'+platesm+'_azi.tif'
     else:
-        vel_eurfile = tsdir+'/results/vel_eurasia_los.tif'
-    #if not os.path.exists(vel_eurfile):
-    vel_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', vel_eurfile, azi=sbovl)
-    #else:
-    #    vel_eurasia = lts.load_tif2xr(vel_eurfile)
+        vel_platefile = tsdir+'/results/vel_'+platesm+'_los.tif'
+    vel_plate = lts.generate_pmm_velocity(frame, plate, 'GEOC', vel_platefile, azi=sbovl)
     vel_tiffile = tsdir+'/results/'+input+'.tif'
     # if not os.path.exists(vel_tiffile):   # why not to regenerate it....
     cmd = 'LiCSBAS_flt2geotiff.py -i {0}/results/{1} -p {0}/info/EQA.dem_par -o {2}'.format(tsdir, input, vel_tiffile)
@@ -144,9 +149,9 @@ def main(argv=None):
         exit()
 
     vel = lts.load_tif2xr(vel_tiffile)
-    vel_eurasia_reshaped = vel_eurasia.interp_like(vel)
+    vel_plate_reshaped = vel_plate.interp_like(vel)
 
-    vel.values = vel.values - vel_eurasia_reshaped.values
+    vel.values = vel.values - vel_plate_reshaped.values
     # breakpoint()
     if not keep_absolute:
         print('\n Fixing to the reference area selected at step 16 \n')
@@ -168,21 +173,21 @@ def main(argv=None):
     if pngflag:
         pngfile = outfile[:-4] + '.png'
         if sbovl:
-            title = 'Velocity fixed towards Eurasia - Azimuth'
+            title = 'Velocity fixed towards '+plate+' - Azimuth'
         else:
-            title = 'Velocity fixed towards Eurasia  - LOS'
+            title = 'Velocity fixed towards '+plate+' - LOS'
         cmin = np.nanpercentile(vel.values, 1)
         cmax = np.nanpercentile(vel.values, 99)
         plot_lib.make_im_png(vel.values, pngfile, cmap, title, cmin, cmax)
 
-        pngfile = vel_eurfile[:-4] + '.png'
+        pngfile = vel_platefile[:-4] + '.png'
         if sbovl:
-            title = 'Eurasia-fixed plate motion - Azimuth'
+            title = plate+'-fixed plate motion - Azimuth'
         else:
-            title = 'Eurasia-fixed plate motion - LOS'
-        cmin = np.nanpercentile(vel_eurasia.values, 1)
-        cmax = np.nanpercentile(vel_eurasia.values, 99)
-        plot_lib.make_im_png(vel_eurasia.values, pngfile, cmap, title, cmin, cmax)
+            title = plate+'-fixed plate motion - LOS'
+        cmin = np.nanpercentile(vel_plate.values, 1)
+        cmax = np.nanpercentile(vel_plate.values, 99)
+        plot_lib.make_im_png(vel_plate.values, pngfile, cmap, title, cmin, cmax)
 
     if vstd_fix:
         # recalc vstd
