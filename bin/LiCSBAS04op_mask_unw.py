@@ -217,6 +217,7 @@ def main(argv=None):
             coh_avg += coh
             n_coh += (coh!=0)
 
+        n_coh = n_coh.astype(np.int32)  #OverflowError: Python integer 99999 out of bounds for int16   # thanks PEB for fixing this
         n_coh[n_coh==0] = 99999 #to avoid zero division
         coh_avg = coh_avg/n_coh
 
