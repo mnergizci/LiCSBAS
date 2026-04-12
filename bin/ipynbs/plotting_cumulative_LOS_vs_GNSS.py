@@ -28,7 +28,7 @@ def main():
     os.environ["LiCSAR_public"] = "/gws/ssde/j25a/nceo_geohazards/vol1/public/LiCSAR_products.public/"
     frame = "021D_05266_252525"
     sbovl = False
-    path = f"/work/scratch-pw4/licsar/mnergiz/TR_postseismic_13032026/reunw/{frame}"
+    path = f"/work/scratch-pw4/licsar/mnergiz/TR_postseismic_04042026/range/{frame}"
     # path = f"/work/scratch-pw4/licsar/mnergiz/TR_postseismic_01042026/{frame}"
     TS_folder = f"{path}/TS_GEOCml10GACOS"
     GEOC_folder = os.path.join(os.path.dirname(os.path.normpath(TS_folder)), "GEOCml10GACOS")
@@ -36,13 +36,13 @@ def main():
     cumfile_filt = f"{TS_folder}/cum_filt.h5"
     ref_loc = "KLS1"
     point_loc = "EKZ1"
-
+    os.makedirs(f"outputs/{frame}", exist_ok=True)
     # -------------------------
     # loading LoS InSAR
     # -------------------------
     cum = load_licsbas_cumh5_as_xrda(cumfile)
     cum_filt = load_licsbas_cumh5_as_xrda(cumfile_filt)
-
+    
     # -------------------------
     # loading GNSS
     # -------------------------
@@ -50,7 +50,7 @@ def main():
         "/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/mnergizci/GNSS_Turkey_Ergintav/gnss_nc.nc"
     )
     
-    gnss_folder = "/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/mnergizci/GNSS_Turkey_Ergintav/output_fits_seasonal_full-10022026/"
+    gnss_folder = "/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/mnergizci/GNSS_Turkey_Ergintav/output_fits_seasonal_full-04042026/"
 
     gnss_daily = build_deseasonalized_gnss_dataset(
         root_dir=f"{gnss_folder}",
@@ -168,7 +168,7 @@ def main():
     # -------------------------
     plot_cumulative_grid(
         cum_filt_ref.cum,
-        outname="cum_filt_021D.png",
+        outname=f"outputs/{frame}/cum_filt_{frame}.png",
         nplots=25,
         ncols=5,
         vmin=-150,
@@ -181,7 +181,7 @@ def main():
 
     plot_cumulative_grid(
         cum_ref.cum,
-        outname="cum_021D.png",
+        outname=f"outputs/{frame}/cum_{frame}.png",
         nplots=25,
         ncols=5,
         vmin=-150,
@@ -279,7 +279,7 @@ def main():
                 time_gnss=[time_cum_gnss, time_daily_gnss],
                 gnss_los_ts=[gnss_cum_los_ts, gnss_daily_los_ts],
                 point_loc=point_loc,
-                outname=f"los_comparison_{point_loc}.png",
+                outname=f"outputs/{frame}/los_comparison_{point_loc}.png",
                 cum_filt_ts=cum_filt_ts,
             )
 
@@ -290,7 +290,7 @@ def main():
         df_stations=df,
         point1=point1,
         reference=reference,
-        outname=f"Figure3_cumulativerections_{point_loc}.png",
+        outname=f"outputs/{frame}/Figure3_cumulativerections_{point_loc}.png",
         grid_label="",
         grid_series=(-150, 150, 1),
     )

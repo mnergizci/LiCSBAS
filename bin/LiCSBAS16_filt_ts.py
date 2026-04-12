@@ -71,7 +71,7 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
  --tide     solid earth tide correction in azi
  --iono     ionospheric correction in azi
  --sbovl_abs sboi absolute running, closing the referencing but this is in the testing so please ask if you need to use #MN
-
+ --naming   save the cum_filt with spatial and temporal filter size like cum_filt_s{spatial_kernel_size(km)}_t{temporal_width(day)}.h5
 Note: Spatial filter consume large memory. If the processing is stacked, try
  - --n_para 1
  - Indicate small filtwidth_km for -s option
@@ -191,6 +191,7 @@ def main(argv=None):
     sbovl_abs = False
     tide = False
     iono = False
+    naming = False
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -221,7 +222,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl", "sbovl_abs", "tide", "iono"])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl", "sbovl_abs", "tide", "iono", "naming"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -273,6 +274,8 @@ def main(argv=None):
                 tide = True
             elif o == '--iono':
                 iono = True
+            elif o == '--naming':
+                naming = True
             elif o == '--from_model':
                 modelfile = a
                 inputresidflag = True
@@ -536,7 +539,11 @@ def main(argv=None):
         filtwidth_yr = np.diff(dt_cum).mean() * 3  #dt_cum[-1]/(n_im-1)*3 ## avg interval*3
 
     ####define the cum_filt file
-    cumffile = os.path.join(tsadir, f'cum_filt.h5') #s{filtwidth_km}_t{int(filtwidth_yr*365.25)} MN
+    if naming:
+        cumffile = os.path.join(tsadir, f'cum_filt_s{filtwidth_km}_t{int(filtwidth_yr*365.25)}.h5')
+    else:
+        cumffile = os.path.join(tsadir, f'cum_filt.h5') #s{filtwidth_km}_t{int(filtwidth_yr*365.25)} MN
+    
     if os.path.exists(cumffile): os.remove(cumffile)
     cumfh5 = h5.File(cumffile,'w') #open cum_filt.h5 to write filtered data
     # 
@@ -846,8 +853,12 @@ def main(argv=None):
 
     ### Referencing cumulative displacement to new stable ref
     if not sbovl_abs:
+        refpoint_cum_filt = cum_filt[:, refy1s, refx1s]
         for i in range(n_im):
-            cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
+            # cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
+            cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_filt[i]
+        #referecing the first epoch
+        cum_filt = cum_filt - cum_filt[0, :, :]
     else:
         print('Skipping back referencing to stable point for SBOI + daz mode')
 

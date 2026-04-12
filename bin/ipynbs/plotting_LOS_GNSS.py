@@ -715,33 +715,36 @@ def plot_los_comparison(
     fig, ax = plt.subplots(1, 1, figsize=(12 * cm, 7 * cm))
     plt.rcParams["legend.fontsize"] = 8
 
-    mean_cum = np.nanmean(cum_ts)
-    std_cum = np.nanstd(cum_ts)
+    # mean_cum = np.nanmean(cum_ts)
+    # std_cum = np.nanstd(cum_ts)
 
-    mean_gnss_cum = np.nanmean(gnss_los_ts[0])
-    std_gnss_cum = np.nanstd(gnss_los_ts[0])
-    mean_gnss_daily = np.nanmean(gnss_los_ts[1])
-    std_gnss_daily = np.nanstd(gnss_los_ts[1])
+    # mean_gnss_cum = np.nanmean(gnss_los_ts[0])
+    # std_gnss_cum = np.nanstd(gnss_los_ts[0])
+    # mean_gnss_daily = np.nanmean(gnss_los_ts[1])
+    # std_gnss_daily = np.nanstd(gnss_los_ts[1])
 
     ax.plot(
         time_insar,
         cum_ts,
         color="red",
         marker="o",
-        linestyle=":",
-        label=f"InSAR ({mean_cum:.2f} ± {std_cum:.2f} mm)",
+        linestyle="None",
+        markeredgecolor="none",
+        alpha=0.3,
+        markersize=4,
+        # label=f"InSAR",
     )
 
     if cum_filt_ts is not None:
-        mean_cum_filt = np.nanmean(cum_filt_ts)
-        std_cum_filt = np.nanstd(cum_filt_ts)
+        # mean_cum_filt = np.nanmean(cum_filt_ts)
+        # std_cum_filt = np.nanstd(cum_filt_ts)
         ax.plot(
             time_insar,
             cum_filt_ts,
-            color="green",
-            marker="o",
+            color="red",
+            linewidth=1,
             linestyle="-",
-            label=f"InSAR filtered ({mean_cum_filt:.2f} ± {std_cum_filt:.2f} mm)",
+            label=f"InSAR",
         )
 
     # shadow (daily GNSS)
@@ -756,15 +759,16 @@ def plot_los_comparison(
         markeredgecolor="none",
         zorder=1,
     )
-    
+
     ax.plot(
         time_gnss[0],
         gnss_los_ts[0],
-        color="black",
+        color="gray",
         linewidth=1,
         linestyle="-",
         zorder=3,
-        label=f"GNSS LOS ({mean_gnss_cum:.2f} ± {std_gnss_cum:.2f} mm)",
+        alpha=0.9,
+        label=f"GNSS",
     )
 
     ax.set_title(f"Referenced LOS comparison at {point_loc}")
@@ -777,7 +781,7 @@ def plot_los_comparison(
     ax.xaxis.set_major_formatter(formatter)
 
     ax.grid(True, alpha=0.3)
-    ax.legend()
+    ax.legend(loc="lower left")
 
     fig.tight_layout()
 
