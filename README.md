@@ -1,10 +1,14 @@
 
 # LiCSBAS
 
-LiCSBAS is an open-source package in Python and bash to carry out InSAR time series analysis using LiCSAR products (i.e., unwrapped interferograms and coherence) which are freely available on the [COMET-LiCS web portal](https://comet.nerc.ac.uk/COMET-LiCS-portal/).  
+LiCSBAS is an open-source package in Python and bash to carry out InSAR time series analysis primarily using LiCSAR products
+(at least interferograms and coherence maps) which are freely available on the [COMET-LiCS web portal](https://comet.nerc.ac.uk/COMET-LiCS-portal/).    
 
-It was originally developed by Dr. Yu Morishita during his research visit stay at the University of Leeds and is currently maintained by the COMET team while his original version (that is also further developed) exists on his [original site](https://github.com/yumorishita). Here we try keep a unity and ingest new functionality to this version that contains various updates but a lot of experimental functions that were developed within a programming learning curve of several COMET members.
+It was originally developed by Dr. Yu Morishita during his research visit stay at the University of Leeds and is currently maintained by the COMET team
+while his original version (and other tools) exists at his [original site](https://github.com/yumorishita).  
 
+Here we try keep a unity and ingest new functionality to this version that contains various updates but a lot of experimental functions that were
+developed within a programming learning curve of several COMET members.  
 
 With LiCSBAS, users can easily derive the time series and velocity of the displacement if sufficient LiCSAR products are available in the area of interest.
 LiCSBAS also contains visualization tools to interactively display the time series of displacement to help investigation and interpretation of the results.
@@ -17,11 +21,23 @@ THIS IS RESEARCH CODE PROVIDED TO YOU "AS IS" WITH NO WARRANTIES OF CORRECTNESS.
 
 ## Documentation and Bug Reports
 
-If you have found an issue or bug, please report it on the [issues page](https://github.com/comet-licsar/LiCSBAS/issues), while you may also check for answers in the original [Yu Morishita implementation issues page](https://github.com/yumorishita/LiCSBAS/issues).
+If you have found an issue or bug using the main branch, please report it on the [issues page](https://github.com/comet-licsar/LiCSBAS/issues).
 
-Similarly, we assume users are familiar with the standard installation procedure of Github repositories, therefore we do not adapt the original [**wiki**](https://github.com/yumorishita/LiCSBAS/wiki) pages that document well all the originally implemented procedures by Dr. Yu Morishita, including the installation procedure (if you follow this procedure, please be aware of the different repository URL, this version of LiCSBAS resides at [github.com/comet-licsar/licsbas](https://github.com/comet-licsar/licsbas) while the original wiki refers to [github.com/yumorishita/licsbas](https://github.com/yumorishita/licsbas)).
+We assume users are familiar with the standard installation procedure of Github repositories, therefore we do not adapt the original [**wiki**](https://github.com/yumorishita/LiCSBAS/wiki) pages that document well all the originally implemented procedures by Dr. Yu Morishita, 
+including the installation procedure (if you follow this procedure, please be aware of the different repository URL, this version of LiCSBAS resides at [github.com/comet-licsar/licsbas](https://github.com/comet-licsar/licsbas) while the original wiki refers to the discontinued [github.com/yumorishita/licsbas](https://github.com/yumorishita/licsbas)).
 
-Finally, the original [quick start](https://github.com/yumorishita/LiCSBAS/wiki/2_0_workflow#quick-start) describes processing philosophy that we keep in our version and only further maintain and develop.
+Similarly, the original [quick start](https://github.com/yumorishita/LiCSBAS/wiki/2_0_workflow#quick-start) describes processing philosophy that we keep in our version and only further maintain and develop.  
+
+We keep regular release strategy of 1-2 releases per year.
+The 'main' branch is considered stable and relatively up-to-date (if the main branch contains bug, please report it to us).
+The 'dev' branch is considered testing and can contain routine bugs that are usually fast-resolved by our team.  
+
+Besides those branches, there are several forks existing, maintained by current or previous COMET members.
+Although we incorporate most of their precious scripts, extending functionality of LiCSBAS,
+these can include original approaches not present or documented here (yet).  
+
+For example, Dr. Qi Ou prepared optional steps as LiCSBAS1xx scripts and [provided documentation](https://github.com/qi-ou/LiCSBAS/blob/main/README.md) on their use,
+as she worked her way to her [article on Tian Shan](https://www.researchsquare.com/article/rs-7529996/v1).
 
 ## Sample Products and Tutorial
 
@@ -54,7 +70,7 @@ Lazecký, M.; Ou, Q.; McGrath, J.; Payne, J.; Espin, P.; Hooper, A.; Wright, T. 
 
 ## Acknowledgements
 
-This work has been accomplished during Y. Morishita’s visit at University of Leeds, funded by JSPS Overseas Research Fellowship.
+This work has been accomplished during Dr. Yu Morishita’s visit at University of Leeds, funded by JSPS Overseas Research Fellowship.
 Further updates of the software are organised by the COMET LiCSAR team.
 
 COMET is the UK Natural Environment Research Council's Centre for the Observation and Modelling of Earthquakes, Volcanoes and Tectonics.
@@ -67,9 +83,5 @@ and ESA Open SAR Library 4000140600/23/I-DT extension, recognised as the [AlignS
 
 The [Scientific Colour Maps](http://www.fabiocrameri.ch/colourmaps.php) ([Crameri, 2018](https://doi.org/10.5194/gmd-11-2541-2018)) is used in LiCSBAS.
 
-*Yu Morishita (PhD)\
-JSPS Overseas Research Fellow (June 2018-March 2020)\
-Visiting Researcher, COMET, School of Earth and Environment, University of Leeds (June 2018-March 2020)\
-Chief Researcher, Geography and Crustal Dynamics Research Center, Geospatial Information Authority of Japan (GSI)*
 
 [<img src="https://raw.githubusercontent.com/wiki/yumorishita/LiCSBAS/images/COMET_logo.png"  height="60">](https://comet.nerc.ac.uk/)   [<img src="https://raw.githubusercontent.com/wiki/yumorishita/LiCSBAS/images/logo-leeds.png"  height="60">](https://environment.leeds.ac.uk/see/)  [<img src="https://raw.githubusercontent.com/wiki/yumorishita/LiCSBAS/images/LiCS_logo.jpg"  height="60">](https://comet.nerc.ac.uk/COMET-LiCS-portal/) 

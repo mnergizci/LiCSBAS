@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.13.4 20210910 Yu Morishita, GSI
-
 ========
 Overview
 ========
@@ -24,7 +22,7 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_d
     [-u U.geo] [-r x1:x2/y1:y2] [--ref_geo lon1/lon2/lat1/lat2] [-p x/y]
     [--p_geo lon/lat] [-c cmap] [--nomask] [--vmin float] [--vmax float]
     [--auto_crange float] [--dmin float] [--dmax float] [--ylen float]
-    [--ts_png pngfile]
+    [--ts_png pngfile] [--dem_background]
 
  -i    Input cum hdf5 file (Default: ./cum_filt.h5 or ./cum.h5)
  --i2  Input 2nd cum hdf5 file
@@ -56,12 +54,16 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_d
  --abs       Show absolute cumulative displacement and velocity if exist in cum file. If not exist, show cum and vel but set title and color range based on absolute values. This is for the scenario like SBOI where the cumulative displacement and velocity are already corrected for plate motion and show the absolute values. In this scenario, the relative cumulative displacement and velocity (i.e., not corrected for plate motion) can be shown by specifying the cum file with relative values with --i2 option.
  --novelocity  Not show velocity in title and not use velocity for color range setting
  --raw         Show raw cumulative displacement without mask and reference area (Default: show filtered cumulative displacement with mask and reference area) for sbovl absolute senario
- --
+
+ # PEB additions:
+ --dem_background  Uses project hgt file to plot a hillshade background. Uses earthpy and rasterio.
 
 example:  LiCSBAS_plot_ts.py -i TS_GEOCml10GACOSmask/cum_filt_interpolate.h5 --cum_name cum --cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
 """
 #%% Change log
 '''
+20260410 Pedro Espin Bedon, UoL (+ML)
+ - added --dem_background and fix for updated matplotlib
 20260211 Muhammet Nergizci, COMET University of Leeds
  - adding the show corrections option to show the corrections in the time series plot, and cum_name options to specify the dataset name for the cumulative displacement and corrections to show in the time series plot
 v1.13.4 20210910 Yu Morishita, GSI
@@ -127,6 +129,7 @@ import cmcrameri.cm as cmc
 import warnings
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
+import subprocess
 
 os.environ['LANG'] = 'en_US.UTF-8'
 
@@ -178,6 +181,37 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
     return yvalues
 
 
+def create_hgt_tif(resultsdir: str):
+    """
+    Creates hgt tif if does not exist
+
+    Args:
+        resultsdir (str): The base directory for the results.
+
+    Returns:
+        str: The stdef run_licsbass_script(resultsdir: str):
+    """
+    out_path = f"{resultsdir}/results/hgt.geo.tif"
+    if not os.path.isfile(out_path):
+        print('creating '+out_path)
+        # Construct the input and parameter file paths
+        input_path = f"{resultsdir}/results/hgt"
+        parameter_file = f"{resultsdir}/info/EQA.dem_par"
+        # Define the command
+        command = [
+            "LiCSBAS_flt2geotiff.py",  # The script to execute
+            "-i", input_path,  # Input path
+            "-p", parameter_file  # Parameter file path
+        ]
+        try:
+            # Run the command
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            return result.stdout
+        except subprocess.CalledProcessError as e:
+            # Raise an error if the script fails
+            raise RuntimeError(f"Script execution failed: {e.stderr}") from e
+
+
 #%% Main
 ## Not use def main to use global valuables
 if __name__ == "__main__":
@@ -215,13 +249,16 @@ if __name__ == "__main__":
     absolute= False
     novel_flag = False
     raw_flag = False
+
+    dem_background = False
     ##--cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "cum_name=", "cum_name2=", "cum_name3=", "novelocity", "raw"])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "cum_name=",
+                "cum_name2=", "cum_name3=", "novelocity", "raw", "dem_background"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -250,6 +287,8 @@ if __name__ == "__main__":
                 cmap_name = a
             elif o == '--nomask':
                 maskflag = False
+            elif o == '--dem_background':
+                dem_background = True
             elif o == '--vmin':
                 vmin = float(a)
             elif o == '--vmax':
@@ -307,6 +346,19 @@ if __name__ == "__main__":
             sys.exit(2)
 
     cumdir = os.path.dirname(os.path.abspath(cumfile))
+    # checks
+    if dem_background:
+        try:
+            import earthpy.spatial as es
+            import rasterio as rio
+        except:
+            print('earthpy or rasterio not installed - disabling DEM background')
+            dem_background = False
+        try:
+            out = create_hgt_tif(cumdir)
+        except RuntimeError as e:
+            print(e)
+            dem_background = False
 
     ### cumfile2
     if not cumfile2 and os.path.basename(cumfile) == 'cum_filt.h5' and os.path.exists(os.path.join(cumdir, 'cum.h5')):
@@ -720,14 +772,28 @@ if __name__ == "__main__":
     axt2 = pv.text(0.01, 0.99, 'Left-doubleclick:\n Plot time series\nRight-drag:\n Change ref area', fontsize=8, va='top')
     axt = pv.text(0.01, 0.78, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)'.format(refx1, refx2, refy1, refy2), fontsize=8, va='bottom')
 
-    ### First show
+    ### background DEM
+    if dem_background:
+        alphamain = 0.6
+        demtif=os.path.join(resultsdir,"hgt.geo.tif")
+        print('Shadow DEM', demtif)
+        az=-167.92738 # could rotate based on A/D
+        ### Create hillshade
+        with rio.open(demtif) as srca:
+            elevationa = srca.read(1)
+            h_dem = es.hillshade(elevationa,azimuth=az)
+            axv.imshow(h_dem, cmap='Greys', alpha=0.8)
+    else:
+        alphamain = 1
+    ### main plot
     rax, = axv.plot([refx1h, refx2h, refx2h, refx1h, refx1h],
                     [refy1h, refy1h, refy2h, refy2h, refy1h], '--k', alpha=0.8)
     if not absolute:
         data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
     else:
         data = vel*mask
-    cax = axv.imshow(data, clim=[vmin, vmax], cmap=cmap, aspect=aspect, interpolation='nearest')
+
+    cax = axv.imshow(data, clim=[vmin, vmax], cmap=cmap, aspect=aspect, interpolation='nearest', alpha = alphamain)
 
     axv.set_title('vel')
 
