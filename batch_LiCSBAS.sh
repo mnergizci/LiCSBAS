@@ -556,11 +556,11 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
 
     if [ "$check_only" == "y" ];then
       echo "LiCSBAS13_sb_inv.py $extra $p13_op"
-      echo "LiCSBASresid_check.py $extra2"
+      echo "LiCSBAS_resid_check.py $extra2"
     else
       LiCSBAS13_sb_inv.py $extra $p13_op 2>&1 | tee -a $log
       pstat=(${PIPESTATUS[0]})
-      LiCSBASresid_check.py $extra2 2>&1 | tee -a $log
+      LiCSBAS_resid_check.py $extra2 2>&1 | tee -a $log
       pstat2=(${PIPESTATUS[0]})
 
       if [ "$p12_nullify" == "y" ];then
