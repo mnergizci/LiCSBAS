@@ -1375,32 +1375,32 @@ def main(argv=None):
     cumh5.close()
 
 
-    #%% Output png images
-    ### Incremental displacement
-    if nopngs:
-        print('skipping generating additional png images of increments and residuals - as sometimes taking too long (tutorial purposes)')
-    else:
-        _n_para = n_im-1 if n_para > n_im-1 else n_para
+    #%% Output png images and residuals info
+    if not nopngs:
+        ### Incremental displacement
         print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
+        _n_para = n_im - 1 if n_para > n_im - 1 else n_para
         # p = q.Pool(_n_para)
         # p.map(inc_png_wrapper, range(n_im-1))
         # p.close()
         # Create a list of (imx, sbovl) pairs for each index
         args_list = [(imx, sbovl) for imx in range(n_im - 1)]
-    
+
         with q.Pool(_n_para) as p:
             p.starmap(inc_png_wrapper, args_list)
 
-
-        
-        ### Residual for each ifg. png and txt.
-        with open(restxtfile, "w") as f:
-            print('# RMS of residual (mm)', file=f)
-        _n_para = n_ifg if n_para > n_ifg else n_para
+    ### Residual for each ifg. png and txt.
+    with open(restxtfile, "w") as f:
+        print('# RMS of residual (mm)', file=f)
+    _n_para = n_ifg if n_para > n_ifg else n_para
+    p = q.Pool(_n_para)
+    if nopngs:
+        print('\nOutput residuals information with {} parallel processing...'.format(_n_para), flush=True)
+        p.map(resid_txt_wrapper, range(n_ifg))
+    else:
         print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
-        p = q.Pool(_n_para)
         p.map(resid_png_wrapper, range(n_ifg))
-        p.close()
+    p.close()
 
     ### Velocity and noise indices
     cmins = [None, None, None, None, None, None]
@@ -1578,19 +1578,25 @@ def inc_png_wrapper(imx, sbovl=False):
 
 #%%
 def resid_png_wrapper(i):
-    ifgd = ifgdates[i]
-    infile = os.path.join(resdir, '{}.res'.format(ifgd))
-    resid = io_lib.read_img(infile, length, width)
-    resid_rms = np.sqrt(np.nanmean(resid**2))
-    with open(restxtfile, "a") as f:
-        print('{} {:5.2f}'.format(ifgd, resid_rms), file=f)
-
+    ifgd, infile, resid_rms, resid = resid_txt_wrapper(i)
     pngfile = infile+'.png'
     title = 'Residual (mm) of {} (RMS:{:.2f}mm)'.format(ifgd, resid_rms)
     plot_lib.make_im_png(resid, pngfile, cmap_vel, title, -wavelength/2*1000, wavelength/2*1000)
 
     if not keep_incfile:
         os.remove(infile)
+
+
+def resid_txt_wrapper(i):
+    ifgd = ifgdates[i]
+    infile = os.path.join(resdir, '{}.res'.format(ifgd))
+    resid = io_lib.read_img(infile, length, width)
+    resid_rms = np.sqrt(np.nanmean(resid ** 2))
+    with open(restxtfile, "a") as f:
+        print('{} {:5.2f}'.format(ifgd, resid_rms), file=f)
+    if not keep_incfile:
+        os.remove(infile)
+    return ifgd, infile, resid_rms, resid
 
 
 #%% main
