@@ -543,7 +543,7 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
     if [ "$cometdev" -eq 1 ];then
         extra='--nopngs'
         if [ -z "$p13_n_unw_r_thre" ];then extra="$extra --n_unw_r_thre 0.4"; fi
-        extra="$extra --singular_gauss"
+        # extra="$extra --singular_gauss"
       else
         extra=''
     fi
@@ -615,7 +615,7 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
   if [ "$cometdev" -eq 1 ];then
       extra='--nopngs'
       if [ -z "$p13_n_unw_r_thre" ];then extra="$extra --n_unw_r_thre 0.4"; fi
-      extra="$extra --singular_gauss"
+      # extra="$extra --singular_gauss"
     else
       extra=''
   fi
