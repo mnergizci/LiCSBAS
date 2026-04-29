@@ -1461,7 +1461,7 @@ def count_gaps_wrapper(i):
 
     ### n_gap and gap location
 #    ns_unw_unnan4inc = (np.matmul(np.int8(G[:, :, None]), (~np.isnan(unwpatch.T))[:, None, :])).sum(axis=0, dtype=np.int16) #n_ifg, n_im-1, n_pt -> n_im-1, n_pt
-    print('patch '+str(i)+', step 1/3: gaps identification')
+    print('sub-patch '+str(i+1)+', step 1/3: gaps identification')
     ns_unw_unnan4inc = np.array([(G[:, j]*
                           (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])))
                          .sum(axis=1, dtype=np.int16) for j in range(n_im-1)])
@@ -1475,7 +1475,7 @@ def count_gaps_wrapper(i):
     # n_ifg*(n_pt,n_ifg)->(n_loop,n_pt)
     # Number of ifgs for each loop at eath point.
     # 3 means complete loop, 1 or 2 means broken loop.
-    print('patch ' + str(i) + ', step 2/3: n_ifg_noloop')
+    print('sub-patch '+str(i+1) + ', step 2/3: n_ifg_noloop')
     ns_ifg4loop = np.array([(np.abs(Aloop[j, :])*
                          (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])))
                             .sum(axis=1) for j in range(n_loop)])
@@ -1484,14 +1484,14 @@ def count_gaps_wrapper(i):
 
     # n_loop*(n_loop,n_pt)*n_pt->(n_ifg,n_pt)
     # Number of loops for each ifg at eath point.
-    print('patch ' + str(i) + ', step 3/3: n_loop per each ifg at each point')
+    print('sub-patch '+str(i+1) + ', step 3/3: n_loop per each ifg at each point')
     ns_loop4ifg = np.array([(
             (np.abs(Aloop[:, j])*bool_loop.T).T*
             (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch, j]))
             ).sum(axis=0) for j in range(n_ifg)]) #
     del bool_loop
 
-    print('patch ' + str(i) + ': indices calculated')
+    print('sub-patch '+str(i+1) + ': indices calculated')
     ns_ifg_noloop_tmp = (ns_loop4ifg==0).sum(axis=0) #n_pt
     del ns_loop4ifg
 
