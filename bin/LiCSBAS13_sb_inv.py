@@ -1378,8 +1378,8 @@ def main(argv=None):
     #%% Output png images and residuals info
     if not nopngs:
         ### Incremental displacement
-        print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
         _n_para = n_im - 1 if n_para > n_im - 1 else n_para
+        print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
         # p = q.Pool(_n_para)
         # p.map(inc_png_wrapper, range(n_im-1))
         # p.close()
