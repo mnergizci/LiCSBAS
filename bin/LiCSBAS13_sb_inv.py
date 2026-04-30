@@ -1284,11 +1284,13 @@ def main(argv=None):
             _ = bperp.pop(i)
             if not save_mem:
                 cum = np.delete(cum, i, 0)
+                gap = np.delete(gap, i-1, 0)
         n_im=len(imdates)
         if save_mem:
             print('removing listed epochs from h5 file')
             update_epochs_i.sort() # probably not needed
             remove_indices_from_dataset(cumh5, 'cum', update_epochs_i)
+            remove_indices_from_dataset(cumh5, 'gap', np.array(update_epochs_i)-1)
         if 'imdates' in cumh5:
             del cumh5['imdates']
             cumh5.create_dataset('imdates', data=[np.int32(imd) for imd in imdates])
