@@ -203,7 +203,7 @@ def main(argv=None):
     ## For parallel processing
     global n_para, n_para_gap, G, Aloop, unwpatch, hasdatapatch, imdates, incdir, ifgdir, length, width,\
         coef_r2m, ifgdates, ref_unw, cycle, keep_incfile, resdir, restxtfile, \
-        cmap_vel, cmap_wrap, wavelength, nullify_noloops #, step_events
+        cmap_vel, cmap_wrap, wavelength, nullify_noloops, debugflag #, step_events
 
 
     #%% Set default
@@ -222,7 +222,8 @@ def main(argv=None):
     nullify_noloops_use_data_after_nullification = False
     sbovl = False
     sbovl_abs = False ##No need to set this to True if sbovl is not set MN
-    
+    debugflag = False
+
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -255,7 +256,7 @@ def main(argv=None):
                                        ["help",  "mem_size=", "input_units=", "gamma=",
                                         "n_unw_r_thre=", "keep_incfile", "nopngs", "nullify_noloops", "nullify_noloops_use_data_after_nullification",
                                         "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches",
-                                        "offsets=", "sbovl", "sbovl_abs", "ignore_nullification"])
+                                        "offsets=", "sbovl", "sbovl_abs", "ignore_nullification", "debug"])
                                       #  "step_events="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -313,6 +314,8 @@ def main(argv=None):
             elif o == '--offsets':
                 offsetsfile = a
                 offsetsflag = True
+            elif o == '--debug':
+                debugflag = True
 	      
 
         if not ifgdir:
@@ -381,7 +384,7 @@ def main(argv=None):
     bad_ifg11file = os.path.join(infodir, '11bad_ifg.txt')
     bad_ifg12file = os.path.join(infodir, '12bad_ifg.txt')
     bad_ifg120file = os.path.join(infodir, '120bad_ifg.txt')
-    bad_ifg12candidatefile = os.path.join(infodir, '12bad_ifg_cand.txt') 
+    bad_ifg12candidatefile = os.path.join(infodir, '12bad_ifg_cand.txt')
     # if ref point selected using LiCSBAS120:
     reffile = os.path.join(infodir, '120ref.txt')
     if not os.path.exists(reffile):
@@ -1351,6 +1354,12 @@ def main(argv=None):
         print('\nWriting to HDF5 file...')
         cumh5.create_dataset('cum', data=cum, compression=compress)
         cumh5.create_dataset('vel', data=vel, compression=compress)
+        try:
+            cumh5.create_dataset('gap', data=gap, compression=compress)
+        except:
+            print('failed storing gap layer - please debug this')
+            if debugflag:
+                breakpoint()
         cumh5.create_dataset('vintercept', data=vconst, compression=compress)
         if store_patches:
             os.remove(cumfile)
