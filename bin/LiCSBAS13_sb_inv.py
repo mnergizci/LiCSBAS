@@ -1294,6 +1294,10 @@ def main(argv=None):
             update_epochs_i.sort() # probably not needed
             remove_indices_from_dataset(cumh5, 'cum', update_epochs_i)
             remove_indices_from_dataset(cumh5, 'gap', np.array(update_epochs_i)-1)
+        else:
+            # we use 'gap' directly from h5 file, so we need to physically update the loaded fixed version:
+            del cumh5['gap']
+            cumh5.create_dataset('gap', data=gap, compression=compress)
         if 'imdates' in cumh5:
             del cumh5['imdates']
             cumh5.create_dataset('imdates', data=[np.int32(imd) for imd in imdates])
@@ -1350,16 +1354,12 @@ def main(argv=None):
 
 
     #%% Close h5 file
+    if debugflag:
+        breakpoint()
     if not save_mem:
         print('\nWriting to HDF5 file...')
         cumh5.create_dataset('cum', data=cum, compression=compress)
         cumh5.create_dataset('vel', data=vel, compression=compress)
-        try:
-            cumh5.create_dataset('gap', data=gap, compression=compress)
-        except:
-            print('failed storing gap layer - please debug this')
-            if debugflag:
-                breakpoint()
         cumh5.create_dataset('vintercept', data=vconst, compression=compress)
         if store_patches:
             os.remove(cumfile)
