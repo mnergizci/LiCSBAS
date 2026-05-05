@@ -633,6 +633,30 @@ def invert_nsbas_wls(unw, var, G, dt_cum, gamma, n_core):
     unw_tmp[np.isnan(unw_tmp)] = 0
     var_tmp = np.concatenate((var, 50*np.ones((n_pt, n_im), dtype=np.float32)), axis=1).transpose() #50 is var for coh=0.1, to scale bottom part of Gall
 
+    # tsstd  = np.zeros((n_im - 1, n_pt), dtype=np.float32) # not finished
+    #for i in range(n_pt):
+    #   X, ts_std = wls_nsbas_with_error(i)
+    #   result[:, i] = X
+    #   tsstd[:, i]  = ts_std
+    '''
+    args = list(range(n_pt))
+    q = multi.get_context('fork')
+    p = q.Pool(n_core)
+    # Map new function
+    _out = p.map(wls_nsbas_with_error, args)
+    p.close()
+    p.join()
+    # Unpack results
+    result = np.zeros((n_im + 1, n_pt), dtype=np.float32)
+    tsstd  = np.zeros((n_im - 1, n_pt), dtype=np.float32)
+    for i, (X, ts_std) in enumerate(_out):
+        result[:, i] = X
+        tsstd[:, i]  = ts_std
+    # Extract parameters
+    inc    = result[:n_im-1, :]
+    vel    = result[n_im-1, :]
+    vconst = result[n_im, :]
+    '''
     if n_core == 1:
         for i in range(n_pt):
             result[:, i] = wls_nsbas(i) #(n_im+1, n_pt)
@@ -668,6 +692,68 @@ def wls_nsbas(i):
     except:
         X = np.zeros((Gall.shape[1]), dtype=np.float32)*np.nan
     return X
+
+
+def wls_nsbas_with_error(i):
+    """
+    (supported by Copilot)
+    Returns:
+        X       : NSBAS solution vector
+                  [increments (n_im-1), velocity, constant]
+        ts_std  : Standard deviation per epoch (n_im-1)
+    """
+    # Use global Gall, unw_tmp, var_tmp, mask, n_im
+    if np.mod(i, 1000) == 0:
+        print(f'  Running {i:6}/{unw_tmp.shape[1]:6}th point...', flush=True)
+    # --- Weighting ---
+    w = 1.0 / np.sqrt(np.float64(var_tmp[:, i]))
+    Gall_w = Gall * w[:, np.newaxis]
+    unw_w  = unw_tmp[:, i] * w
+    m = mask[:, i]  # valid rows
+    try:
+        # --- Solve WLS ---
+        X = np.linalg.lstsq(Gall_w[m], unw_w[m], rcond=None)[0]
+
+        # --- Posterior covariance of parameters ---
+        GTWG = Gall_w[m].T @ Gall_w[m]
+        try:
+            Cx = np.linalg.inv(GTWG)
+        except:
+            Cx = np.linalg.pinv(GTWG, rcond=1e-10)
+        # --- Extract increment covariance ---
+        Cm = Cx[:n_im-1, :n_im-1]
+        # --- Time integration matrix ---
+        # u_k = sum_{j<=k} inc_j
+        A = np.tril(np.ones((n_im-1, n_im-1), dtype=np.float64))
+        # --- Propagate covariance ---
+        Cu = A @ Cm @ A.T
+        ts_std = np.sqrt(np.diag(Cu))
+    except Exception:
+        X = np.full(Gall.shape[1], np.nan, dtype=np.float32)
+        ts_std = np.full(n_im-1, np.nan, dtype=np.float32)
+    return X, ts_std
+
+
+'''
+# Weight matrix (diagonal)
+W = np.diag(1.0 / var)
+
+GTWG = G.T @ W @ G
+Cm = np.linalg.inv(GTWG)
+
+# Optional variance scaling using residuals
+resid = unw - G @ inc
+sigma0_sq = (resid.T @ W @ resid) / (len(unw) - G.shape[1])
+Cm *= sigma0_sq
+
+# Increment std
+inc_std = np.sqrt(np.diag(Cm))
+
+# Time series covariance
+A = np.tril(np.ones((G.shape[1]+1, G.shape[1])))
+Cu = A @ Cm @ A.T
+ts_std = np.sqrt(np.diag(Cu))
+'''
 
 
 #%%
