@@ -203,7 +203,7 @@ def main(argv=None):
     ## For parallel processing
     global n_para, n_para_gap, G, Aloop, unwpatch, hasdatapatch, imdates, incdir, ifgdir, length, width,\
         coef_r2m, ifgdates, ref_unw, cycle, keep_incfile, resdir, restxtfile, \
-        cmap_vel, cmap_wrap, wavelength, nullify_noloops #, step_events
+        cmap_vel, cmap_wrap, wavelength, nullify_noloops, debugflag #, step_events
 
 
     #%% Set default
@@ -222,7 +222,8 @@ def main(argv=None):
     nullify_noloops_use_data_after_nullification = False
     sbovl = False
     sbovl_abs = False ##No need to set this to True if sbovl is not set MN
-    
+    debugflag = False
+
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -255,7 +256,7 @@ def main(argv=None):
                                        ["help",  "mem_size=", "input_units=", "gamma=",
                                         "n_unw_r_thre=", "keep_incfile", "nopngs", "nullify_noloops", "nullify_noloops_use_data_after_nullification",
                                         "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches",
-                                        "offsets=", "sbovl", "sbovl_abs", "ignore_nullification"])
+                                        "offsets=", "sbovl", "sbovl_abs", "ignore_nullification", "debug"])
                                       #  "step_events="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -313,6 +314,8 @@ def main(argv=None):
             elif o == '--offsets':
                 offsetsfile = a
                 offsetsflag = True
+            elif o == '--debug':
+                debugflag = True
 	      
 
         if not ifgdir:
@@ -381,7 +384,7 @@ def main(argv=None):
     bad_ifg11file = os.path.join(infodir, '11bad_ifg.txt')
     bad_ifg12file = os.path.join(infodir, '12bad_ifg.txt')
     bad_ifg120file = os.path.join(infodir, '120bad_ifg.txt')
-    bad_ifg12candidatefile = os.path.join(infodir, '12bad_ifg_cand.txt') 
+    bad_ifg12candidatefile = os.path.join(infodir, '12bad_ifg_cand.txt')
     # if ref point selected using LiCSBAS120:
     reffile = os.path.join(infodir, '120ref.txt')
     if not os.path.exists(reffile):
@@ -1284,11 +1287,17 @@ def main(argv=None):
             _ = bperp.pop(i)
             if not save_mem:
                 cum = np.delete(cum, i, 0)
+                gap = np.delete(gap, i-1, 0)
         n_im=len(imdates)
         if save_mem:
             print('removing listed epochs from h5 file')
             update_epochs_i.sort() # probably not needed
             remove_indices_from_dataset(cumh5, 'cum', update_epochs_i)
+            remove_indices_from_dataset(cumh5, 'gap', np.array(update_epochs_i)-1)
+        else:
+            # we use 'gap' directly from h5 file, so we need to physically update the loaded fixed version:
+            del cumh5['gap']
+            cumh5.create_dataset('gap', data=gap, compression=compress)
         if 'imdates' in cumh5:
             del cumh5['imdates']
             cumh5.create_dataset('imdates', data=[np.int32(imd) for imd in imdates])
@@ -1345,6 +1354,8 @@ def main(argv=None):
 
 
     #%% Close h5 file
+    if debugflag:
+        breakpoint()
     if not save_mem:
         print('\nWriting to HDF5 file...')
         cumh5.create_dataset('cum', data=cum, compression=compress)
@@ -1375,30 +1386,31 @@ def main(argv=None):
     cumh5.close()
 
 
-    #%% Output png images
-    ### Incremental displacement
-    if nopngs:
-        print('skipping generating additional png images of increments and residuals - as sometimes taking too long (tutorial purposes)')
-    else:
-        _n_para = n_im-1 if n_para > n_im-1 else n_para
+    #%% Output png images and residuals info
+    if not nopngs:
+        ### Incremental displacement
+        _n_para = n_im - 1 if n_para > n_im - 1 else n_para
         print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
         # p = q.Pool(_n_para)
         # p.map(inc_png_wrapper, range(n_im-1))
         # p.close()
         # Create a list of (imx, sbovl) pairs for each index
         args_list = [(imx, sbovl) for imx in range(n_im - 1)]
-    
+
         with q.Pool(_n_para) as p:
             p.starmap(inc_png_wrapper, args_list)
-
 
     ### Residual for each ifg. png and txt.
     with open(restxtfile, "w") as f:
         print('# RMS of residual (mm)', file=f)
     _n_para = n_ifg if n_para > n_ifg else n_para
-    print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
     p = q.Pool(_n_para)
-    p.map(resid_png_wrapper, range(n_ifg))
+    if nopngs:
+        print('\nOutput residuals information with {} parallel processing...'.format(_n_para), flush=True)
+        p.map(resid_txt_wrapper, range(n_ifg))
+    else:
+        print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
+        p.map(resid_png_wrapper, range(n_ifg))
     p.close()
 
     ### Velocity and noise indices
@@ -1460,7 +1472,7 @@ def count_gaps_wrapper(i):
 
     ### n_gap and gap location
 #    ns_unw_unnan4inc = (np.matmul(np.int8(G[:, :, None]), (~np.isnan(unwpatch.T))[:, None, :])).sum(axis=0, dtype=np.int16) #n_ifg, n_im-1, n_pt -> n_im-1, n_pt
-    print('patch '+str(i)+', step 1/3: gaps identification')
+    print('sub-patch '+str(i+1)+', step 1/3: gaps identification')
     ns_unw_unnan4inc = np.array([(G[:, j]*
                           (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])))
                          .sum(axis=1, dtype=np.int16) for j in range(n_im-1)])
@@ -1474,7 +1486,7 @@ def count_gaps_wrapper(i):
     # n_ifg*(n_pt,n_ifg)->(n_loop,n_pt)
     # Number of ifgs for each loop at eath point.
     # 3 means complete loop, 1 or 2 means broken loop.
-    print('patch ' + str(i) + ', step 2/3: n_ifg_noloop')
+    print('sub-patch '+str(i+1) + ', step 2/3: n_ifg_noloop')
     ns_ifg4loop = np.array([(np.abs(Aloop[j, :])*
                          (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])))
                             .sum(axis=1) for j in range(n_loop)])
@@ -1483,14 +1495,14 @@ def count_gaps_wrapper(i):
 
     # n_loop*(n_loop,n_pt)*n_pt->(n_ifg,n_pt)
     # Number of loops for each ifg at eath point.
-    print('patch ' + str(i) + ', step 3/3: n_loop per each ifg at each point')
+    print('sub-patch '+str(i+1) + ', step 3/3: n_loop per each ifg at each point')
     ns_loop4ifg = np.array([(
             (np.abs(Aloop[:, j])*bool_loop.T).T*
             (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch, j]))
             ).sum(axis=0) for j in range(n_ifg)]) #
     del bool_loop
 
-    print('patch ' + str(i) + ': indices calculated')
+    print('sub-patch '+str(i+1) + ': indices calculated')
     ns_ifg_noloop_tmp = (ns_loop4ifg==0).sum(axis=0) #n_pt
     del ns_loop4ifg
 
@@ -1577,19 +1589,25 @@ def inc_png_wrapper(imx, sbovl=False):
 
 #%%
 def resid_png_wrapper(i):
-    ifgd = ifgdates[i]
-    infile = os.path.join(resdir, '{}.res'.format(ifgd))
-    resid = io_lib.read_img(infile, length, width)
-    resid_rms = np.sqrt(np.nanmean(resid**2))
-    with open(restxtfile, "a") as f:
-        print('{} {:5.2f}'.format(ifgd, resid_rms), file=f)
-
+    ifgd, infile, resid_rms, resid = resid_txt_wrapper(i)
     pngfile = infile+'.png'
     title = 'Residual (mm) of {} (RMS:{:.2f}mm)'.format(ifgd, resid_rms)
     plot_lib.make_im_png(resid, pngfile, cmap_vel, title, -wavelength/2*1000, wavelength/2*1000)
 
     if not keep_incfile:
         os.remove(infile)
+
+
+def resid_txt_wrapper(i):
+    ifgd = ifgdates[i]
+    infile = os.path.join(resdir, '{}.res'.format(ifgd))
+    resid = io_lib.read_img(infile, length, width)
+    resid_rms = np.sqrt(np.nanmean(resid ** 2))
+    with open(restxtfile, "a") as f:
+        print('{} {:5.2f}'.format(ifgd, resid_rms), file=f)
+    if not keep_incfile:
+        os.remove(infile)
+    return ifgd, infile, resid_rms, resid
 
 
 #%% main
