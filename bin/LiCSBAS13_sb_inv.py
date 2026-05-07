@@ -1155,13 +1155,13 @@ def main(argv=None):
                 inc_patch = np.zeros((n_im-1, n_pt_all), dtype=np.float32)*np.nan
                 vel_patch = np.zeros((n_pt_all), dtype=np.float32)*np.nan
                 vconst_patch = np.zeros((n_pt_all), dtype=np.float32)*np.nan
-                if estimate_ts_errors:
-                    tsstd_patch = np.zeros((n_im-1, n_pt_all), dtype=np.float32)*np.nan
-                
                 inc_patch[:, ix_unnan_pt] = inc_tmp
                 vel_patch[ix_unnan_pt] = vel_tmp
                 vconst_patch[ix_unnan_pt] = vconst_tmp
-                tsstd_patch[:, ix_unnan_pt] = tsstd_tmp
+
+                if estimate_ts_errors:
+                    tsstd_patch = np.zeros((n_im-1, n_pt_all), dtype=np.float32)*np.nan
+                    tsstd_patch[:, ix_unnan_pt] = tsstd_tmp
 
                 ### Calculate residuals
                 res_patch = np.zeros((n_ifg, n_pt_all), dtype=np.float32)*np.nan
@@ -1255,11 +1255,9 @@ def main(argv=None):
                     res_patch[i, :].tofile(f)
 
             ## velocity and noise indecies in results dir
-            names = ['vel', 'vintercept', 'resid_rms', 'n_gap', 'n_ifg_noloop', 'maxTlen', 'gap_patch']
-            data = [vel_patch, vconst_patch, res_rms_patch, ns_gap_patch, ns_ifg_noloop_patch, maxTlen_patch, gap_patch]
-            if estimate_ts_errors:
-                names += ['tsstd_patch']
-                data += [tsstd_patch]
+            names = ['vel', 'vintercept', 'resid_rms', 'n_gap', 'n_ifg_noloop', 'maxTlen']
+            data = [vel_patch, vconst_patch, res_rms_patch, ns_gap_patch, ns_ifg_noloop_patch, maxTlen_patch]
+
             for i in range(len(names)):
                 file = os.path.join(resultsdir, names[i])
                 with open(file, openmode) as f:
@@ -1331,7 +1329,7 @@ def main(argv=None):
             cumh5.create_dataset('gap', data=gap, compression=compress)
             if estimate_ts_errors:
                 del cumh5['tsstd']
-                cumh5.create_dataset('tsstd', data=gap, compression=compress)
+                cumh5.create_dataset('tsstd', data=tsstd, compression=compress)
         if 'imdates' in cumh5:
             del cumh5['imdates']
             cumh5.create_dataset('imdates', data=[np.int32(imd) for imd in imdates])
@@ -1448,6 +1446,7 @@ def main(argv=None):
     ### Velocity and noise indices
     cmins = [None, None, None, None, None, None]
     cmaxs = [None, None, None, None, None, None]
+    names = ['vel', 'vintercept', 'resid_rms', 'n_gap', 'n_ifg_noloop', 'maxTlen']
     cmaps = [cmap_vel, cmap_vel, cmap_noise_r, cmap_noise_r, cmap_noise_r, cmap_noise]
     titles = ['Velocity (mm/yr)', 'Intercept of velocity (mm)', 'RMS of residual (mm)', 'Number of gaps in SB network', 'Number of ifgs with no loops', 'Max length of connected SB network (yr)']
 
