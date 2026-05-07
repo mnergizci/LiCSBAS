@@ -707,6 +707,7 @@ def wls_nsbas_with_error(i):
     # --- Weighting ---
     w = 1.0 / np.sqrt(np.float64(var_tmp[:, i]))
     Gall_w = Gall * w[:, np.newaxis]
+    n_im = Gall_w.shape[1] - 2
     unw_w  = unw_tmp[:, i] * w
     m = mask[:, i]  # valid rows
     try:
