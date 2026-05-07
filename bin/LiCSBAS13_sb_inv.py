@@ -1111,7 +1111,8 @@ def main(argv=None):
                 else:
                     method = 'nsbas'
                 print('...using method:   '+method+'\n', flush = True)
-
+                if estimate_ts_errors:
+                    print('...adding time series std estimates \n', flush=True)
                 # with offsets:
                 # nsbas should invert with offsets, as in cum2vel - otherwise the gaps are wrongly estimated due to wrong velocity
                 # only_sb can invert in the next step with offsets as there is no problem
