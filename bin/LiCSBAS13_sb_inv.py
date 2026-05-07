@@ -830,6 +830,9 @@ def main(argv=None):
             cumh5.create_dataset('bperp', data=bperp)
         gap = cumh5.require_dataset('gap', (n_im-1, length, width),
                                     dtype=np.int8, compression=compress)
+        if estimate_ts_errors:
+            tsstd = cumh5.require_dataset('tsstd', (n_im - 1, length, width),
+                                        dtype=np.int8, compression=compress)
         if save_mem:
             cum = cumh5.require_dataset('cum', (n_im, length, width),
                                         dtype=np.float32, compression=compress)
@@ -1312,16 +1315,23 @@ def main(argv=None):
             if not save_mem:
                 cum = np.delete(cum, i, 0)
                 gap = np.delete(gap, i-1, 0)
+                if estimate_ts_errors:
+                    tsstd = np.delete(tsstd, i-1, 0)
         n_im=len(imdates)
         if save_mem:
             print('removing listed epochs from h5 file')
             update_epochs_i.sort() # probably not needed
             remove_indices_from_dataset(cumh5, 'cum', update_epochs_i)
             remove_indices_from_dataset(cumh5, 'gap', np.array(update_epochs_i)-1)
+            if estimate_ts_errors:
+                remove_indices_from_dataset(cumh5, 'tsstd', np.array(update_epochs_i) - 1)
         else:
             # we use 'gap' directly from h5 file, so we need to physically update the loaded fixed version:
             del cumh5['gap']
             cumh5.create_dataset('gap', data=gap, compression=compress)
+            if estimate_ts_errors:
+                del cumh5['tsstd']
+                cumh5.create_dataset('tsstd', data=gap, compression=compress)
         if 'imdates' in cumh5:
             del cumh5['imdates']
             cumh5.create_dataset('imdates', data=[np.int32(imd) for imd in imdates])
