@@ -797,6 +797,10 @@ def main(argv=None):
                 vconst[:processed_rows, :] = vconst_tmp.reshape((processed_rows, width))
                 cumh5 = h5.File(cumh5file, 'r+')
                 gap = cumh5.require_dataset('gap', (n_im-1, length, width), dtype=np.int8, compression=compress)
+                try:
+                    tsstd = cumh5.require_dataset('tsstd', (n_im - 1, length, width), dtype=np.float32, compression=compress)
+                except:
+                    pass
                 
                 print(cumh5.keys())
                 if save_mem:
@@ -832,7 +836,7 @@ def main(argv=None):
                                     dtype=np.int8, compression=compress)
         if estimate_ts_errors:
             tsstd = cumh5.require_dataset('tsstd', (n_im - 1, length, width),
-                                        dtype=np.int8, compression=compress)
+                                        dtype=np.float32, compression=compress)
         if save_mem:
             cum = cumh5.require_dataset('cum', (n_im, length, width),
                                         dtype=np.float32, compression=compress)
