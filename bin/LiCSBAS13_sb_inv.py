@@ -1234,6 +1234,9 @@ def main(argv=None):
             gap[:, rows[0]:rows[1], :] = gap_patch.reshape((n_im-1, lengththis, width))
             if estimate_ts_errors:
                 tsstd[:, rows[0]:rows[1], :] = tsstd_patch.reshape((n_im-1, lengththis, width))
+                # additionally may need to set nan for cum nans - but keeping it for now (informative?)
+                # cumclip = cum[1:, rows[0]:rows[1], :]
+                # tsstd[:, rows[0]:rows[1], :][np.isnan(cumclip)] = np.nan
 
             if store_patches and not save_mem:
                 with open(cumfile, 'w') as f:
