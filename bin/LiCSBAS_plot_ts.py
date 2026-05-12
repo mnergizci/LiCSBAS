@@ -249,6 +249,7 @@ if __name__ == "__main__":
     absolute= False
     novel_flag = False
     raw_flag = False
+    tsstd = None
 
     dem_background = False
     ##--cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
@@ -423,6 +424,10 @@ if __name__ == "__main__":
     except:
         gap = []
         print('No gap field found in {}. Skip.'.format(cumfile))
+
+    if 'tsstd' in cumh5:
+        tsstd = cumh5['tsstd']
+        print('Found std estimates - adding to plot')
 
     try:
         geocod_flag = True
@@ -1102,6 +1107,10 @@ if __name__ == "__main__":
                 dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
                 #dcum_ref = 0
                 dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
+                #if tsstd is not None:
+                #    stds_ref = tsstd_ref[ii, jj]-np.nanmean(tsstd_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
+                #    stds = np.abs(tsstd[:, ii, jj] - np.nanmean(tsstd[:, refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2],
+                #                                      axis=(1, 2)) - stds_ref)
             else:
                 vel1p = vel[ii, jj]
                 dph = cum_abs[:, ii, jj] - cum_abs_ref[ii, jj]
@@ -1149,6 +1158,12 @@ if __name__ == "__main__":
                 dphf = cumname3[:, ii, jj]-np.nanmean(cumname3[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcumname3_ref
                 axts.scatter(imdates_dt, dphf, c='purple', label=label4, alpha=0.6, zorder=4)
                 # axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+
+            if tsstd is not None:
+                # how to refer this to ref point?
+                stds = tsstd[:, ii, jj]
+                axts.fill_between(imdates_dt[1:], dphf - stds, dphf + stds, color='red',alpha=0.25,linewidth=0,zorder=3,label='±1σ')
+                # axts.scatter(imdates_dt[1:], stds, c='purple', label='1-sigma', alpha=0.6, zorder=4)
 
             ## gap
             if gap:
