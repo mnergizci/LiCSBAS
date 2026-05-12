@@ -1107,13 +1107,20 @@ if __name__ == "__main__":
                 dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
                 #dcum_ref = 0
                 dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
-                #if tsstd is not None:
-                #    stds_ref = tsstd_ref[ii, jj]-np.nanmean(tsstd_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
-                #    stds = np.abs(tsstd[:, ii, jj] - np.nanmean(tsstd[:, refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2],
-                #                                      axis=(1, 2)) - stds_ref)
+                if tsstd is not None:
+                    std_ref = tsstd[:,refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2] # but then i get zeroes there?
+                    std_ref[std_ref==0] = np.nan
+                    if np.isnan(std_ref).all():
+                        std_ref = 0
+                    else:
+                        std_ref = np.sqrt(np.nansum(std_ref**2, axis=(1, 2))) / np.sum(~np.isnan(std_ref), axis=(1, 2))
+                    #
+                    std_point = np.sqrt(tsstd[:,ii,jj] ** 2 + std_ref ** 2)
             else:
                 vel1p = vel[ii, jj]
-                dph = cum_abs[:, ii, jj] - cum_abs_ref[ii, jj]
+                dph = cum_abs[:, ii, jj] # - cum_abs_ref[ii, jj]
+                if tsstd is not None:
+                    std_point = tsstd[:, ii, jj]
             ## fit function
             lines1 = [0, 0, 0, 0]
             xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
@@ -1135,8 +1142,8 @@ if __name__ == "__main__":
                     dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
                 else:
                     vel2p = vel2[ii, jj]
-                    dcum2_ref = cum2_ref[ii, jj]
-                    dphf = cum2[:, ii, jj] - dcum2_ref
+                    # dcum2_ref = cum2_ref[ii, jj]
+                    dphf = cum2[:, ii, jj] # - dcum2_ref
                 ## fit function
                 lines2 = [0, 0, 0, 0]
                 for model, vis in enumerate(visibilities):
@@ -1148,10 +1155,7 @@ if __name__ == "__main__":
                     axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
 
             if tsstd is not None:
-                # how to refer this to ref point?
-                stds = tsstd[:, ii, jj]
-                #
-                axts.errorbar(imdates_dt[1:], dph[1:], yerr=2*stds,
+                axts.errorbar(imdates_dt[1:], dph[1:], yerr=2*std_point,
                             fmt='none', ecolor='blue', capsize = 3, zorder=3, alpha=0.5, label='±2σ')
                 #
                 #axts.fill_between(imdates_dt[1:], dph[1:] - 2*stds, dph[1:] + 2*stds, color='blue',alpha=0.25,linewidth=0,zorder=3,
@@ -1367,7 +1371,7 @@ if __name__ == "__main__":
                     iono2_ref_value = iono2_ref[ii, jj]-np.nanmean(iono2_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
                     iono2_adjusted = iono2[:, ii, jj]-np.nanmean(iono2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - iono2_ref_value
                 else:
-                    iono2_adjusted = iono2[:, ii, jj]-iono2_ref[ii, jj]
+                    iono2_adjusted = iono2[:, ii, jj] #-iono2_ref[ii, jj]
                 # Plot adjusted iono2 correction
                 axts_corr.scatter(imdates_dt, iono2_adjusted, label=label_iono2, c='red', alpha=0.8, zorder=4, marker="p")  # Purple
                 axts_corr.plot(imdates_dt, iono2_adjusted, color='red', alpha=0.8, linestyle='-', zorder=4)  # Purple line       
@@ -1382,7 +1386,7 @@ if __name__ == "__main__":
                 dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
             else:
                 vel1p = vel[ii, jj]
-                dph = cum_abs[:, ii, jj] - cum_abs_ref[ii, jj]
+                dph = cum_abs[:, ii, jj] # - cum_abs_ref[ii, jj]
             ## fit function
             lines1 = [0, 0, 0, 0]
             xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
