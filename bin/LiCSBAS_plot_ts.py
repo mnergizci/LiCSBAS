@@ -1150,8 +1150,16 @@ if __name__ == "__main__":
             if tsstd is not None:
                 # how to refer this to ref point?
                 stds = tsstd[:, ii, jj]
-                axts.fill_between(imdates_dt[1:], dph[1:] - 2*stds, dph[1:] + 2*stds, color='blue',alpha=0.25,linewidth=0,zorder=3,label='±2σ')
+                #
+                axts.errorbar(imdates_dt[1:], dph[1:], yerr=2*stds,
+                            fmt='none', ecolor='blue', capsize = 3, zorder=3, alpha=0.5, label='±2σ')
+                #
+                #axts.fill_between(imdates_dt[1:], dph[1:] - 2*stds, dph[1:] + 2*stds, color='blue',alpha=0.25,linewidth=0,zorder=3,
+                #                  label='±2σ')
                 # axts.scatter(imdates_dt[1:], stds, c='purple', label='1-sigma', alpha=0.6, zorder=4)
+                if not ylen:
+                    vlim = [np.nanmin(dph) - 5, np.nanmax(dph) + 5]
+                    axts.set_ylim(vlim)
 
             if cum_name2:
                 dcumname2_ref = cumname2_ref[ii, jj]-np.nanmean(cumname2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
