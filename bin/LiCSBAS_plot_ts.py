@@ -1146,7 +1146,13 @@ if __name__ == "__main__":
                 if not novel_flag:
                     axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
                     axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
-            
+
+            if tsstd is not None:
+                # how to refer this to ref point?
+                stds = tsstd[:, ii, jj]
+                axts.fill_between(imdates_dt[1:], dph - stds, dph + stds, color='blue',alpha=0.25,linewidth=0,zorder=3,label='±1σ')
+                # axts.scatter(imdates_dt[1:], stds, c='purple', label='1-sigma', alpha=0.6, zorder=4)
+
             if cum_name2:
                 dcumname2_ref = cumname2_ref[ii, jj]-np.nanmean(cumname2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
                 dphf = cumname2[:, ii, jj]-np.nanmean(cumname2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcumname2_ref
@@ -1159,11 +1165,7 @@ if __name__ == "__main__":
                 axts.scatter(imdates_dt, dphf, c='purple', label=label4, alpha=0.6, zorder=4)
                 # axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
 
-            if tsstd is not None:
-                # how to refer this to ref point?
-                stds = tsstd[:, ii, jj]
-                axts.fill_between(imdates_dt[1:], dphf - stds, dphf + stds, color='red',alpha=0.25,linewidth=0,zorder=3,label='±1σ')
-                # axts.scatter(imdates_dt[1:], stds, c='purple', label='1-sigma', alpha=0.6, zorder=4)
+
 
             ## gap
             if gap:
