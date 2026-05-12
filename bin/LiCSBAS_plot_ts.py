@@ -1150,7 +1150,7 @@ if __name__ == "__main__":
             if tsstd is not None:
                 # how to refer this to ref point?
                 stds = tsstd[:, ii, jj]
-                axts.fill_between(imdates_dt[1:], dph - stds, dph + stds, color='blue',alpha=0.25,linewidth=0,zorder=3,label='±1σ')
+                axts.fill_between(imdates_dt[1:], dph[1:] - 2*stds, dph[1:] + 2*stds, color='blue',alpha=0.25,linewidth=0,zorder=3,label='±2σ')
                 # axts.scatter(imdates_dt[1:], stds, c='purple', label='1-sigma', alpha=0.6, zorder=4)
 
             if cum_name2:
