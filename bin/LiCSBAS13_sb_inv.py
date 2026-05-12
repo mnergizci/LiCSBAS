@@ -1238,7 +1238,7 @@ def main(argv=None):
                 cumclip = cum[1:, rows[0]:rows[1], :]
                 gapclip = gap[:, rows[0]:rows[1], :]
                 # tsmask = (gapclip == 0) & np.isnan(cumclip)
-                tsmask = (gapclip == 1) or np.isnan(cumclip)
+                tsmask = (gapclip == 1) | np.isnan(cumclip)
                 tsstd[:, rows[0]:rows[1], :][tsmask] = np.nan
 
             if store_patches and not save_mem:
