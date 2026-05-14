@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 v1.0.0 20220802 Yu Morishita
+(originally from https://github.com/yumorishita/LiCSBASpatch_AIST_ALOS )
+
+Please find the ALOS ifgs map here to identify frame IDs:
+https://yumorishita.github.io/gsimaps/#3/20.715015/12.128906/&base=blank&ls=blank%7Copenstreetmap%7Cgeojson_ALOSframeA343_group%7Cgeojson_ALOSframeAothers_group%7Cgeojson_ALOSframeD343_group%7Cgeojson_ALOSframeDothers_group&blend=0&disp=111000&lcd=openstreetmap&vs=c1g1j0h0k0l0u0t0z0r0s0m0f1&d=m
 
 ============
 Output files
@@ -108,7 +112,8 @@ def main(argv=None):
 
     # %% Setting
     q = multi.get_context('fork')
-    gunw_url = 'https://s3.abci.ai/palsar-insar-pds/P1INSAR/GUNW/'
+    # gunw_url = 'https://s3.abci.ai/palsar-insar-pds/P1INSAR/GUNW/'
+    gunw_url = 'https://gsrt.digiarc.aist.go.jp/pds/palsar-insar-pds/P1INSAR/GUNW/'
     doc_url = 'https://gsrt.digiarc.aist.go.jp/insarbrowser/doc/'
 
 
