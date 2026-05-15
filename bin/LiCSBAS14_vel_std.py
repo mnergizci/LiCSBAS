@@ -215,6 +215,9 @@ def main(argv=None):
                 row_ex2 = 0 if i == len(patchrow)-1 else 1 ## last patch
 
                 _cum = cum[:, rows[0]-row_ex1:rows[1]+row_ex2, :].reshape(n_im, lengththis+row_ex1+row_ex2, width)
+                # fixing situation with first epoch having missing bursts (thus nans) - testing now
+                _cum[0,:,:] = 0.0
+                _cum[0, :, :][np.all(np.isnan(_cum[:, :, :]), axis=0)] = 0.0
 
                 ### Calc STC
                 stc = inv_lib.calc_stc(_cum, gpu=gpu)[row_ex1:lengththis+row_ex1, :] ## original length
