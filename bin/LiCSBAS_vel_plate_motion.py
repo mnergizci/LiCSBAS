@@ -12,13 +12,13 @@ Finally, note it expects you to have the filtered masked velocity calculated, i.
 =====
 Usage
 =====
-LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--plate Eurasia] [--vstd_fix] [--keep_absolute] [--azimuth]
+LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--plate auto] [--vstd_fix] [--keep_absolute] [--azimuth]
 
  -t TS_GEOC_dir  TS folder with finished processing including step 16 (mandatory)
  -f frame_ID  In case your GEOC folder does not contain ENU tif files, provide frame ID
  -o  Output tif file (Default: vel_pmm_fixed.tif)
- --plate  Fix to given plate (Default: Eurasia) - must be one of:
-  ['Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia', 'Pacific', 'SouthAmerica', 'Somalia']
+ --plate  Fix to given plate (Default: auto - based on centre coordinates) - must be one of:
+  ['auto', 'Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia', 'Pacific', 'SouthAmerica', 'Somalia']
  --vstd_fix  Would also perform reference fix in vstd
  --keep_absolute  Do not fix to a reference point
  --azimuth   Use ENU files for azimuth directions (for sbovls)
@@ -70,7 +70,9 @@ def main(argv=None):
     sbovl = False
     sbovl_abs = False  # if True, absolute velocity will be kept, otherwise it will be fixed to the reference area selected at step 16
     input = 'vel.filt.mskd'
-    plate = 'Eurasia'
+    plate = 'auto'
+    plates = ['auto', 'Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia',
+              'Pacific', 'SouthAmerica', 'Somalia']
     #%% Read options
     try:
         try:
@@ -122,7 +124,6 @@ def main(argv=None):
                     raise Usage(f'Error, the {input} file does not exist - please check SBOI processing.')
             else:
                 raise Usage('Error, the vel_filt.mskd file does not exist - please finish processing incl step 16')
-        plates = ['Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia', 'Pacific', 'SouthAmerica', 'Somalia']
         if plate not in plates:
             raise Usage('Error, please choose one of plates: '+plates)
     except Usage as err:
@@ -133,6 +134,29 @@ def main(argv=None):
 
     print(f'{input} will be processed for plate motion correction')
     #%%
+    vel_tiffile = tsdir + '/results/' + input + '.tif'
+    if plate == 'auto':
+        print('loading additional libraries')
+        try:
+            import rioxarray
+        except:
+            raise RuntimeError('please install rioxarray')
+        try:
+            from licsbas_mintpy_PMM import get_plate_in_coord
+        except:
+            raise RuntimeError('please install licsar_extra')
+        print('We will identify the plate based on centre lon, lat')
+        vel = rioxarray.open_rasterio(vel_tiffile)
+        clon, clat = float(vel.x.mean()), float(vel.y.mean())
+        vel.close()
+        plate = get_plate_in_coord(clon, clat)
+        if not plate:
+            raise Usage('No plate was found at the central coordinates - please set manually')
+        print('Identified plate: '+plate)
+        if plate not in plates:
+            raise Usage('The selected plate is not supported')
+        print('')
+
     #vfilt_file = tsdir+'/results/vel_filt.mskd'
     platesm = plate.lower()
     if sbovl:
@@ -140,7 +164,6 @@ def main(argv=None):
     else:
         vel_platefile = tsdir+'/results/vel_'+platesm+'_los.tif'
     vel_plate = lts.generate_pmm_velocity(frame, plate, 'GEOC', vel_platefile, azi=sbovl)
-    vel_tiffile = tsdir+'/results/'+input+'.tif'
     # if not os.path.exists(vel_tiffile):   # why not to regenerate it....
     cmd = 'LiCSBAS_flt2geotiff.py -i {0}/results/{1} -p {0}/info/EQA.dem_par -o {2}'.format(tsdir, input, vel_tiffile)
     os.system(cmd)

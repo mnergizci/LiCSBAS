@@ -125,7 +125,8 @@ def make_sb_matrix_epochs(ifgdates):
 
 
 def invert_unws(unw, G, dt_cum, gamma, n_core, gpu, dt_offsets = None,
-                wvars = None, method = 'nsbas', inv_alg = 'LS'):
+                wvars = None, method = 'nsbas', inv_alg = 'LS',
+                estimate_ts_errors = False):
     ''' Passing to the requested inversion method.
 
     Inputs:
@@ -140,11 +141,13 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu, dt_offsets = None,
       wvars (None or np.array): variances used to form weights for the (optional) WLS
       method (str): one of following methods: 'nsbas', 'singular', 'singular_gauss', 'only_sb'
       inv_alg (str): either 'LS' or 'WLS'
+      estimate_ts_errors (bool): if True, will also estimate TS errors - 202605: now only for WLS (preferred)
 
     Returns:
       inc     : Incremental displacement (n_im-1, n_pt)
       vel     : Velocity (n_pt)
       vconst  : Constant part of linear velocity (c of vt+c) (n_pt)
+      [tsstd  : in case of WLS and estimate_ts_errors]
     '''
     if (gpu and (method[:5] != 'nsbas')):
         print('WARNING, non-NSBAS methods were not tested on GPUs')
@@ -153,7 +156,7 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu, dt_offsets = None,
         if inv_alg == 'LS':
             return invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu)
         elif inv_alg == 'WLS':
-            return invert_nsbas_wls(unw, wvars, G, dt_cum, gamma, n_core)
+            return invert_nsbas_wls(unw, wvars, G, dt_cum, gamma, n_core, estimate_ts_errors = estimate_ts_errors)
     elif method == 'only_sb':
         return invert_singular(unw, G, dt_cum, n_core, wvars = wvars, only_sb=True)
     elif method == 'singular_gauss':
@@ -592,7 +595,7 @@ reverting back to numpy solution
 '''
 
 #%%
-def invert_nsbas_wls(unw, var, G, dt_cum, gamma, n_core):
+def invert_nsbas_wls(unw, var, G, dt_cum, gamma, n_core, estimate_ts_errors = False):
     """
     Calculate increment displacement difference by NSBAS inversion with WLS.
 
@@ -604,11 +607,13 @@ def invert_nsbas_wls(unw, var, G, dt_cum, gamma, n_core):
       dt_cum : Cumulative years(or days) for each image (n_im)
       gamma  : Gamma value for NSBAS inversion, should be small enough (e.g., 0.0001)
       n_core : Number of cores for parallel processing
+      estimate_ts_errors : This would also estimate and return inverted time series errors
 
     Returns:
       inc     : Incremental displacement (n_im-1, n_pt)
       vel     : Velocity (n_pt)
       vconst  : Constant part of linear velocity (c of vt+c) (n_pt)
+      [tsstd  : Time series errors estimated through BLUE approach]
     """
     global Gall, unw_tmp, var_tmp, mask ## for para_wrapper
 
@@ -617,7 +622,9 @@ def invert_nsbas_wls(unw, var, G, dt_cum, gamma, n_core):
     n_im = G.shape[1]+1
 
     result = np.zeros((n_im+1, n_pt), dtype=np.float32)*np.nan #[inc, vel, const]
-
+    if estimate_ts_errors:
+        tsstd  = np.zeros((n_im - 1, n_pt), dtype=np.float32)*np.nan
+    
     ### Set matrix of NSBAS part (bottom)
     Gbl = np.tril(np.ones((n_im, n_im-1), dtype=np.float32), k=-1) #lower tri matrix without diag
     Gbr = -np.ones((n_im, 2), dtype=np.float32)
@@ -632,24 +639,40 @@ def invert_nsbas_wls(unw, var, G, dt_cum, gamma, n_core):
     mask = (~np.isnan(unw_tmp))
     unw_tmp[np.isnan(unw_tmp)] = 0
     var_tmp = np.concatenate((var, 50*np.ones((n_pt, n_im), dtype=np.float32)), axis=1).transpose() #50 is var for coh=0.1, to scale bottom part of Gall
-
+    #
     if n_core == 1:
         for i in range(n_pt):
-            result[:, i] = wls_nsbas(i) #(n_im+1, n_pt)
+            if estimate_ts_errors:
+                X, ts_std = wls_nsbas_with_error(i)
+                result[:, i] = X
+                tsstd[:, i]  = ts_std
+            else:
+                result[:, i] = wls_nsbas(i) #(n_im+1, n_pt)
     else:
         print('  {} parallel processing'.format(n_core), flush=True)
 
         args = [i for i in range(n_pt)]
         q = multi.get_context('fork')
         p = q.Pool(n_core)
-        _result = p.map(wls_nsbas, args) #list[n_pt][length]
-        result = np.array(_result).T
-
+        if estimate_ts_errors:
+            _out = p.map(wls_nsbas_with_error, args)
+            for i, (X, ts_std) in enumerate(_out):
+                result[:, i] = X
+                tsstd[:, i]  = ts_std
+        else:
+            _result = p.map(wls_nsbas, args) #list[n_pt][length]
+            result = np.array(_result).T
+        p.close()
+        p.join()
+    
     inc = result[:n_im-1, :]
     vel = result[n_im-1, :]
     vconst = result[n_im, :]
-
-    return inc, vel, vconst
+    
+    if estimate_ts_errors:
+        return inc, vel, vconst, tsstd
+    else:
+        return inc, vel, vconst
 
 
 def wls_nsbas(i):
@@ -668,6 +691,69 @@ def wls_nsbas(i):
     except:
         X = np.zeros((Gall.shape[1]), dtype=np.float32)*np.nan
     return X
+
+
+def wls_nsbas_with_error(i):
+    """
+    (supported by Copilot)
+    Returns:
+        X       : NSBAS solution vector
+                  [increments (n_im-1), velocity, constant]
+        ts_std  : Standard deviation per epoch (n_im-1)
+    """
+    # Use global Gall, unw_tmp, var_tmp, mask, n_im
+    if np.mod(i, 1000) == 0:
+        print(f'  Running {i:6}/{unw_tmp.shape[1]:6}th point...', flush=True)
+    # --- Weighting ---
+    w = 1.0 / np.sqrt(np.float64(var_tmp[:, i]))
+    Gall_w = Gall * w[:, np.newaxis]
+    n_im = Gall_w.shape[1] - 1
+    unw_w  = unw_tmp[:, i] * w
+    m = mask[:, i]  # valid rows
+    try:
+        # --- Solve WLS ---
+        X = np.linalg.lstsq(Gall_w[m], unw_w[m], rcond=None)[0]
+
+        # --- Posterior covariance of parameters ---
+        GTWG = Gall_w[m].T @ Gall_w[m]
+        try:
+            Cx = np.linalg.inv(GTWG)
+        except:
+            Cx = np.linalg.pinv(GTWG, rcond=1e-10)
+        # --- Extract increment covariance ---
+        Cm = Cx[:n_im-1, :n_im-1]
+        # --- Time integration matrix ---
+        # u_k = sum_{j<=k} inc_j
+        A = np.tril(np.ones((n_im-1, n_im-1), dtype=np.float64))
+        # --- Propagate covariance ---
+        Cu = A @ Cm @ A.T
+        ts_std = np.sqrt(np.diag(Cu))
+    except Exception:
+        X = np.full(Gall.shape[1], np.nan, dtype=np.float32)
+        ts_std = np.full(n_im-1, np.nan, dtype=np.float32)
+    return X, ts_std
+
+
+'''
+# Weight matrix (diagonal)
+W = np.diag(1.0 / var)
+
+GTWG = G.T @ W @ G
+Cm = np.linalg.inv(GTWG)
+
+# Optional variance scaling using residuals
+resid = unw - G @ inc
+sigma0_sq = (resid.T @ W @ resid) / (len(unw) - G.shape[1])
+Cm *= sigma0_sq
+
+# Increment std
+inc_std = np.sqrt(np.diag(Cm))
+
+# Time series covariance
+A = np.tril(np.ones((G.shape[1]+1, G.shape[1])))
+Cu = A @ Cm @ A.T
+ts_std = np.sqrt(np.diag(Cu))
+'''
 
 
 #%%
