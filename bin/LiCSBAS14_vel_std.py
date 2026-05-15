@@ -216,8 +216,7 @@ def main(argv=None):
 
                 _cum = cum[:, rows[0]-row_ex1:rows[1]+row_ex2, :].reshape(n_im, lengththis+row_ex1+row_ex2, width)
                 # fixing situation with first epoch having missing bursts (thus nans) - testing now
-                _cum[0,:,:] = 0.0
-                _cum[0, :, :][np.all(np.isnan(_cum[:, :, :]), axis=0)] = 0.0
+                #_cum[0, :, :][np.all(np.isnan(_cum), axis=0)] = 0.0
 
                 ### Calc STC
                 stc = inv_lib.calc_stc(_cum, gpu=gpu)[row_ex1:lengththis+row_ex1, :] ## original length
@@ -232,7 +231,10 @@ def main(argv=None):
                 #%% Calc vstd
                 ### Read data for vstd
                 n_pt_all = lengththis*width
-                cum_patch = cum[:, rows[0]:rows[1], :].reshape((n_im, n_pt_all)).transpose() #(n_pt_all, n_im)
+                # fixing situation with first epoch having missing bursts (thus nans)
+                _cum = cum[:, rows[0]:rows[1], :]
+                _cum[0, :, :][~np.all(np.isnan(_cum), axis=0)] = 0.0
+                cum_patch = _cum.reshape((n_im, n_pt_all)).transpose() #(n_pt_all, n_im)
 
                 ### Remove invalid points
                 bool_unnan_pt = ~np.isnan(cum_patch[:, 0])
@@ -248,7 +250,7 @@ def main(argv=None):
                 print('  Calculating std of velocity by bootstrap...', flush=True)
                 vstd[bool_unnan_pt], bootvel[bool_unnan_pt] = inv_lib.calc_velstd_withnan(cum_patch, dt_cum,
                                                                 gpu=gpu, bootnum=bootnum)
-
+                del _cum
                 ### Output data and image
 
                 openmode = 'w' if i == 0 else 'a' #w only 1st patch
