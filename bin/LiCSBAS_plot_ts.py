@@ -329,7 +329,7 @@ if __name__ == "__main__":
     #%% Set cmap
     cmap = tools_lib.get_cmap(cmap_name)
 
-
+    
     #%% Set files
     ### cumfile
     if not cumfile: ## if not given
@@ -404,7 +404,7 @@ if __name__ == "__main__":
     else:
         LOSuflag = True
 
-
+    
     #%% Read data
     ### cumfile
     print('\nReading {}'.format(os.path.relpath(cumfile)))
@@ -441,7 +441,7 @@ if __name__ == "__main__":
         aspect = 1
         print('No latlon field found in {}. Skip.'.format(cumfile))
     
-    breakpoint()
+    
     ### Add the corrections
     if correction_flag:
         # tide correction
@@ -463,7 +463,7 @@ if __name__ == "__main__":
             print('No iono correction found in {}. Skip.'.format(cumfile))
         
         # gacos correction
-        # breakpoint()
+        # 
         try:
             gacos = cumh5['sltd'][:] #'gacos'
             label_gacos = 'Gacos correction'
@@ -495,11 +495,11 @@ if __name__ == "__main__":
             iono2 = None
             print(f'Error checking iono2 in {cumfile}: {e}')   
             
-    # breakpoint()
+    # 
     if absolute:
         cum_abs = cum_name
         vel = None
-        # breakpoint()
+        # 
         # Check for absolute displacement
         if cum_name is None:
             if 'cum_abs_notide_noiono' in cumh5:
@@ -691,7 +691,7 @@ if __name__ == "__main__":
         cumname3_ref = cumname3[ix_m, :, :]
         label4 = f'{cum_name3}'
 
-    # breakpoint()
+    # 
     #%% Read Mask (1: unmask, 0: mask, nan: no cum data)
     mask_base = np.ones((length, width), dtype=np.float32)
     mask_base[np.isnan(cum[ix_m, :, :])] = np.nan
@@ -780,7 +780,7 @@ if __name__ == "__main__":
 
     ### background DEM
     if dem_background:
-        alphamain = 0.6
+        alphamain = 0.8
         demtif=os.path.join(resultsdir,"hgt.geo.tif")
         print('Shadow DEM', demtif)
         az=-167.92738 # could rotate based on A/D
@@ -1211,8 +1211,9 @@ if __name__ == "__main__":
         axts.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
         axts_corr.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
                 
-        loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
-        try:  # Only support from Matplotlib 3.1
+        loc_ts = mdates.AutoDateLocator()
+        axts.xaxis.set_major_locator(loc_ts)
+        try:
             axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
         except:
             axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
