@@ -442,7 +442,7 @@ if __name__ == "__main__":
         print('No latlon field found in {}. Skip.'.format(cumfile))
 
     ### Add the corrections
-    if :
+    if correction_flag:
         # tide correction
         try:
             tide = cumh5['tide'][:]
