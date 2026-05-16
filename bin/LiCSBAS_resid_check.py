@@ -48,6 +48,8 @@ Outputs in TS_GEOCml*/:
  - info/
    - 11bad_ifg.txt    : Updated list of bad interferograms to be discarded
    - 11bad_ifg.txt.backup : Backup of previous bad interferogram list, or just rerun LiCSBAS11 to get original bad interferogram?
+ - TS_*/13resid_bad
+    - epoch.res.png : selected bad interferograms with their RMS values for visual inspection
 
 =====
 Usage
@@ -130,6 +132,9 @@ def main(argv=None):
     infodir = os.path.join(tsadir, 'info')
     restxtfile = os.path.join(infodir,'13resid.txt')
     badifg_file = os.path.join(infodir, '11bad_ifg.txt')
+    resid_folder = os.path.join(tsadir, '13resid')
+    resid_checked_dir = os.path.join(tsadir, '13resid_bad')
+    
 
     if not os.path.isfile(restxtfile):
         print("ERROR: Residual file {} does not exist!".format(restxtfile), flush=True)
@@ -181,6 +186,16 @@ def main(argv=None):
     bad_set.update(zero_pairs)
     bad_set.update(outlier_pairs)
     
+    #linking the selected bad interferograms for visual inspection
+    if not os.path.exists(resid_checked_dir):
+        os.makedirs(resid_checked_dir)
+    for pair in bad_set:
+        resid_file = os.path.join(resid_folder, f"{pair}.res.png")
+        if os.path.isfile(resid_file):
+            link_name = os.path.join(resid_checked_dir, f"{pair}.res.png")
+            if not os.path.exists(link_name):
+                shutil.copy2(resid_file, link_name)
+
     # # Sort and write output
     # bad_list = sorted(bad_set)
     # print(f"  Total bad interferograms: {len(bad_list)}")
