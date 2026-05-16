@@ -440,7 +440,8 @@ if __name__ == "__main__":
         geocod_flag = False
         aspect = 1
         print('No latlon field found in {}. Skip.'.format(cumfile))
-
+    
+    breakpoint()
     ### Add the corrections
     if correction_flag:
         # tide correction
