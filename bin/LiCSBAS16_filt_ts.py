@@ -67,8 +67,8 @@ LiCSBAS16_filt_ts.py -t tsadir [-s filtwidth_km] [-y filtwidth_yr] [-r deg]
  --from_model path/to/model.h5  Use externally calculated model to perform residual-based filtering (in dev further. see LiCSBAS_cum2vel.py to generate this)
  --interpolate_nans   This will use the filter to fill nan values (in unmasked data). If temporal filtering is disabled, it will use linear interpolation in space instead.
  --nopngs     Avoid generating some (unnecessary) PNG previews of increment residuals etc.
- --sbovl     processing SBOI input spatio-temporal filter.
- --sbovl_abs recalculate the absolute velocity of sbovl, referecing steps are skipped!
+ --sboi     processing SBOI input spatio-temporal filter.
+ --sboi_abs recalculate the absolute velocity of sboi, referecing steps are skipped!
  --naming   save the cum_filt with spatial and temporal filter size like cum_filt_s{spatial_kernel_size(km)}_t{temporal_width(day)}.h5
 Note: Spatial filter consume large memory. If the processing is stacked, try
  - --n_para 1
@@ -79,9 +79,9 @@ Note: Spatial filter consume large memory. If the processing is stacked, try
 #%% Change log
 '''
 20260517 MN
- - reordering sbovl, sbovl_abs and removing the tide and iono flags: these correction will applied right after step13 before the bootstraping.
+ - reordering sboi, sboi_abs and removing the tide and iono flags: these correction will applied right after step13 before the bootstraping.
 20250211 MN
- - added sbovl, tide and iono flags for Burst overlap interferometry in LiCSBAS.
+ - added sboi, tide and iono flags for Burst overlap interferometry in LiCSBAS.
 20241107 ML
  - added interpolate_nans and updated masking of final cum_filt data
 20241029 Milan Lazecky
@@ -187,8 +187,8 @@ def main(argv=None):
     inputresidflag = False
     interpolateflag = False
     gpu = False
-    sbovl = False
-    sbovl_abs = False
+    sboi = False
+    sboi_abs = False
     tide = False
     iono = False
     naming = False
@@ -222,7 +222,7 @@ def main(argv=None):
             opts, args = getopt.getopt(argv[1:], "ht:s:y:r:",
                            ["help", "demerr", "hgt_linear", "hgt_min=", "hgt_max=",
                             "nomask", "interpolate_nans", "nofilter", "n_para=", "range=", "range_geo=",
-                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sbovl", "sbovl_abs", "naming"])
+                            "ex_range=", "ex_range_geo=", "gpu", "from_model=", "nopngs", "sboi", "sboi_abs", "naming"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -265,11 +265,11 @@ def main(argv=None):
                 gpu = True
             elif o == '--nopngs':
                 nopngs = True
-            elif o == '--sbovl':
-                sbovl = True
-            elif o == '--sbovl_abs':
-                sbovl = True
-                sbovl_abs = True
+            elif o == '--sboi':
+                sboi = True
+            elif o == '--sboi_abs':
+                sboi = True
+                sboi_abs = True
             elif o == '--naming':
                 naming = True
             elif o == '--from_model':
@@ -328,7 +328,7 @@ def main(argv=None):
     if wavelength > 0.2: ## L-band
         cycle = 1.5 # 2pi/cycle for comparison png
     elif wavelength <= 0.2: ## C-band
-        if not sbovl:
+        if not sboi:
             cycle = 3 # 3*2pi/cycle for comparison png
         else:
             cycle = 3  #TODO must be around 75?? because of the SBOI? I need to check MN
@@ -348,23 +348,23 @@ def main(argv=None):
 
     #%% Dates
     imdates = cumh5['imdates'][()].astype(str).tolist()
-    if sbovl_abs:
+    if sboi_abs:
         print('absoluting mode activated.')
         if 'cum_abs' in cumh5:
             cum_org = cumh5['cum_abs'][()]
-            sbovl_suffix = '_abs'
+            sboi_suffix = '_abs'
         else:
             cum_org = cumh5['cum'][()]
-            sbovl_suffix = ''
-        print(f'suffix for sbovl_abs: {sbovl_suffix}')
+            sboi_suffix = ''
+        print(f'suffix for sboi_abs: {sboi_suffix}')
         ##redefine the output files
-        # vconstfile = os.path.join(resultsdir, f'vintercept_ransac{sbovl_suffix}.filt')
-        # velfile = os.path.join(resultsdir, f'vel_ransac{sbovl_suffix}.filt')
-        vconstfile = os.path.join(resultsdir, f'vintercept{sbovl_suffix}.filt')
-        velfile = os.path.join(resultsdir, f'vel{sbovl_suffix}.filt')
+        # vconstfile = os.path.join(resultsdir, f'vintercept_ransac{sboi_suffix}.filt')
+        # velfile = os.path.join(resultsdir, f'vel_ransac{sboi_suffix}.filt')
+        vconstfile = os.path.join(resultsdir, f'vintercept{sboi_suffix}.filt')
+        velfile = os.path.join(resultsdir, f'vel{sboi_suffix}.filt')
     else:
         cum_org = cumh5['cum'][()]
-        # if sbovl:
+        # if sboi:
         #     if tide:
         #         tide_org = cumh5['tide'][()]
         #     if iono:
@@ -372,7 +372,7 @@ def main(argv=None):
                 
     
     # #%% If tide/iono are all-NaN for an epoch, set that correction epoch to 0 (skip correction), separately for each
-    # if sbovl:
+    # if sboi:
     #     #tide
     #     if tide:
     #         tide_allnan = np.all(np.isnan(tide_org), axis=(1, 2))
@@ -395,7 +395,7 @@ def main(argv=None):
     n_im, length, width = cum_org.shape
 
     #%% tide and iono removal for sboi before filtering
-    if sbovl:
+    if sboi:
         if maskflag:
             maskfile = os.path.join(resultsdir, 'mask')
             mask = io_lib.read_img(maskfile, length, width)
@@ -408,7 +408,7 @@ def main(argv=None):
             mask = np.ones((length, width), dtype=np.float32)
             mask[np.isnan(cum_org[0, :, :])] = np.nan
         
-        if not sbovl_abs: 
+        if not sboi_abs: 
             infodir = os.path.join(tsadir, 'info')
             ref13file = os.path.join(infodir, '13ref.txt')
             ref12file = os.path.join(infodir, '12ref.txt')
@@ -510,7 +510,7 @@ def main(argv=None):
             # if iono:
             #     cum_org -= iono_org
 
-            # --- Else case for sbovl_abs (presumably)
+            # --- Else case for sboi_abs (presumably)
             else:
                 print('Skipping back referencing to stable point for SBOI + daz mode')
 
@@ -802,7 +802,7 @@ def main(argv=None):
 
     # 
     #%% Find stable ref point
-    if not sbovl_abs: 
+    if not sboi_abs: 
         print('\nFind stable reference point...', flush=True)
         ### Compute RMS of time series with reference to all points
         sumsq_cum_wrt_med = np.zeros((length, width), dtype=np.float32)
@@ -841,7 +841,7 @@ def main(argv=None):
         modelh5.close()
 
     ### Referencing cumulative displacement to new stable ref
-    if not sbovl_abs:
+    if not sboi_abs:
         refpoint_cum_filt = cum_filt[:, refy1s, refx1s]
         for i in range(n_im):
             # cum_filt[i, :, :] = cum_filt[i, :, :] - refpoint_cum_org[i]  #cum[i, refy1s, refx1s]
@@ -851,7 +851,7 @@ def main(argv=None):
     else:
         print('Skipping back referencing to stable point for SBOI + daz mode')
 
-    if not sbovl_abs: ##TODO I have closed here as I get some nan errors for SBOI 
+    if not sboi_abs: ##TODO I have closed here as I get some nan errors for SBOI 
         ### Save image
         rms_cum_wrt_med_file = os.path.join(infodir, '16rms_cum_wrt_med')
         with open(rms_cum_wrt_med_file, 'w') as f:
@@ -915,10 +915,10 @@ def main(argv=None):
         print('\n(masked version)', flush=True)
         cum_filt = cum_filt * mask[np.newaxis, :, :]
     # 
-    if sbovl_abs:
-        cumfh5.create_dataset('vel' + sbovl_suffix, data=vel.reshape(length, width)*mask, compression=compress)
-        cumfh5.create_dataset('vintercept' + sbovl_suffix, data=vconst.reshape(length, width)*mask, compression=compress)
-        cumfh5.create_dataset('cum' + sbovl_suffix, data=cum_filt, compression=compress)
+    if sboi_abs:
+        cumfh5.create_dataset('vel' + sboi_suffix, data=vel.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('vintercept' + sboi_suffix, data=vconst.reshape(length, width)*mask, compression=compress)
+        cumfh5.create_dataset('cum' + sboi_suffix, data=cum_filt, compression=compress)
     else:
         cumfh5.create_dataset('vel', data=vel.reshape(length, width)*mask, compression=compress)
         cumfh5.create_dataset('vintercept', data=vconst.reshape(length, width)*mask, compression=compress)
@@ -956,8 +956,8 @@ def main(argv=None):
 
     # 
     #%% Output image
-    if sbovl_abs:
-        pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.png')
+    if sboi_abs:
+        pngfile = os.path.join(resultsdir,f'vel{sboi_suffix}.filt.png')
     else:
         pngfile = os.path.join(resultsdir,'vel.filt.png')
     title = 'Filtered velocity (mm/yr)'
@@ -966,8 +966,8 @@ def main(argv=None):
     plot_lib.make_im_png(vel, pngfile, cmap_vel, title, vmin, vmax)
 
     ## vintercept
-    if sbovl_abs:
-        pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.png')
+    if sboi_abs:
+        pngfile = os.path.join(resultsdir,f'vintercept{sboi_suffix}.filt.png')
     else:
         pngfile = os.path.join(resultsdir,'vintercept.filt.png')
     title = 'Intercept of filtered velocity (mm)'
@@ -984,8 +984,8 @@ def main(argv=None):
 
 
     if maskflag:
-        if sbovl_abs:
-            pngfile = os.path.join(resultsdir,f'vel{sbovl_suffix}.filt.mskd.png')
+        if sboi_abs:
+            pngfile = os.path.join(resultsdir,f'vel{sboi_suffix}.filt.mskd.png')
         else:
             pngfile = os.path.join(resultsdir,'vel.filt.mskd.png')
         title = 'Masked filtered velocity (mm/yr)'
@@ -994,8 +994,8 @@ def main(argv=None):
         plot_lib.make_im_png(vel_mskd, pngfile, cmap_vel, title, vmin, vmax)
 
         ## vintercept
-        if sbovl_abs:
-            pngfile = os.path.join(resultsdir,f'vintercept{sbovl_suffix}.filt.mskd.png')
+        if sboi_abs:
+            pngfile = os.path.join(resultsdir,f'vintercept{sboi_suffix}.filt.mskd.png')
         else:
             pngfile = os.path.join(resultsdir,'vintercept.filt.mskd.png')
         title = 'Masked intercept of filtered velocity (mm)'
