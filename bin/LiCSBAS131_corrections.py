@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-
-This script applies tide, iono, and optionally GACOS corrections at cumulative level
+This script applies tide, iono, and gacos corrections at cumulative level (all optional) and calculates STD reduction diagnostics
 for LiCSBAS13 results.
 
 ===============
@@ -565,12 +564,7 @@ def main(argv=None):
     if iono:
         cum_before_iono = cum_org.copy()
 
-        # IMPORTANT:
-        # Your current script used cum_org += iono_org.
-        # Keep this if your iono dataset has the opposite sign and must be added.
-        # If iono is a delay that should be removed, change this to:
-        #     cum_after_iono = cum_org - iono_org
-        cum_after_iono = cum_org + iono_org
+        cum_after_iono = cum_org - iono_org
 
         std_before, std_after, rate = calc_std_reduction(
             cum_before_iono,
