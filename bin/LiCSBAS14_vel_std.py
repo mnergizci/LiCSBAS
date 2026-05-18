@@ -21,7 +21,7 @@ Outputs in TS_GEOCml*/results/ :
 =====
 Usage
 =====
-LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac] [--skipexisting] [--sbovl] [--sbovl_abs] 
+LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac] [--skipexisting] [--sboi] [--sboi_abs] 
 
  -t  Path to the TS_GEOCml* dir.
  -i  Path to cum file (Default: cum.h5)
@@ -29,8 +29,8 @@ LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac
  --gpu        Use GPU (Need cupy module)
  --ransac     Recalculate velocity free from outliers (use RANSAC algorithm)
  --skipexisting  Skip if exists
- --sbovl      sbovl option
- --sbovl_abs  sbovl option for recalculate the absolute velocity, this is skip for referecing step for sbovl
+ --sboi      sboi option
+ --sboi_abs  recalculate the absolute velocity of sboi, referecing steps are skipped!
  --bootnum    Number of bootstrap iterations (Default: 100)
 """
 #%% Change log
@@ -38,7 +38,7 @@ LiCSBAS14_vel_std.py -t tsadir [-i cumfile] [--mem_size float] [--gpu] [--ransac
 20250404 Muhammet Nergizci, Uni of Leeds
  - Multi-cumfile support added with suffix-based output
 20250324 Muhammet Nergizci, Uni of Leeds
- - sbovl flag adding, ransac small debug
+ - sboi flag adding, ransac small debug
 20241115 ML, UoL
  - Adding some additional layers (n_gap_merged)
 v1.3 20221115 Milan Lazecky, Uni of Leeds
@@ -92,15 +92,15 @@ def main(argv=None):
     cmap_noise_r = 'viridis_r'
     cumfile = False
     skipexisting = False
-    sbovl = False
-    sbovl_abs = False
+    sboi = False
+    sboi_abs = False
     bootnum = 100
     
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "ht:i:",
-                                       ["help", "mem_size=", "gpu", "ransac", "skipexisting", "sbovl", "sbovl_abs", "bootnum="])
+                                       ["help", "mem_size=", "gpu", "ransac", "skipexisting", "sboi", "sboi_abs", "bootnum="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -119,11 +119,11 @@ def main(argv=None):
                 ransac = True
             elif o == '--skipexisting':
                 skipexisting = True
-            elif o == '--sbovl':
-                sbovl = True
-            elif o == '--sbovl_abs':
-                sbovl = True
-                sbovl_abs = True
+            elif o == '--sboi':
+                sboi = True
+            elif o == '--sboi_abs':
+                sboi = True
+                sboi_abs = True
             elif o == '--bootnum':
                 bootnum = int(a)
 
@@ -161,9 +161,9 @@ def main(argv=None):
     imdates = cumh5['imdates'][()].astype(str).tolist()
     
     cum_keys = []
-    if sbovl_abs:
-        # Process all three if sbovl (absolute) is specified
-        for k in ['cum','cum_abs']: #TODO you can remove some of them later. Redundant but we need to try all for comparison of correction. 'cum_abs_notide','cum_abs_notide_noiono', 'cum_abs_noiono'
+    if sboi_abs:
+        # Process all three if absolute values are specified
+        for k in ['cum','cum_abs']: #TODO you can remove some of them later. Redundant but we need to try all for comparison of correction.
             if k in cumh5:
                 cum_keys.append(k)
     else:
@@ -193,7 +193,7 @@ def main(argv=None):
         
         dostc = True
         dovstd = True
-        if sbovl: #TODO you can remove it later. 
+        if sboi: #TODO you can remove it later. 
             skipexisting = False
         if skipexisting:
             if os.path.exists(stcfile):
@@ -293,7 +293,7 @@ def main(argv=None):
             
             ### Output data and image
             # Use suffix to define filenames clearly per cumulative input
-            if sbovl_abs:
+            if sboi_abs:
                 vel2file = os.path.join(resultsdir, f'vel_ransac{suffix}')
                 inter2file = os.path.join(resultsdir, f'intercept_ransac{suffix}')
                 # vstdfile = os.path.join(resultsdir, f'vstd_ransac{suffix}')
@@ -346,7 +346,7 @@ def main(argv=None):
             plot_lib.make_im_png(bootvel, bootvelfile + '.png', cmap_vel, title, cmin, cmax)
             
             #saving bootvel to the cum_file
-            if sbovl_abs:
+            if sboi_abs:
                 print(f' Saving {bootvelfile} into cum.h5...', flush=True)
                 with h5.File(cumfile, 'a') as f:
                     dataset_name = f'vel{suffix}'
@@ -356,7 +356,7 @@ def main(argv=None):
                     f.create_dataset(dataset_name, data=bootvel.reshape((length, width)), dtype='float32')
     
         if ransac:
-            if sbovl_abs:
+            if sboi_abs:
                 vel2file = os.path.join(resultsdir, f'vel_ransac{suffix}')
                 inter2file = os.path.join(resultsdir, f'intercept_ransac{suffix}')
             else:
@@ -371,7 +371,7 @@ def main(argv=None):
             plot_lib.make_im_png(vel2, pngfile, cmap_vel, title, cmin, cmax)
             
             #saving the cum_file
-            if sbovl_abs:
+            if sboi_abs:
                 print(f' Saving vel_ransac{suffix} into cum.h5...', flush=True)
                 print('Please keep in mind if ransac is used, the cum.h5 file will be overwritten with the new velocity estimates not bootvel estimates')
                 with h5.File(cumfile, 'a') as f:
