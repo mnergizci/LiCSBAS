@@ -3,7 +3,7 @@
 ========
 Overview
 ========
-This script checks the LiCSBAS13 residual statistics for sbovl data and
+This script checks the LiCSBAS13 residual statistics for SBOI data and
 updates the list of bad interferograms to be discarded before rerunning
 LiCSBAS13.
 
@@ -58,6 +58,8 @@ LiCSBAS11_check_unw.py -t TS_GEOCml*
 """
 #%% Change log
 '''
+Muhammet Nergizci-COMET, Leeds, 2026-05-18
+- turn the 95 percentile thresholding as default as the histogram is skewed.
 Muhammet Nergizci-COMET, Leeds, 2026-05-05
 - Updates the Overview, create the backup and screen the selected bad interferograms.
 Muhammet Nergizci-COMET, Leeds, 2025-08-07
@@ -72,10 +74,7 @@ import sys
 import time
 import shutil
 import numpy as np
-import datetime as dt
-import LiCSBAS_io_lib as io_lib
-import LiCSBAS_tools_lib as tools_lib
-import LiCSBAS_plot_lib as plot_lib
+import matplotlib.pyplot as plt
 from scipy import stats
 
 class Usage(Exception):
@@ -107,6 +106,7 @@ def main(argv=None):
 
     #%% Set default
     tsadir = []
+    sigma2_threshold = False
  
     #%% Read options
   
@@ -162,11 +162,16 @@ def main(argv=None):
     valid_mask = rms_values != 0.0
     pairs = pairs[valid_mask]
     rms_values = rms_values[valid_mask]
-
+    # breakpoint()
     # Thresholding
-    mean = np.mean(rms_values)
-    std = np.std(rms_values)
-    threshold = mean + 2 * std
+    if sigma2_threshold:
+        mean = np.mean(rms_values)
+        std = np.std(rms_values)
+        threshold = mean + 2 * std
+    
+    else:
+        # percentile-based thresholding (alternative)
+        threshold = np.percentile(rms_values, 95)
 
     outlier_indices = np.where(rms_values > threshold)[0]
     outlier_pairs = pairs[outlier_indices]
@@ -185,6 +190,20 @@ def main(argv=None):
     bad_set = set()
     bad_set.update(zero_pairs)
     bad_set.update(outlier_pairs)
+    
+    #plot histogram of RMS values with threshold
+    plt.figure(figsize=(10,6))
+    plt.hist(rms_values, bins=30, color='blue', alpha=0.7, label='RMS values')
+    plt.axvline(threshold, color='red', linestyle='dashed', linewidth=2, label=f'Threshold = {threshold:.4f}')
+    plt.xlabel('RMS Value')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of Residual RMS Values')
+    plt.legend()
+    plt.grid()
+    plt.tight_layout()
+    hist_file = os.path.join(infodir, '13resid_histogram.png')
+    plt.savefig(hist_file)
+    print(f"\nHistogram of RMS values saved to: {hist_file}")
     
     #linking the selected bad interferograms for visual inspection
     if not os.path.exists(resid_checked_dir):
@@ -211,9 +230,12 @@ def main(argv=None):
     existing_pairs = set()
     if os.path.exists(badifg_file):
         #create backup
-        backup_file = badifg_file + f".backup" 
-        shutil.copy2(badifg_file, backup_file)
-        print(f"Backup created: {backup_file}")
+        backup_file = badifg_file + f".backup"
+        if os.path.exists(backup_file):
+            print(f"Backup already exists: {backup_file}")
+        else:
+            shutil.copy2(badifg_file, backup_file)
+            print(f"Backup created: {backup_file}")
         # Read existing bad interferograms
         with open(badifg_file, 'r') as f:
             for line in f:
