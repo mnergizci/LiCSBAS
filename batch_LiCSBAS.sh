@@ -690,7 +690,9 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
           echo 'python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GACOS', 'sltd.geo.tif', -55.465/(4*np.pi), directcorrect = False, sboi=False)"'
         fi
       fi
-      echo "LiCSBAS131_corrections.py $extra"
+      if [[ "$extra" == *"--tide"* || "$extra" == *"--iono"* || "$extra" == *"--gacos"* ]]; then
+        echo "LiCSBAS131_corrections.py $extra"
+      fi
     else
       if [ "$p131_tide" == "y" ]; then
         extra="$extra --tide"
@@ -714,7 +716,9 @@ if [ $start_step -le 13 -a $end_step -ge 13 ];then
           python3 -c "from lics_tstools import *; correct_cum_from_tifs('$TSdir/cum.h5', 'GACOS', 'sltd.geo.tif', -55.465/(4*np.pi), directcorrect = False, sboi=False)"
         fi
       fi
-      LiCSBAS131_corrections.py -t $TSdir $extra
+      if [[ "$extra" == *"--tide"* || "$extra" == *"--iono"* || "$extra" == *"--gacos"* ]]; then
+        LiCSBAS131_corrections.py -t $TSdir $extra
+      fi
     fi
   fi
 fi
