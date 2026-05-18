@@ -13,7 +13,7 @@ Inputs in GEOCml*/ :
  - yyyymmdd_yyyymmdd/
    - yyyymmdd_yyyymmdd.unw[.png]
    - yyyymmdd_yyyymmdd.cc
-   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sboi is used)
  - slc.mli[.par|.png]
  - baselines (can be dummy)
  - EQA.dem_par
@@ -34,7 +34,7 @@ Inputs in GEOCml*/ :
 =====
 Usage
 =====
-LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxbtemp maxbtemp] [--minbtemp minbtemp] [-s] [--sbovl] [--skip_dates eqoffsets.txt]
+LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxbtemp maxbtemp] [--minbtemp minbtemp] [-s] [--sboi] [--skip_dates eqoffsets.txt]
 
  -d  Path to the GEOCml* dir containing stack of unw data.
  -t  Path to the output TS_GEOCml* dir. (Default: TS_GEOCml*)
@@ -43,7 +43,7 @@ LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxb
  --minbtemp  Minimal Btemp in days (Default: 0 = not use)
  --maxbtemp  Maximal Btemp in days (Default: 0 = not use)
  -s  Check for coregistration error in the form of a significant azimuthal ramp
- --sbovl only applying step 11 for sbovl
+ --sboi only applying step 11 for sboi
  --skip_dates dates.txt  Will skip interferograms covering given dates (in the form of either yyyymmdd or yyyy-mm-dd inside the txt file)
 
 """
@@ -52,7 +52,7 @@ LiCSBAS11_check_unw.py -d ifgdir [-t tsadir] [-c coh_thre] [-u unw_thre] [--maxb
 20250109 ML
  - add option to ignore ifgs covering given epoch
 20241030 M Nergizci
-- add sbovl flag
+- add sboi flag
 20241028 ML
  - add also max btemp
 20240115 ML
@@ -120,13 +120,13 @@ def main(argv=None):
     check_coreg_slope = False
     minbtemp = 0
     maxbtemp = 0 # 0 means not use
-    sbovl = False
+    sboi = False
     skipdatesfile = []
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "skip_dates=", "maxbtemp=","sbovl"])
+            opts, args = getopt.getopt(argv[1:], "hd:t:c:u:s", ["help", "minbtemp=", "skip_dates=", "maxbtemp=","sboi"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -147,8 +147,8 @@ def main(argv=None):
                 maxbtemp = float(a)
             elif o == '-s':
                 check_coreg_slope = True
-            elif o == '--sbovl':
-                sbovl = True
+            elif o == '--sboi':
+                sboi = True
             elif o == '--skip_dates':
                 skipdatesfile = a
 
@@ -231,7 +231,7 @@ def main(argv=None):
     for ifgix, ifgd in enumerate(ifgdates):
         if np.mod(ifgix,100) == 0:
             print("  {0:3}/{1:3}th unw checked for dimension and readability".format(ifgix, n_ifg), flush=True)
-        if sbovl:
+        if sboi:
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
         else:
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
@@ -281,7 +281,7 @@ def main(argv=None):
     for ifgix, ifgd in enumerate(ifgdates):
         if np.mod(ifgix,100) == 0:
             print("  {0:3}/{1:3}th unw to identify valid area...".format(ifgix, n_ifg), flush=True)
-        if sbovl:
+        if sboi:
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
         else:
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
@@ -303,7 +303,7 @@ def main(argv=None):
         if np.mod(ifgix,100) == 0:
             print("  {0:3}/{1:3}th cc and unw...".format(ifgix, n_ifg), flush=True)
         ## unw
-        if sbovl:
+        if sboi:
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
         else:
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
@@ -403,7 +403,7 @@ def main(argv=None):
         print('# ifg dates         bperp   dt unw_cov  coh_av', file=fstats)
 
     ### Identify suffix of raster image (png, ras or bmp?)
-    if sbovl:
+    if sboi:
         unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0]+'.sbovldiff.adf.mm')
     else:
         unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0]+'.unw')
@@ -433,7 +433,7 @@ def main(argv=None):
             if toskip:
                 continue
         if suffix:
-            if sbovl:
+            if sboi:
                 rasname = ifgdates[i]+'.sbovldiff.adf.mm'+suffix
             else:
                 rasname = ifgdates[i]+'.unw'+suffix
