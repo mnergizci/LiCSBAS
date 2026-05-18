@@ -24,7 +24,7 @@ Inputs in GEOCml*/:
    - yyyymmdd_yyyymmdd.conncomp
    - yyyymmdd_yyyymmdd.unw
    
-   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sbovl is used)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (if --sboi is used)
 
 Outputs in TS_GEOCml*/ :
  - info/
@@ -46,7 +46,7 @@ LiCSBAS120_choose_reference.py [-h] [-f FRAME_DIR] [-g UNW_DIR] [-t TS_DIR] [-w 
 20241221 Muhammet Nergizci
 - check baseline file empty or not 
 20241030 Muhammet Nergizci
-- add sbovl flag
+- add sboi flag
 20240928 ML
  - check for existence of conn. components, avoiding if not 
 '''
@@ -100,7 +100,7 @@ def init_args():
     parser.add_argument('--keep_node_cuts', default=False, action='store_true', help="do not remove node cuts from largest network component")
     parser.add_argument('--skip_node_cuts', default=False, action='store_true', help="skip node cut searching, used when the program gets stuck")
     parser.add_argument('--ignore_comp', default=False, action='store_true', help="do not use connected components for choosing reference")
-    parser.add_argument('--sbovl', default=False, action='store_true', help="run the code for only sbovl referencing point")
+    parser.add_argument('--sboi', default=False, action='store_true', help="run the code for only sboi referencing point")
     args = parser.parse_args()
 
 
@@ -196,7 +196,7 @@ def calc_block_sum_of_unw_coh_component_size():
     ### Accumulate through network (1)unw pixel counts, (2) coherence and (3) size of connected components
     for ifgd in ifgdates:
         # turn ifg into ones and zeros for non-nan and nan values
-        if args.sbovl:
+        if args.sboi:
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')
         else:    
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.unw')
@@ -295,7 +295,7 @@ def closest_to_ref_center():
 
 def plot_ref_proxies():
     ### load example unw for plotting in block resolution
-    if args.sbovl:
+    if args.sboi:
         unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0] + '.sbovldiff.adf.mm')
     else:
         unwfile = os.path.join(ifgdir, ifgdates[0], ifgdates[0] + '.unw')
@@ -343,7 +343,7 @@ def save_reference_to_file():
     print('Selected ref in full resolution: {}:{}/{}:{}'.format(refx1, refx2, refy1, refy2), flush=True)
 
     ### Save ref
-    if not args.sbovl:
+    if not args.sboi:
         refsfile = os.path.join(infodir, '120ref.txt')
     else:
         refsfile = os.path.join(infodir, '12ref.txt')
@@ -359,7 +359,7 @@ def discard_ifg_with_all_nans_at_ref():
     noref_ifg = []
     for ifgd in ifgdates:
         # add about ori:
-        if args.sbovl:
+        if args.sboi:
             unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm.ori')
             if not os.path.exists(unwfile):
                 unwfile = os.path.join(ifgdir, ifgd, ifgd+'.sbovldiff.adf.mm')

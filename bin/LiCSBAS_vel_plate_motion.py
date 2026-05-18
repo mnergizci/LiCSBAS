@@ -21,7 +21,7 @@ LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--plate 
   ['auto', 'Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia', 'Pacific', 'SouthAmerica', 'Somalia']
  --vstd_fix  Would also perform reference fix in vstd
  --keep_absolute  Do not fix to a reference point
- --azimuth   Use ENU files for azimuth directions (for sbovls)
+ --azimuth   Use ENU files for azimuth directions (for sbois)
 
 Note it will use the final output, i.e. masked filtered velocity after step 16.
 """
@@ -67,8 +67,8 @@ def main(argv=None):
     outfile = 'vel_pmm_fixed_los.tif'
     frame = None
     keep_absolute = False
-    sbovl = False
-    sbovl_abs = False  # if True, absolute velocity will be kept, otherwise it will be fixed to the reference area selected at step 16
+    sboi = False
+    sboi_abs = False  # if True, absolute velocity will be kept, otherwise it will be fixed to the reference area selected at step 16
     input = 'vel.filt.mskd'
     plate = 'auto'
     plates = ['auto', 'Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia',
@@ -76,7 +76,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:f:o:", ["help", "vstd_fix", "keep_absolute", "plate=", "sbovl", "sbovl_abs", "input="])
+            opts, args = getopt.getopt(argv[1:], "ht:f:o:", ["help", "vstd_fix", "keep_absolute", "plate=", "sboi", "sboi_abs", "input="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -93,19 +93,19 @@ def main(argv=None):
                 keep_absolute = True
             elif o == '-o':
                 outfile = a
-            elif o == '--sbovl':
-                sbovl= True
+            elif o == '--sboi':
+                sboi= True
             elif o == '--plate':
                 plate = a
-            elif o == '--sbovl_abs':
-                sbovl = True
-                sbovl_abs = True
+            elif o == '--sboi_abs':
+                sboi = True
+                sboi_abs = True
                 keep_absolute = True
                 print("Running in SBOI mode, also absolute velocity will be kept.")
             elif o == '--input':
                 input= a
 
-        if sbovl:
+        if sboi:
             print("Running in SBOI mode")
             # keep_absolute = True
             if outfile == 'vel_pmm_fixed_los.tif':
@@ -119,7 +119,7 @@ def main(argv=None):
             if os.path.exists(os.path.join(tsdir, 'results', 'vel.mskd')):
                 print('Warning, vel.filt.mskd does not exist, but vel.mskd exists. Will use it instead.')
                 input = 'vel.mskd'
-            elif sbovl_abs:
+            elif sboi_abs:
                 if not os.path.exists(os.path.join(tsdir, 'results', input)):
                     raise Usage(f'Error, the {input} file does not exist - please check SBOI processing.')
             else:
@@ -159,11 +159,11 @@ def main(argv=None):
 
     #vfilt_file = tsdir+'/results/vel_filt.mskd'
     platesm = plate.lower()
-    if sbovl:
+    if sboi:
         vel_platefile = tsdir+'/results/vel_'+platesm+'_azi.tif'
     else:
         vel_platefile = tsdir+'/results/vel_'+platesm+'_los.tif'
-    vel_plate = lts.generate_pmm_velocity(frame, plate, 'GEOC', vel_platefile, azi=sbovl)
+    vel_plate = lts.generate_pmm_velocity(frame, plate, 'GEOC', vel_platefile, azi=sboi)
     # if not os.path.exists(vel_tiffile):   # why not to regenerate it....
     cmd = 'LiCSBAS_flt2geotiff.py -i {0}/results/{1} -p {0}/info/EQA.dem_par -o {2}'.format(tsdir, input, vel_tiffile)
     os.system(cmd)
@@ -195,7 +195,7 @@ def main(argv=None):
     # %% Make png if specified
     if pngflag:
         pngfile = outfile[:-4] + '.png'
-        if sbovl:
+        if sboi:
             title = 'Velocity fixed towards '+plate+' - Azimuth'
         else:
             title = 'Velocity fixed towards '+plate+' - LOS'
@@ -204,7 +204,7 @@ def main(argv=None):
         plot_lib.make_im_png(vel.values, pngfile, cmap, title, cmin, cmax)
 
         pngfile = vel_platefile[:-4] + '.png'
-        if sbovl:
+        if sboi:
             title = plate+'-fixed plate motion - Azimuth'
         else:
             title = plate+'-fixed plate motion - LOS'
