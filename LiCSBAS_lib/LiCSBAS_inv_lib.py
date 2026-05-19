@@ -169,7 +169,7 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu, dt_offsets = None,
 
 
 def invert_singular(unw, G, dt_cum, n_core, wvars = None, dt_offsets = None,
-                    singular_gauss = False, only_sb = False, estimate_ts_errors = estimate_ts_errors):
+                    singular_gauss = False, only_sb = False, estimate_ts_errors = False):
     ''' Calculate increment displacement difference by two-stage inversion of SBAS and nan-filling.
 
     Inputs:
