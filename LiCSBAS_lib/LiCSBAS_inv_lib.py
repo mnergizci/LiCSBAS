@@ -141,13 +141,13 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu, dt_offsets = None,
       wvars (None or np.array): variances used to form weights for the (optional) WLS
       method (str): one of following methods: 'nsbas', 'singular', 'singular_gauss', 'only_sb'
       inv_alg (str): either 'LS' or 'WLS'
-      estimate_ts_errors (bool): if True, will also estimate TS errors - 202605: now only for WLS (preferred)
+      estimate_ts_errors (bool): if True, will also estimate TS errors - 202605: now only for NSBAS
 
     Returns:
       inc     : Incremental displacement (n_im-1, n_pt)
       vel     : Velocity (n_pt)
       vconst  : Constant part of linear velocity (c of vt+c) (n_pt)
-      [tsstd  : in case of WLS and estimate_ts_errors]
+      [tsstd  : in case of NSBAS and estimate_ts_errors]
     '''
     if (gpu and (method[:5] != 'nsbas')):
         print('WARNING, non-NSBAS methods were not tested on GPUs')
@@ -302,6 +302,8 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
 
     # do the original NSBAS inversion
     result = np.zeros((n_im+1, n_pt), dtype=np.float32)*np.nan #[inc, vel, const]
+    if estimate_ts_errors:
+        tsstd  = np.zeros((n_im - 1, n_pt), dtype=np.float32)*np.nan
 
     ### Set matrix of NSBAS part (bottom)
     Gbl = np.tril(np.ones((n_im, n_im-1), dtype=np.float32), k=-1) #lower tri matrix without diag
@@ -329,7 +331,33 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
             del unw_tmp_cp, Gall_cp, _sol
         else:
             result[:, bool_pt_full] = np.linalg.lstsq(Gall, unw_tmp, rcond=None)[0]
-
+        if estimate_ts_errors:
+            X = result[:, bool_pt_full]
+            Gm = Gall
+            dm = unw_tmp
+            n_obs = Gm.shape[0]
+            n_param = Gm.shape[1]
+            # --- Residuals ---
+            r = dm - Gm @ X
+            # --- Degrees of freedom ---
+            dof = max(n_obs - n_param, 1)
+            # --- Variance factor ---
+            sigma0_sq = (r @ r) / dof
+            # --- Covariance of parameters ---
+            GTG = Gm.T @ Gm
+            try:
+                Cx = np.linalg.inv(GTG)
+            except:
+                Cx = np.linalg.pinv(GTG, rcond=1e-10)
+            # --- Scale with residual variance ---
+            Cx *= sigma0_sq
+            # --- Extract increment covariance ---
+            Cm = Cx[:n_im - 1, :n_im - 1]
+            # --- Time integration matrix ---
+            A = np.tril(np.ones((n_im - 1, n_im - 1), dtype=np.float64))
+            # --- Propagate covariance ---
+            Cu = A @ Cm @ A.T
+            tsstd[:, bool_pt_full] = np.sqrt(np.diag(Cu))
     print('  Next, solve {0} points including nan point-by-point...'.format(n_pt-n_pt_full), flush=True)
     ### Solve other points with nan point by point.
     ## Not use GPU because lstsq with small matrix is slower than CPU
@@ -337,7 +365,14 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
     mask = (~np.isnan(unw_tmp))
     unw_tmp[np.isnan(unw_tmp)] = 0
     if n_core == 1:
-        result[:, ~bool_pt_full] = censored_lstsq_slow(Gall, unw_tmp, mask) #(n_im+1, n_pt)
+        if estimate_ts_errors:
+            valid_idx = np.where(~bool_pt_full)[0]
+            for i in valid_idx:
+                X, ts_std = wls_nsbas_with_error(i, use_weights=False)
+                result[:, i] = X
+                tsstd[:, i] = ts_std
+        else:
+            result[:, ~bool_pt_full] = censored_lstsq_slow(Gall, unw_tmp, mask) #(n_im+1, n_pt)
     else:
         print('  {} parallel processing'.format(n_core), flush=True)
         #
@@ -348,8 +383,18 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
         #A = Gall
         #else:
         #    A = csc_array(Gall)  # or csr?
-        _result = p.map(censored_lstsq_slow_para_wrapper, args) #list[n_pt][length]
-        result[:, ~bool_pt_full] = np.array(_result).T
+        if estimate_ts_errors:
+            from functools import partial
+            func = partial(wls_nsbas_with_error, use_weights=False)
+            _out = p.map(func, args)
+            valid_idx = np.where(~bool_pt_full)[0]
+            for j, (X, ts_std) in enumerate(_out):
+                i = valid_idx[j]
+                result[:, i] = X
+                tsstd[:, i]  = ts_std
+        else:
+            _result = p.map(censored_lstsq_slow_para_wrapper, args) #list[n_pt][length]
+            result[:, ~bool_pt_full] = np.array(_result).T
         p.close()
 
     #
@@ -357,7 +402,10 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
     inc = result[:n_im-1, :]
     vel = result[n_im-1, :]
     vconst = result[n_im, :]
-    return inc, vel, vconst
+    if estimate_ts_errors:
+        return inc, vel, vconst, tsstd
+    else:
+        return inc, vel, vconst
 
 
 # orig solution by ML, just instead of full large matrix of increment rows, use only sum and minmax - much faster,
