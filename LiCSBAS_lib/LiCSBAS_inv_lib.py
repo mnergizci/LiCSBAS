@@ -154,22 +154,22 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu, dt_offsets = None,
 
     if method == 'nsbas':
         if inv_alg == 'LS':
-            return invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu)
+            return invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = estimate_ts_errors)
         elif inv_alg == 'WLS':
             return invert_nsbas_wls(unw, wvars, G, dt_cum, gamma, n_core, estimate_ts_errors = estimate_ts_errors)
     elif method == 'only_sb':
-        return invert_singular(unw, G, dt_cum, n_core, wvars = wvars, only_sb=True)
+        return invert_singular(unw, G, dt_cum, n_core, wvars = wvars, only_sb=True, estimate_ts_errors = estimate_ts_errors)
     elif method == 'singular_gauss':
-        return invert_singular(unw, G, dt_cum, n_core, dt_offsets = dt_offsets, wvars=wvars, singular_gauss = True)
+        return invert_singular(unw, G, dt_cum, n_core, dt_offsets = dt_offsets, wvars=wvars, singular_gauss = True, estimate_ts_errors = estimate_ts_errors)
     elif method == 'singular':
-        return invert_singular(unw, G, dt_cum, n_core, wvars=wvars, singular_gauss = False)
+        return invert_singular(unw, G, dt_cum, n_core, wvars=wvars, singular_gauss = False, estimate_ts_errors = estimate_ts_errors)
     else:
         print('ERROR, no implemented method is selected - cancelling (consider this as a BUG)')
         return
 
 
 def invert_singular(unw, G, dt_cum, n_core, wvars = None, dt_offsets = None,
-                    singular_gauss = False, only_sb = False):
+                    singular_gauss = False, only_sb = False, estimate_ts_errors = estimate_ts_errors):
     ''' Calculate increment displacement difference by two-stage inversion of SBAS and nan-filling.
 
     Inputs:
@@ -275,7 +275,7 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None, dt_offsets = None,
     return inc, vel, vconst
 
 #%%
-def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu):
+def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False):
     """
     Calculate increment displacement difference by NSBAS inversion. Points with all unw data are solved by simple SB inversion firstly at a time.
 
@@ -693,37 +693,49 @@ def wls_nsbas(i):
     return X
 
 
-def wls_nsbas_with_error(i):
-    """
-    (supported by Copilot)
+def wls_nsbas_with_error(i, use_weights=True):
+    """ Update 2026/05: added residuals to the error calc
     Returns:
         X       : NSBAS solution vector
                   [increments (n_im-1), velocity, constant]
         ts_std  : Standard deviation per epoch (n_im-1)
     """
-    # Use global Gall, unw_tmp, var_tmp, mask, n_im
     if np.mod(i, 1000) == 0:
         print(f'  Running {i:6}/{unw_tmp.shape[1]:6}th point...', flush=True)
-    # --- Weighting ---
-    w = 1.0 / np.sqrt(np.float64(var_tmp[:, i]))
-    Gall_w = Gall * w[:, np.newaxis]
-    n_im = Gall_w.shape[1] - 1
-    unw_w  = unw_tmp[:, i] * w
-    m = mask[:, i]  # valid rows
+    unw_col = unw_tmp[:, i]
+    m = mask[:, i]
     try:
-        # --- Solve WLS ---
-        X = np.linalg.lstsq(Gall_w[m], unw_w[m], rcond=None)[0]
-
-        # --- Posterior covariance of parameters ---
-        GTWG = Gall_w[m].T @ Gall_w[m]
+        if use_weights:
+            # --- Weighted system ---
+            w = 1.0 / np.sqrt(np.float64(var_tmp[:, i]))
+            Gm = Gall[m] * w[m, np.newaxis]
+            dm = unw_col[m] * w[m]
+        else:
+            # --- Unweighted system ---
+            Gm = Gall[m]
+            dm = unw_col[m]
+        n_obs = Gm.shape[0]
+        n_param = Gm.shape[1]
+        n_im = n_param - 1
+        # --- Solve LS ---
+        X = np.linalg.lstsq(Gm, dm, rcond=None)[0]
+        # --- Residuals ---
+        r = dm - Gm @ X
+        # --- Degrees of freedom ---
+        dof = max(n_obs - n_param, 1)
+        # --- Variance factor ---
+        sigma0_sq = (r @ r) / dof
+        # --- Covariance of parameters ---
+        GTG = Gm.T @ Gm
         try:
-            Cx = np.linalg.inv(GTWG)
+            Cx = np.linalg.inv(GTG)
         except:
-            Cx = np.linalg.pinv(GTWG, rcond=1e-10)
+            Cx = np.linalg.pinv(GTG, rcond=1e-10)
+        # --- Scale with residual variance ---
+        Cx *= sigma0_sq
         # --- Extract increment covariance ---
         Cm = Cx[:n_im-1, :n_im-1]
         # --- Time integration matrix ---
-        # u_k = sum_{j<=k} inc_j
         A = np.tril(np.ones((n_im-1, n_im-1), dtype=np.float64))
         # --- Propagate covariance ---
         Cu = A @ Cm @ A.T
@@ -732,6 +744,7 @@ def wls_nsbas_with_error(i):
         X = np.full(Gall.shape[1], np.nan, dtype=np.float32)
         ts_std = np.full(n_im-1, np.nan, dtype=np.float32)
     return X, ts_std
+
 
 
 '''
