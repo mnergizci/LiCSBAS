@@ -340,6 +340,8 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
             n_param = Gm.shape[1]
             # --- Residuals ---
             r = dm - Gm @ X   # (n_obs, n_valid)
+            # --- Degrees of freedom ---
+            dof = max(n_obs - n_param, 1)
             # --- Variance factor per pixel ---
             sigma0_sq = np.sum(r**2, axis=0) / dof   # (n_valid,)
             # --- Base covariance ---
