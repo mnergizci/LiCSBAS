@@ -332,6 +332,7 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
         else:
             result[:, bool_pt_full] = np.linalg.lstsq(Gall, unw_tmp, rcond=None)[0]
         if estimate_ts_errors:
+            breakpoint()
             X = result[:, bool_pt_full]
             Gm = Gall
             dm = unw_tmp
