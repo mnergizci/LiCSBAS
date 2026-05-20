@@ -783,7 +783,12 @@ def wls_nsbas_with_error(i, use_weights=True):
         # --- Extract increment covariance ---
         Cm = Cx[:n_im-1, :n_im-1]
         # --- Time integration matrix ---
-        A = np.tril(np.ones((n_im-1, n_im-1), dtype=np.float64))
+        A = np.tril(np.ones((n_im-1, n_im-1)), dtype=np.float64))
+        # but let's not propagate the extended error due to trend estimation
+        gap_mask = np.all(G == 0, axis=0) # but can i directly access G?
+        # gap_mask = np.all(G_inc == 0, axis=0)
+        # gap_mask = np.all(np.abs(G_inc) < 1e-10, axis=0) # should be safer due to floating point..
+        A[:, gap_mask] = 0
         # --- Propagate covariance ---
         Cu = A @ Cm @ A.T
         ts_std = np.sqrt(np.diag(Cu))
