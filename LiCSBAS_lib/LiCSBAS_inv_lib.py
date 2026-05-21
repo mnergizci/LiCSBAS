@@ -332,32 +332,34 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
         else:
             result[:, bool_pt_full] = np.linalg.lstsq(Gall, unw_tmp, rcond=None)[0]
         if estimate_ts_errors:
+            # breakpoint()
             X = result[:, bool_pt_full]
             Gm = Gall
             dm = unw_tmp
             n_obs = Gm.shape[0]
             n_param = Gm.shape[1]
             # --- Residuals ---
-            r = dm - Gm @ X
+            r = dm - Gm @ X   # (n_obs, n_valid)
             # --- Degrees of freedom ---
             dof = max(n_obs - n_param, 1)
-            # --- Variance factor ---
-            sigma0_sq = (r @ r) / dof
-            # --- Covariance of parameters ---
+            # --- Variance factor per pixel ---
+            sigma0_sq = np.sum(r**2, axis=0) / dof   # (n_valid,)
+            # --- Base covariance ---
             GTG = Gm.T @ Gm
             try:
-                Cx = np.linalg.inv(GTG)
+                Cx_base = np.linalg.inv(GTG)
             except:
-                Cx = np.linalg.pinv(GTG, rcond=1e-10)
-            # --- Scale with residual variance ---
-            Cx *= sigma0_sq
-            # --- Extract increment covariance ---
-            Cm = Cx[:n_im - 1, :n_im - 1]
-            # --- Time integration matrix ---
+                Cx_base = np.linalg.pinv(GTG, rcond=1e-10)
+            # --- Increment covariance ---
+            Cm_base = Cx_base[:n_im - 1, :n_im - 1]
+            # --- Time propagation ---
             A = np.tril(np.ones((n_im - 1, n_im - 1), dtype=np.float64))
-            # --- Propagate covariance ---
-            Cu = A @ Cm @ A.T
-            tsstd[:, bool_pt_full] = np.sqrt(np.diag(Cu))
+            Cu_base = A @ Cm_base @ A.T
+            ts_var_base = np.diag(Cu_base)   # (n_im - 1,)
+            # --- Apply per-pixel scaling ---
+            tsstd[:, bool_pt_full] = np.sqrt(
+                ts_var_base[:, None] * sigma0_sq[None, :]
+            )
     print('  Next, solve {0} points including nan point-by-point...'.format(n_pt-n_pt_full), flush=True)
     ### Solve other points with nan point by point.
     ## Not use GPU because lstsq with small matrix is slower than CPU
@@ -396,7 +398,6 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False)
             _result = p.map(censored_lstsq_slow_para_wrapper, args) #list[n_pt][length]
             result[:, ~bool_pt_full] = np.array(_result).T
         p.close()
-
     #
     # NSBAS result matrix: last 2 rows are vel and vconst
     inc = result[:n_im-1, :]
@@ -784,7 +785,12 @@ def wls_nsbas_with_error(i, use_weights=True):
         # --- Extract increment covariance ---
         Cm = Cx[:n_im-1, :n_im-1]
         # --- Time integration matrix ---
-        A = np.tril(np.ones((n_im-1, n_im-1), dtype=np.float64))
+        A = np.tril(np.ones((n_im-1, n_im-1)), dtype=np.float64)
+        # but let's not propagate the extended error due to trend estimation
+        gap_mask = np.all(G == 0, axis=0) # but can i directly access G?
+        # gap_mask = np.all(G_inc == 0, axis=0)
+        # gap_mask = np.all(np.abs(G_inc) < 1e-10, axis=0) # should be safer due to floating point..
+        A[:, gap_mask] = 0
         # --- Propagate covariance ---
         Cu = A @ Cm @ A.T
         ts_std = np.sqrt(np.diag(Cu))
