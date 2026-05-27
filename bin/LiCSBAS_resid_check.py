@@ -3,7 +3,7 @@
 ========
 Overview
 ========
-This script checks the LiCSBAS13 residual statistics for SBOI data and
+This script checks the LiCSBAS13 residual statistics for sbovl data and
 updates the list of bad interferograms to be discarded before rerunning
 LiCSBAS13.
 

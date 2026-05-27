@@ -70,14 +70,14 @@ def main(argv=None):
     outfile = 'cum_pmm_fixed_los.tif'
     frame = None
     keep_absolute = False
-    sboi = False
-    sboi_abs = False  # if True, absolute velocity will be kept, otherwise it will be fixed to the reference area selected at step 16
+    sbovl = False
+    sbovl_abs = False  # if True, absolute velocity will be kept, otherwise it will be fixed to the reference area selected at step 16
     imd_p = ''
     imd_s = ''
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:f:o:p:s:", ["help", "vstd_fix", "keep_absolute", "sboi", "sboi_abs", "imd_p=", "imd_s="])
+            opts, args = getopt.getopt(argv[1:], "ht:f:o:p:s:", ["help", "vstd_fix", "keep_absolute", "sbovl", "sbovl_abs", "imd_p=", "imd_s="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -96,16 +96,16 @@ def main(argv=None):
                 imd_p = a
             elif o == '-s':
                 imd_s = a
-            elif o == '--sboi':
-                sboi= True
-            elif o == '--sboi_abs':
-                sboi = True
-                sboi_abs = True
+            elif o == '--sbovl':
+                sbovl= True
+            elif o == '--sbovl_abs':
+                sbovl = True
+                sbovl_abs = True
                 keep_absolute = True
-                print("Running in SBOI mode, also absolute velocity will be kept.")
+                print("Running in sbovl mode, also absolute velocity will be kept.")
 
-        if sboi:
-            print("Running in SBOI mode")
+        if sbovl:
+            print("Running in sbovl mode")
             # keep_absolute = True
             if outfile == 'vel_pmm_fixed_los.tif':
                 outfile = 'vel_pmm_fixed_azi.tif'
@@ -122,9 +122,9 @@ def main(argv=None):
             if os.path.exists(os.path.join(tsdir, 'results', f'cum_{imd_p}-{imd_s}.mask')):
                 print('Warning, cum_filt does not exist, but cum exists. Will use it instead.')
                 input = f'cum_{imd_p}-{imd_s}.mask'
-            elif sboi_abs:
+            elif sbovl_abs:
                 if not os.path.exists(os.path.join(tsdir, 'results', input)):
-                    raise Usage(f'Error, the {input} file does not exist - please check SBOI processing.')
+                    raise Usage(f'Error, the {input} file does not exist - please check sbovl processing.')
             else:
                 raise Usage('Error, the cum_filt.mskd file does not exist - please finish processing incl step 16')
 
@@ -137,12 +137,12 @@ def main(argv=None):
     print(f'{input} will be processed for plate motion correction')
     #%%
     #vfilt_file = tsdir+'/results/vel_filt.mskd'
-    if sboi:
+    if sbovl:
         vlos_eurfile = tsdir+'/results/vel_eurasia_azi.tif'
     else:
         vlos_eurfile = tsdir+'/results/vel_eurasia_los.tif'
     #if not os.path.exists(vlos_eurfile):
-    vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', vlos_eurfile, sboi=sboi)
+    vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', vlos_eurfile, sbovl=sbovl)
     #else:
     #    vlos_eurasia = lts.load_tif2xr(vlos_eurfile)
     cum_tiffile = tsdir+f'/results/cum_filt_{imd_p}-{imd_s}.mask.tif'
@@ -188,7 +188,7 @@ def main(argv=None):
     # %% Make png if specified
     if pngflag:
         pngfile = outfile[:-4] + '.png'
-        if sboi:
+        if sbovl:
             title = 'Cum fixed towards Eurasia - Azimuth'
         else:
             title = 'Cum fixed towards Eurasia  - LOS'
@@ -197,7 +197,7 @@ def main(argv=None):
         plot_lib.make_im_png(cumlos.values, pngfile, cmap, title, cmin, cmax)
 
         pngfile = vlos_eurfile[:-4] + '.png'
-        if sboi:
+        if sbovl:
             title = 'Eurasia-fixed plate motion - Azimuth'
         else:
             title = 'Eurasia-fixed plate motion - LOS'

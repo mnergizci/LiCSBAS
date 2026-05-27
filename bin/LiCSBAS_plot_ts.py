@@ -52,7 +52,7 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_d
  --dem_background  Uses project hgt file to plot a hillshade background. Uses earthpy and rasterio.
 
  ##TODO here is testing for absolute referencign and plotting, so please contact developers if you want to use or modify these options #MN
- --abs       Show absolute cumulative displacement and velocity if exist in cum file. If not exist, show cum and vel but set title and color range based on absolute values. This is for the scenario like SBOI where the cumulative displacement and velocity are already corrected for plate motion and show the absolute values. In this scenario, the relative cumulative displacement and velocity (i.e., not corrected for plate motion) can be shown by specifying the cum file with relative values with --i2 option.
+ --abs       Show absolute cumulative displacement and velocity if exist in cum file. If not exist, show cum and vel but set title and color range based on absolute values. This is for the scenario like sbovl where the cumulative displacement and velocity are already corrected for plate motion and show the absolute values. In this scenario, the relative cumulative displacement and velocity (i.e., not corrected for plate motion) can be shown by specifying the cum file with relative values with --i2 option.
  --no_velocity  Not show velocity in title and not use velocity for color range setting
   
 example:  LiCSBAS_plot_ts.py -i TS_GEOCml10GACOSmask/cum_filt_interpolate.h5 --cum_name cum --cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
@@ -606,7 +606,7 @@ if __name__ == "__main__":
             
     ### cumfile2
     if cumfile2:
-        if absolute:  #SBOI scenario for InSAR LoS plotting
+        if absolute:  #sbovl scenario for InSAR LoS plotting
             print('Reading {} as 2nd'.format(os.path.relpath(cumfile2)))
             cumh52 = h5.File(cumfile2,'r')
             if  'cum_abs' in cumh52:

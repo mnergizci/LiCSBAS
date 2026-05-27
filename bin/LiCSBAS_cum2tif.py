@@ -173,14 +173,14 @@ def cum_wrapper(frame, cumxr, imdate, plate_motion, refarea, interseismic_motion
     return imdate, arr_plate, arr_inter
 
 #%% main function running
-def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn_gnss=None, plate_motion=False, interseismic_motion=False, n_para=4, sboi=False):
+def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn_gnss=None, plate_motion=False, interseismic_motion=False, n_para=4, sbovl=False):
 
     cum_name= cum_h5.split('.')[0]
     cum_h5 = os.path.join(TS_folder, cum_h5) 
     GEOC_folder = TS_folder.split('_')[-1]
     dem_par = os.path.join(GEOC_folder, dem_par)
     mask = os.path.join(TS_folder,'results', mask)
-    if sboi:
+    if sbovl:
         E_unit=lts.load_tif2xr(f'{frame}.E.azi.geo.tif')
         N_unit=lts.load_tif2xr(f'{frame}.N.azi.geo.tif')
         U_unit=lts.load_tif2xr(f'{frame}.U.azi.geo.tif')
@@ -217,14 +217,14 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
     cumxr = lts.loadall2cube(cum_h5)#, extracols = 'cum')
     
     if plate_motion:
-        vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', azi=sboi)
+        vlos_eurasia = lts.generate_pmm_velocity(frame, 'Eurasia', 'GEOC', azi=sbovl)
         #reshape
         vlos_eurasia_reshaped=vlos_eurasia.interp_like(cumxr.vel)
     if interseismic_motion:
         
         if ve_gnss is None or vn_gnss is None:
             ve_gnss_nc='/gws/ssde/j25a/nceo_geohazards/vol1/projects/COMET/mnergizci/1.second_paper/interseismic/decomp3d.nc'
-            vn_gnss_nc='/gws/ssde/j25a/nceo_geohazards/vol1/projects/COMET/mnergizci/1.second_paper/interseismic/velmap_insars29_sbois0_scalar.nc'
+            vn_gnss_nc='/gws/ssde/j25a/nceo_geohazards/vol1/projects/COMET/mnergizci/1.second_paper/interseismic/velmap_insars29_sbovls0_scalar.nc'
             if not os.path.exists(ve_gnss_nc):
                 print(f"Error: GNSS velocity file {ve_gnss_nc} does not exist.")
                 exit(1)
@@ -246,7 +246,7 @@ def main(TS_folder, cum_h5, mask, dem_par, frame, imd_p, imd_s, ve_gnss=None, vn
             ve_gnss_filled = ve_gnss_reshaped.fillna(ve_gnss_velmap_reshaped)
             vu_gnss_reshaped = vu_gnss_reshaped.where(np.abs(vu_gnss_reshaped) <= 5)
             
-            if sboi:
+            if sbovl:
                 vlos_gnss = ve_gnss_filled * E_unit + vn_gnss_reshaped * N_unit
             else:
                 vlos_gnss = ve_gnss_filled * E_unit + vn_gnss_reshaped * N_unit + vu_gnss_reshaped * U_unit
@@ -353,9 +353,9 @@ if __name__ == "__main__":
     parser.add_argument("--plate_motion", action="store_true", help="If set, it will calculate the plate motion effect")
     parser.add_argument("--interseismic_motion", action="store_true", help="If set, it will calculate the interseismic accumulation")
     parser.add_argument("--n_para", default=4, type=int, help="Number of parallel processes to use")
-    parser.add_argument("--sboi", action="store_true", help="If set, it will use the sboi dataset")
+    parser.add_argument("--sbovl", action="store_true", help="If set, it will use the sbovl dataset")
     args = parser.parse_args()
     args.interseismic_motion = True
-    if args.sboi == True:
+    if args.sbovl == True:
         args.TS_folder = 'TS_GEOCml10mask'
-    main(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame, args.imd_p, args.imd_s, args.ve_gnss, args.vn_gnss, args.plate_motion, args.interseismic_motion, args.n_para, args.sboi)
+    main(args.TS_folder ,args.cum_h5, args.mask, args.dem_par, args.frame, args.imd_p, args.imd_s, args.ve_gnss, args.vn_gnss, args.plate_motion, args.interseismic_motion, args.n_para, args.sbovl)

@@ -50,20 +50,20 @@ LiCSBAS15_mask_ts.py -t tsadir [-c coh_thre] [-u n_unw_r_thre] [-v vstd_thre]
                   (Default: they are masked by stc)
  --noautoadjust  Do not auto adjust threshold when all pixels are masked
                  (Default: do auto adjust)
- --sboi  use the sboi masking thresholds and indices
- --sboi_abs  absolute sense to call boolvel_abs
+ --sbovl  use the sbovl masking thresholds and indices
+ --sbovl_abs  absolute sense to call boolvel_abs
 
  Default thresholds:
    C-band : -c 0.05 -u 1.5 -v 100 -T 1 -g 10 -s 5  -i 50 -l 5 -r 2
    L-band : -c 0.01 -u 1   -v 200 -T 1 -g 1  -s 10 -i 50 -l 1 -r 10
-   SBOI   : -c 0.05 -u 0.5 -g 50 -s 10 -r 15 -i 1000 -L 0.5   
+   sbovl   : -c 0.05 -u 0.5 -g 50 -s 10 -r 15 -i 1000 -L 0.5   
 """
 #%% Change log
 '''
 20241115 ML, UoL
  - use of n_gaps_merge
  20241103 MNergizci, UoL
- - add sboi flag
+ - add sbovl flag
 20241107 ML, UoL
  - updated mask_ts.png
 20240628 ML, UoL
@@ -166,8 +166,8 @@ def main(argv=None):
     keep_isolated = False
     auto_adjust = True
     n_gap_use_merged = False
-    sboi = False
-    sboi_abs = False
+    sbovl = False
+    sbovl_abs = False
     cmap_vel = cmc.roma.reversed()
     cmap_noise = 'viridis'
     cmap_noise_r = 'viridis_r'
@@ -177,7 +177,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged","sboi", "sboi_abs", "tide", "iono"])
+            opts, args = getopt.getopt(argv[1:], "ht:c:u:v:g:i:l:L:r:T:s:", ["version", "help", "vmin=", "vmax=", "avg_phase_bias=", "use_coh_freq", "keep_isolated", "noautoadjust","n_gap_use_merged","sbovl", "sbovl_abs", "tide", "iono"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -222,11 +222,11 @@ def main(argv=None):
                 auto_adjust = False
             elif o == '--n_gap_use_merged':
                 n_gap_use_merged = True
-            elif o == '--sboi':
-                sboi = True
-            elif o == '--sboi_abs':
-                sboi = True
-                sboi_abs = True
+            elif o == '--sbovl':
+                sbovl = True
+            elif o == '--sbovl_abs':
+                sbovl = True
+                sbovl_abs = True
             # elif o == '--tide':
             #     tide = True
             # elif o == '--iono':
@@ -263,8 +263,8 @@ def main(argv=None):
         ngapfile = 'n_gap_merged'
     
     # rearranging:
-    if sboi:
-        print(f'sboi active so there is no n_loop_err_rat threshold')
+    if sbovl:
+        print(f'sbovl active so there is no n_loop_err_rat threshold')
         names = ['coh_avg', 'n_unw', 'vstd', 'maxTlen', ngapfile, 'stc', 'n_ifg_noloop', 'resid_rms']
         units = ['', '', 'mm/yr', 'yr', '', 'mm', '', 'mm']
     elif os.path.exists(os.path.join(resultsdir, 'n_loop_err_rat')):
@@ -275,7 +275,7 @@ def main(argv=None):
     else:
         raise Usage('no n_loop_err information - cancelling. Please rerun step 12 or contact dev team on recommendations how to skip this step.')
     units = ['', '', 'mm/yr', 'yr', '', 'mm', '', '', 'mm']
-    if sboi:
+    if sbovl:
         gt_lt = ['lt', 'lt', 'gt', 'lt', 'gt', 'gt', 'gt', 'gt'] 
     else:    
         gt_lt = ['lt', 'lt', 'gt', 'lt', 'gt', 'gt', 'gt', 'gt', 'gt']  ## > or <
@@ -342,7 +342,7 @@ def main(argv=None):
         if not 'vstd' in thre_dict: thre_dict['vstd'] = 100
         if not 'n_gap' in thre_dict: thre_dict['n_gap'] = 10
         if not 'stc' in thre_dict: thre_dict['stc'] = 10 # tested as more appropriate
-        if not sboi:
+        if not sbovl:
             if (not 'n_loop_err' in thre_dict) and ('n_loop_err' in names): thre_dict['n_loop_err'] = 5
         if not 'resid_rms' in thre_dict: thre_dict['resid_rms'] = 15
     
@@ -352,7 +352,7 @@ def main(argv=None):
     
     #%% Read data
     # breakpoint()
-    if sboi_abs:
+    if sbovl_abs:
         velfile = os.path.join(resultsdir,'bootvel_abs')
         print(f'Using {velfile}')
     else:

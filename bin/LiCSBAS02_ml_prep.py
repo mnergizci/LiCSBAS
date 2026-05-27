@@ -11,8 +11,8 @@ Inputs:
    - yyyymmdd_yyyymmdd/
      - yyyymmdd_yyyymmdd.geo.unw.tif
      - yyyymmdd_yyyymmdd.geo.cc.tif
-     - yyyymmdd_yyyymmdd.geo.sbovldiff.adf.mm.tif (if --sboi is used)
-     - yyyymmdd_yyyymmdd.geo.sbovldiff.adf.cc.tif (if --sboi is used)
+     - yyyymmdd_yyyymmdd.geo.sbovldiff.adf.mm.tif (if --sbovl is used)
+     - yyyymmdd_yyyymmdd.geo.sbovldiff.adf.cc.tif (if --sbovl is used)
   [- *.geo.mli.tif]
   [- *.geo.hgt.tif]
   [- *.geo.[E|N|U].tif]
@@ -23,8 +23,8 @@ Outputs in GEOCml*/ (downsampled if indicated):
  - yyyymmdd_yyyymmdd/
    - yyyymmdd_yyyymmdd.unw[.png] (float32)
    - yyyymmdd_yyyymmdd.cc (uint8)
-   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (float32) (if --sboi is used)
-   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (uint8) (if --sboi is used)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.mm[.png] (float32) (if --sbovl is used)
+   - yyyymmdd_yyyymmdd.sbovldiff.adf.cc (uint8) (if --sbovl is used)
  - baselines (may be dummy)
  - EQA.dem_par
  - slc.mli.par
@@ -45,13 +45,13 @@ LiCSBAS02_ml_prep.py -i GEOCdir [-o GEOCmldir] [-n nlook] [--freq float] [--n_pa
            (e.g., 1.27e9 for ALOS, 1.2575e9 for ALOS-2/U, 1.2365e9 for ALOS-2/{F,W})
  --n_para  Number of parallel processing (Default: # of usable CPU)
  --plot_cc Plot coherence png image
- --sboi multilook sboi or bovl
+ --sbovl multilook sbovl or bovl
  
 """
 #%% Change log
 '''
 v1.14.2a 20231030 M Nergizci, UoL
- - sboi flag addding
+ - sbovl flag addding
 v1.14.2a 20230921 ML
  - Dimensions check
 v1.7.5  20230803 Jack McGrath, Uni Leeds
@@ -134,7 +134,7 @@ def main(argv=None):
     outdir = []
     nlook = 1
     plot_cc = False
-    sboi = False
+    sbovl = False
     rngoff = False
     radar_freq = 5.405e9
     try:
@@ -144,7 +144,7 @@ def main(argv=None):
 
     cmap_wrap = cmc.romaO #SCM.romaO
     cmap_cc = cmc.batlow #SCM.batlow
-    cycle = 3 #default of ifg, (75 for sboi)
+    cycle = 3 #default of ifg, (75 for sbovl)
     n_valid_thre = 0.5
     coh_thre = 0.15
     q = multi.get_context('fork')
@@ -154,7 +154,7 @@ def main(argv=None):
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:n:", ["help", "plot_cc", "freq=", "n_para=", "coh_thre=",  "sboi", "rngoff"])
+            opts, args = getopt.getopt(argv[1:], "hi:o:n:", ["help", "plot_cc", "freq=", "n_para=", "coh_thre=",  "sbovl", "rngoff"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -175,8 +175,8 @@ def main(argv=None):
                 n_para = int(a)
             elif o == '--plot_cc':
                 plot_cc = True
-            elif o == '--sboi':
-                sboi = True
+            elif o == '--sbovl':
+                sbovl = True
             elif o == '--rngoff':
                 rngoff = True
                 raise Usage('The --rngoff functionality has to be yet implemented. Cancelling now.')
@@ -192,13 +192,13 @@ def main(argv=None):
         print("\nFor help, use -h or --help.\n", file=sys.stderr)
         return 2
 
-    if sboi:
-        if n_valid_thre == 0.5: #This is needed as sboi is already sparse data.
+    if sbovl:
+        if n_valid_thre == 0.5: #This is needed as sbovl is already sparse data.
             n_valid_thre = 0.1
         # if coh_thre == 0.2:
         #     # coh_thre=0.4
         #     coh_thre = 0.05
-        #     print(f"  Coherence threshold set to {coh_thre} for sboi processing", flush=True)
+        #     print(f"  Coherence threshold set to {coh_thre} for sbovl processing", flush=True)
 
     #%% Directory and file setting
     geocdir = os.path.abspath(geocdir)
@@ -225,7 +225,7 @@ def main(argv=None):
     #%% ENU
     for ENU in ['E', 'N', 'U']:
         print('\nCreate {}'.format(ENU+'.geo'), flush=True)
-        if sboi:
+        if sbovl:
             enutif = glob.glob(os.path.join(geocdir, '*.geo.{}.azi.tif'.format(ENU)))
         else:
             enutif = glob.glob(os.path.join(geocdir, '*.geo.{}.tif'.format(ENU)))
@@ -304,43 +304,43 @@ def main(argv=None):
 
     ### First check if float already exist
     ifgdates2 = []
-    if sboi:
-        sboidates = []
+    if sbovl:
+        sbovldates = []
     for i, ifgd in enumerate(ifgdates):
         ifgdir1 = os.path.join(outdir, ifgd)
         unwfile = os.path.join(ifgdir1, ifgd+'.unw')
         ccfile = os.path.join(ifgdir1, ifgd+'.cc')
         if not (os.path.exists(unwfile) and os.path.exists(ccfile)):
             ifgdates2.append(ifgd)
-        if sboi:
+        if sbovl:
             sbovlmmfile = os.path.join(ifgdir1, ifgd+'.sbovldiff.adf.mm')
             sbovlccfile = os.path.join(ifgdir1, ifgd+'.cc')  #also use normal cc
             bovlmmfile = os.path.join(ifgdir1, ifgd+'.bovldiff.adf.mm')  # in case only bovl exists.
             
             if not ((os.path.exists(sbovlmmfile) and os.path.exists(sbovlccfile)) or (os.path.exists(bovlmmfile))):
-                sboidates.append(ifgd)
+                sbovldates.append(ifgd)
     # breakpoint()
     n_ifg2 = len(ifgdates2)
-    if sboi:
-        n_sboi = len(sboidates)
+    if sbovl:
+        n_sbovl = len(sbovldates)
     
     # Print existing status for unw and cc files
-    if not sboi:
+    if not sbovl:
         if n_ifg - n_ifg2 > 0:
             print("  {0:3}/{1:3} unw and cc already exist. Skip".format(n_ifg - n_ifg2, n_ifg), flush=True)
     else:
         # Print existing status for sbovldiff.adf.mm and sbovldiff.adf.cc files
-        if n_ifg - n_sboi > 0:
-            print("  {0:3}/{1:3} (s)bovldiff.adf.mm and cc already exist. Skip".format(n_ifg - n_sboi, n_ifg), flush=True)
+        if n_ifg - n_sbovl > 0:
+            print("  {0:3}/{1:3} (s)bovldiff.adf.mm and cc already exist. Skip".format(n_ifg - n_sbovl, n_ifg), flush=True)
            
                    
     width = None
     ifgd_ok = []
-    sboi_ok = []
-    if sboi and n_sboi > 0:
+    sbovl_ok = []
+    if sbovl and n_sbovl > 0:
         if n_ifg2 > 0:
-            if n_para > n_sboi:
-                n_para = n_sboi
+            if n_para > n_sbovl:
+                n_para = n_sbovl
 
         # Perform size check
         try:
@@ -353,20 +353,20 @@ def main(argv=None):
             print('no other-than-ifg tif is found')
             width = None
 
-        # Parallel processing for sboi data
-        print('  {} parallel processing for sboi...'.format(n_para), flush=True)
+        # Parallel processing for sbovl data
+        print('  {} parallel processing for sbovl...'.format(n_para), flush=True)
         p = q.Pool(n_para)
-        rc_sboi = p.starmap(convert_wrapper, [(sboidates[i], True) for i in range(n_sboi)])  # Pass sboidates
+        rc_sbovl = p.starmap(convert_wrapper, [(sbovldates[i], True) for i in range(n_sbovl)])  # Pass sbovldates
         p.close()
 
 
-        # Parallel processing for `sboi` data if flag is set
-        for i, _rc in enumerate(rc_sboi):
+        # Parallel processing for `sbovl` data if flag is set
+        for i, _rc in enumerate(rc_sbovl):
             if _rc == 1:
                 with open(no_unw_list, 'a') as f:
-                    print('{}'.format(sboidates[i]), file=f)
+                    print('{}'.format(sbovldates[i]), file=f)
             elif _rc == 0:
-                sboi_ok.append(sboidates[i])
+                sbovl_ok.append(sbovldates[i])
         
     else:
         if n_ifg2 > 0:
@@ -417,9 +417,9 @@ def main(argv=None):
             length = int(length/nlook)
             dlon = dlon*nlook
             dlat = dlat*nlook
-    elif sboi_ok:
+    elif sbovl_ok:
         example_date = None
-        for pair in sboi_ok:
+        for pair in sbovl_ok:
             unw_tiffile = os.path.join(geocdir, pair, f"{pair}.geo.sbovldiff.adf.mm.tif")
             if not unw_tiffile:
                 unw_tiffile = os.path.join(geocdir, pair, f"{pair}.geo.bovldiff.adf.mm.tif")
@@ -439,7 +439,7 @@ def main(argv=None):
                     dlat *= nlook
                 break  # Exit loop when a valid file is found
         if example_date is None:
-            print("No valid sboi data found. Exiting.")
+            print("No valid sbovl data found. Exiting.")
             sys.exit(1)
     else:
         print(f"No valid interferogram data found for processing or already processed, please check {outdir} exist or not!", flush=True)
@@ -545,13 +545,13 @@ def main(argv=None):
 
 
 #%%
-# Wrapper function with `is_sboi` parameter
-def convert_wrapper(ifgd, is_sboi=False):
+# Wrapper function with `is_sbovl` parameter
+def convert_wrapper(ifgd, is_sbovl=False):
     # if np.mod(ifgd, 10) == 0:
     print(f"  Processing {ifgd}...", flush=True)
 
     # Initialize suffix and cycle based on type
-    if is_sboi:
+    if is_sbovl:
         suffix = ['.geo.sbovldiff.adf.mm.tif', '.geo.cc.tif', '.sbovldiff.adf.mm', '.cc']
         cycle = 75
 
@@ -573,7 +573,7 @@ def convert_wrapper(ifgd, is_sboi=False):
                 print(f'  {ifgd + ".geo.bovldiff.adf.mm.tif"} found ok', flush=True)
     #
     else:
-        # Default case for non-sboi processing
+        # Default case for non-sbovl processing
         suffix = ['.geo.unw.tif', '.geo.cc.tif', '.unw', '.cc']
         cycle = 3
         unw_tiffile = os.path.join(geocdir, ifgd, ifgd + suffix[0])
