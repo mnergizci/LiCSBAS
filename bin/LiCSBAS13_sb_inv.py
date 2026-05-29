@@ -1311,11 +1311,11 @@ def main(argv=None):
             update_epochs_i.append(i)
         else:
             sumsq_cum_wrt_med_test = sumsq_cum_wrt_med + (cum[i, :, :]-np.nanmedian(cum[i, :, :]))**2
-        if np.count_nonzero(~np.isnan(sumsq_cum_wrt_med_test))<=1:
-            print('WARNING - epoch '+imdates[i]+' is not consistent with previous epochs in coverage (nullified?) - removing this epoch.')
-            update_epochs_i.append(i)
-        else:
-            sumsq_cum_wrt_med = sumsq_cum_wrt_med_test
+            if np.count_nonzero(~np.isnan(sumsq_cum_wrt_med_test))<=1:
+                print('WARNING - epoch '+imdates[i]+' is not consistent with previous epochs in coverage (nullified?) - removing this epoch.')
+                update_epochs_i.append(i)
+            else:
+                sumsq_cum_wrt_med = sumsq_cum_wrt_med_test
     if update_epochs_i:
         update_epochs_i.sort(reverse=True)   # need to pop last ones first
         for i in update_epochs_i:
