@@ -1210,8 +1210,9 @@ if __name__ == "__main__":
         axts.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
         axts_corr.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
                 
-        loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
-        try:  # Only support from Matplotlib 3.1
+        loc_ts = mdates.AutoDateLocator()
+        axts.xaxis.set_major_locator(loc_ts)
+        try:
             axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
         except:
             axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
