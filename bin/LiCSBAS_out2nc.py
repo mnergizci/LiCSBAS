@@ -26,6 +26,7 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
  --extracol Will add extra layer from files in folder TS*/results - e.g. --extracol loop_ph_avg_abs
  --zarr  The output will be stored in the zarr format
  --addtif   Optionally you can directly include your external tif file as new data layer (it will get resampled using nearest neigbour interpolation)
+ --cf   Export the cube to CF-compliant form (to be used e.g. via ncWMS etc.)
 """
 #%% Change log
 '''
@@ -631,11 +632,12 @@ def main(argv=None):
     extracols = ['loop_ph_avg_abs']
     filestoadd = []
     tozarr =False
+    tocf = False
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "zarr", "addtif=", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "cf", "zarr", "addtif=", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -648,6 +650,8 @@ def main(argv=None):
                 outfile = a
             elif o == '--extracol':
                 extracols.append(a)
+            elif o == '--cf':
+                tocf = True
             elif o == '--addtif':
                 print('Final datacube will include imported '+a)
                 filestoadd.append(a)
@@ -774,6 +778,103 @@ def main(argv=None):
     
     cube.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
     cube.rio.write_crs("EPSG:4326", inplace=True)
+
+    if tocf:
+        ds = cube #xr.open_dataset(infile, decode_times=True, mask_and_scale=False)
+        # 1) Fix lat: remove any NaNs, flip to increasing if necessary
+        if np.all(np.isnan(ds["lat"].values)):
+            raise SystemExit("lat is all NaN — coordinate must be valid numeric values")
+        # force 1D lat array and flip if decreasing
+        if ds["lat"].values[0] > ds["lat"].values[-1]:
+            ds = ds.sortby("lat")  # makes lat increasing and reorders data
+        # 2) Wrap lon to [-180,180]
+        lon = ds["lon"].values
+        # convert to float and map into [-180,180)
+        lon = ((lon + 180) % 360) - 180
+        ds = ds.assign_coords(lon=lon)
+        # sort lon increasing and roll data to match
+        ds = ds.sortby("lon")
+        # 3) Ensure time uses a standard calendar and is numeric if needed (xarray handles decoding)
+        # If time is not decoded, you can leave it; otherwise ensure CF attrs below reflect original units.
+        # Set CF-standard attributes for coords
+        ds = ds.assign_coords({
+            "lat": ds["lat"],
+            "lon": ds["lon"],
+            "time": ds["time"]
+        })
+        ds["lat"].attrs.update({"units": "degrees_north", "standard_name": "latitude", "axis": "Y"})
+        ds["lon"].attrs.update({"units": "degrees_east", "standard_name": "longitude", "axis": "X"})
+        ds["time"].attrs.update({"standard_name": "time", "axis": "T"})
+        # if original time had units, preserve them; otherwise ensure a units attribute exists
+        if "units" not in ds["time"].attrs and hasattr(ds["time"].encoding, "units"):
+            ds["time"].attrs["units"] = ds["time"].encoding.get("units", "")
+        # 4) Fix data variable attributes: rename "unit" -> "units", add long_name/standard_name where appropriate
+        def fix_units(varname, stdname=None, longname=None, units=None):
+            if varname not in ds:
+                return
+            v = ds[varname]
+            # move "unit" to "units"
+            if "unit" in v.attrs and "units" not in v.attrs:
+                v.attrs["units"] = v.attrs.pop("unit")
+            if units:
+                v.attrs["units"] = units
+            if stdname:
+                v.attrs["standard_name"] = stdname
+            if longname:
+                v.attrs["long_name"] = longname
+        fix_units("cum", stdname="cumulative_displacement", longname="cumulative_displacement", units="mm")
+        fix_units("vel", units="mm year-1")
+        fix_units("vstd", units="mm year-1")
+        fix_units("rms", units="mm")
+        fix_units("stc", units="mm")
+        fix_units("coh", units="1")
+        fix_units("loop_ph_avg_abs", units="rad")
+        #
+        # 5) Remove _FillValue from coordinate variables if present (coordinates must be numeric arrays)
+        for c in ["lat", "lon", "time"]:
+            ds[c].encoding.pop("_FillValue", None)
+            ds[c].attrs.pop("_FillValue", None)
+        #
+        # 6) Ensure spatial_ref has grid_mapping_name attribute (keep existing)
+        if "spatial_ref" in ds:
+            ds["spatial_ref"].attrs.setdefault("grid_mapping_name", "latitude_longitude")
+        #
+        # 7) Global Conventions
+        ds.attrs["Conventions"] = "CF-1.8"
+        #
+        # 8) Choose encoding for compression and chunking for ncWMS: time chunk = 1
+        comp = dict(zlib=True, complevel=4)
+        # Choose chunks: time/32, lat/128, lon/128 (adjust lat/lon chunk sizes if needed)
+        chunktime = 32
+        chunklat = 128
+        chunklon = 128
+        nt = ds.dims.get("time", chunktime)
+        nlat = ds.dims.get("lat", chunklat)
+        nlon = ds.dims.get("lon", chunklon)
+        encoding = {}
+        for v in ds.data_vars:
+            shape = ds[v].shape
+            # preserve mask/byte vars as small-chunked or without compression if needed
+            encoding[v] = comp.copy()
+            # set chunksizes only for variables that have lat/lon/time dims
+            chunks = []
+            for d in ds[v].dims:
+                if d == "time":
+                    chunks.append(min(chunktime, ds.dims["time"]))
+                elif d == "lat":
+                    chunks.append(min(chunklat, ds.dims["lat"]))
+                elif d == "lon":
+                    chunks.append(min(chunklon, ds.dims["lon"]))
+                else:
+                    chunks.append(ds.dims[d])
+            encoding[v]["chunksizes"] = tuple(chunks)
+        # For coordinate variables ensure they are not compressed (optional)
+        encoding["lat"] = {"dtype": ds["lat"].dtype}
+        encoding["lon"] = {"dtype": ds["lon"].dtype}
+        encoding["time"] = {"dtype": ds["time"].dtype}
+        # 9) Write out using netCDF4_classic format
+        ds.to_netcdf(outfile, format="NETCDF4_CLASSIC", encoding=encoding)
+        print("Wrote", outfile)
 
     if not tozarr:
         if (compress and not alignsar):
