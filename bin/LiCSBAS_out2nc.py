@@ -871,7 +871,7 @@ def main(argv=None):
         # For coordinate variables ensure they are not compressed (optional)
         encoding["lat"] = {"dtype": ds["lat"].dtype}
         encoding["lon"] = {"dtype": ds["lon"].dtype}
-        encoding["time"] = {"dtype": ds["time"].dtype}
+        encoding["time"] = {"dtype": 'i4'}  # ds["time"].dtype}
         # 9) Write out using netCDF4_classic format
         ds.to_netcdf(outfile, format="NETCDF4_CLASSIC", encoding=encoding)
         print("Wrote", outfile)
