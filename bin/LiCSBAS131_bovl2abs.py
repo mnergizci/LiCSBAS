@@ -145,11 +145,12 @@ def main(argv=None):
     
     import lics_tstools as lts
     import daz_lib_licsar as dll
+    import xarray as xr
     # frame=''
     esds, frameta = dll.estimate_vels_frame(frame, True)
 
     #
-    cumfile='TS_GEOCml10mask/cum.h5'
+    # cumfile='TS_GEOCml10mask/cum.h5'
     
     # now we should get the iono/tide corrections there
     # ...
@@ -174,9 +175,27 @@ def main(argv=None):
         
     
     # Reference all to first epoch
-    cum = cum - cum[0]
+    # cum = cum - cum[0]
     cube = xr.open_dataset(cumfile)
-    cube['cum']=cube.cum.copy()
+    if 'tide' not in cube:
+        print('trying to correct for SET')
+        try:
+            cube.close()
+            lts.correct_cum_from_tifs(cumfile, 'GEOC.EPOCHS', 'tide.geo.azi.tif', 1000, directcorrect=False,
+                              sbovl=True)
+            cube = xr.open_dataset(cumfile)
+        except:
+            print('but that was not successful')
+    if 'iono' not in cube:
+        print('trying to correct for iono')
+        try:
+            cube.close()
+            lts.correct_cum_from_tifs(cumfile, 'GEOC.EPOCHS', 'geo.iono.code.sTECA.tif', 14000,
+                              directcorrect=False, sbovl=True)
+            cube = xr.open_dataset(cumfile)
+        except:
+            print('but that was not successful')
+
     for correction in ['tide','iono']:
         if correction in cube:
             print('correcting for '+correction)
@@ -186,13 +205,17 @@ def main(argv=None):
     cube['cum'] = cube['cum'] - cube['cum'].mean(axis=(1,2))
     cube['cum'] = cube['cum'] - cube['cum'][0]
     
-    cube.to_netcdf('cum_corrected.h5')
-    # ted muzu:
-    LiCSBAS14_vel_std.py -t TS_GEOCml10mask -i TS_GEOCml10mask/cum_corrected.h5
-    mv TS_GEOCml10mask/cum_corrected.h5 TS_GEOCml10mask/cum.h5
-    LiCSBAS16_filt_ts.py   -t TS_GEOCml10mask --n_para 8 --sbovl
-    LiCSBAS_cum2vel.py -s 20180101 -e 20230101 -i TS_GEOCml10mask/cum_filt.h5 -r 0:0/0:0 --vstd
-    
+    cube.to_netcdf(os.path.join(tsadir,'cum_corrected.h5'))
+    cube.close()
+'''
+# ted muzu:
+mv TS_GEOCml10mask/cum.h5 TS_GEOCml10mask/cum.backup.h5
+mv TS_GEOCml10mask/cum_corrected.h5 TS_GEOCml10mask/cum.h5
+LiCSBAS14_vel_std.py -t TS_GEOCml10mask -i TS_GEOCml10mask/cum.h5
+LiCSBAS16_filt_ts.py   -t TS_GEOCml10mask --n_para 8 --sbovl
+LiCSBAS_cum2vel.py -s 20170101 -e 20230101 -i TS_GEOCml10mask/cum_filt.h5 -r 0:0/0:0 --vstd
+'''
+
     '''
     if tide_exists:
         # mean center it
