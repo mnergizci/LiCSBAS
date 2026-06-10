@@ -58,7 +58,7 @@ Outputs in TS_GEOCml*/ :
 Usage
 =====
 LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs] [--sbovl] [--sbovl_abs]
-                 [--no_storepatches] [--load_patches] [--nullify_noloops] [--offsets eqoffsets.txt]
+                 [--no_storepatches] [--load_patches] [--nullify_noloops] [--offsets eqoffsets.txt] [--estimate_ts_errors]
 
  -d  Path to the GEOCml* dir containing stack of unw data
  -t  Path to the output TS_GEOCml* dir.
@@ -90,6 +90,7 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --sbovl running the inversion on sbovl data (input is in mm)
  --sbovl_abs recalculate the absolute velocity of sbovl, referecing steps are skipped!
  --ignore_nullification  Use of unwrapped data before the unwrapping error nullification (step 12) if performed.
+ --estimate_ts_errors  This will estimate cumulated time series errors from increment residuals. For NSBAS only (for now). WLS would also use weights to form covariance matrix
 """
 '''
 skipping here as will do it as post-processing:
@@ -348,8 +349,8 @@ def main(argv=None):
                 raise Usage('Offsets could not be loaded from '+offsetsfile)
         if inv_alg not in ['LS', 'WLS']:
             raise Usage("Wrong inversion algorithm - only LS or WLS are the options here")
-        if estimate_ts_errors and (inv_alg != 'WLS' or singular):
-            raise Usage("At this moment, TS errors are estimated only with WLS NSBAS")
+        if estimate_ts_errors and singular:
+            raise Usage("At this moment, TS errors are estimated only with NSBAS")
         #if (inv_alg == 'WLS') and (singular == True):
         #    raise Usage('Sorry, --singular works only with LS but you requested WLS as inversion algorithm.')
         #if singular or only_sb:
@@ -1310,11 +1311,11 @@ def main(argv=None):
             update_epochs_i.append(i)
         else:
             sumsq_cum_wrt_med_test = sumsq_cum_wrt_med + (cum[i, :, :]-np.nanmedian(cum[i, :, :]))**2
-        if np.count_nonzero(~np.isnan(sumsq_cum_wrt_med_test))<=1:
-            print('WARNING - epoch '+imdates[i]+' is not consistent with previous epochs in coverage (nullified?) - removing this epoch.')
-            update_epochs_i.append(i)
-        else:
-            sumsq_cum_wrt_med = sumsq_cum_wrt_med_test
+            if np.count_nonzero(~np.isnan(sumsq_cum_wrt_med_test))<=1:
+                print('WARNING - epoch '+imdates[i]+' is not consistent with previous epochs in coverage (nullified?) - removing this epoch.')
+                update_epochs_i.append(i)
+            else:
+                sumsq_cum_wrt_med = sumsq_cum_wrt_med_test
     if update_epochs_i:
         update_epochs_i.sort(reverse=True)   # need to pop last ones first
         for i in update_epochs_i:

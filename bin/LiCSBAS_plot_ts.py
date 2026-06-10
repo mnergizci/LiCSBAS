@@ -1087,7 +1087,7 @@ if __name__ == "__main__":
                 #dcum_ref = 0
                 dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
                 if tsstd is not None:
-                    std_ref = tsstd[:,refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2] # but then i get zeroes there?
+                    std_ref = tsstd[:,refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2]
                     std_ref[std_ref==0] = np.nan
                     if np.isnan(std_ref).all():
                         std_ref = 0

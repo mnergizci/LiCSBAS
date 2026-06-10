@@ -141,35 +141,35 @@ def invert_unws(unw, G, dt_cum, gamma, n_core, gpu, dt_offsets = None,
       wvars (None or np.array): variances used to form weights for the (optional) WLS
       method (str): one of following methods: 'nsbas', 'singular', 'singular_gauss', 'only_sb'
       inv_alg (str): either 'LS' or 'WLS'
-      estimate_ts_errors (bool): if True, will also estimate TS errors - 202605: now only for WLS (preferred)
+      estimate_ts_errors (bool): if True, will also estimate TS errors - 202605: now only for NSBAS
 
     Returns:
       inc     : Incremental displacement (n_im-1, n_pt)
       vel     : Velocity (n_pt)
       vconst  : Constant part of linear velocity (c of vt+c) (n_pt)
-      [tsstd  : in case of WLS and estimate_ts_errors]
+      [tsstd  : in case of NSBAS and estimate_ts_errors]
     '''
     if (gpu and (method[:5] != 'nsbas')):
         print('WARNING, non-NSBAS methods were not tested on GPUs')
 
     if method == 'nsbas':
         if inv_alg == 'LS':
-            return invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu)
+            return invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = estimate_ts_errors)
         elif inv_alg == 'WLS':
             return invert_nsbas_wls(unw, wvars, G, dt_cum, gamma, n_core, estimate_ts_errors = estimate_ts_errors)
     elif method == 'only_sb':
-        return invert_singular(unw, G, dt_cum, n_core, wvars = wvars, only_sb=True)
+        return invert_singular(unw, G, dt_cum, n_core, wvars = wvars, only_sb=True, estimate_ts_errors = estimate_ts_errors)
     elif method == 'singular_gauss':
-        return invert_singular(unw, G, dt_cum, n_core, dt_offsets = dt_offsets, wvars=wvars, singular_gauss = True)
+        return invert_singular(unw, G, dt_cum, n_core, dt_offsets = dt_offsets, wvars=wvars, singular_gauss = True, estimate_ts_errors = estimate_ts_errors)
     elif method == 'singular':
-        return invert_singular(unw, G, dt_cum, n_core, wvars=wvars, singular_gauss = False)
+        return invert_singular(unw, G, dt_cum, n_core, wvars=wvars, singular_gauss = False, estimate_ts_errors = estimate_ts_errors)
     else:
         print('ERROR, no implemented method is selected - cancelling (consider this as a BUG)')
         return
 
 
 def invert_singular(unw, G, dt_cum, n_core, wvars = None, dt_offsets = None,
-                    singular_gauss = False, only_sb = False):
+                    singular_gauss = False, only_sb = False, estimate_ts_errors = False):
     ''' Calculate increment displacement difference by two-stage inversion of SBAS and nan-filling.
 
     Inputs:
@@ -275,7 +275,7 @@ def invert_singular(unw, G, dt_cum, n_core, wvars = None, dt_offsets = None,
     return inc, vel, vconst
 
 #%%
-def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu):
+def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu, estimate_ts_errors = False):
     """
     Calculate increment displacement difference by NSBAS inversion. Points with all unw data are solved by simple SB inversion firstly at a time.
 
@@ -302,6 +302,8 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu):
 
     # do the original NSBAS inversion
     result = np.zeros((n_im+1, n_pt), dtype=np.float32)*np.nan #[inc, vel, const]
+    if estimate_ts_errors:
+        tsstd  = np.zeros((n_im - 1, n_pt), dtype=np.float32)*np.nan
 
     ### Set matrix of NSBAS part (bottom)
     Gbl = np.tril(np.ones((n_im, n_im-1), dtype=np.float32), k=-1) #lower tri matrix without diag
@@ -329,7 +331,35 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu):
             del unw_tmp_cp, Gall_cp, _sol
         else:
             result[:, bool_pt_full] = np.linalg.lstsq(Gall, unw_tmp, rcond=None)[0]
-
+        if estimate_ts_errors:
+            # breakpoint()
+            X = result[:, bool_pt_full]
+            Gm = Gall
+            dm = unw_tmp
+            n_obs = Gm.shape[0]
+            n_param = Gm.shape[1]
+            # --- Residuals ---
+            r = dm - Gm @ X   # (n_obs, n_valid)
+            # --- Degrees of freedom ---
+            dof = max(n_obs - n_param, 1)
+            # --- Variance factor per pixel ---
+            sigma0_sq = np.sum(r**2, axis=0) / dof   # (n_valid,)
+            # --- Base covariance ---
+            GTG = Gm.T @ Gm
+            try:
+                Cx_base = np.linalg.inv(GTG)
+            except:
+                Cx_base = np.linalg.pinv(GTG, rcond=1e-10)
+            # --- Increment covariance ---
+            Cm_base = Cx_base[:n_im - 1, :n_im - 1]
+            # --- Time propagation ---
+            A = np.tril(np.ones((n_im - 1, n_im - 1), dtype=np.float64))
+            Cu_base = A @ Cm_base @ A.T
+            ts_var_base = np.diag(Cu_base)   # (n_im - 1,)
+            # --- Apply per-pixel scaling ---
+            tsstd[:, bool_pt_full] = np.sqrt(
+                ts_var_base[:, None] * sigma0_sq[None, :]
+            )
     print('  Next, solve {0} points including nan point-by-point...'.format(n_pt-n_pt_full), flush=True)
     ### Solve other points with nan point by point.
     ## Not use GPU because lstsq with small matrix is slower than CPU
@@ -337,7 +367,14 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu):
     mask = (~np.isnan(unw_tmp))
     unw_tmp[np.isnan(unw_tmp)] = 0
     if n_core == 1:
-        result[:, ~bool_pt_full] = censored_lstsq_slow(Gall, unw_tmp, mask) #(n_im+1, n_pt)
+        if estimate_ts_errors:
+            valid_idx = np.where(~bool_pt_full)[0]
+            for i in valid_idx:
+                X, ts_std = wls_nsbas_with_error(i, use_weights=False)
+                result[:, i] = X
+                tsstd[:, i] = ts_std
+        else:
+            result[:, ~bool_pt_full] = censored_lstsq_slow(Gall, unw_tmp, mask) #(n_im+1, n_pt)
     else:
         print('  {} parallel processing'.format(n_core), flush=True)
         #
@@ -348,16 +385,28 @@ def invert_nsbas(unw, G, dt_cum, gamma, n_core, gpu):
         #A = Gall
         #else:
         #    A = csc_array(Gall)  # or csr?
-        _result = p.map(censored_lstsq_slow_para_wrapper, args) #list[n_pt][length]
-        result[:, ~bool_pt_full] = np.array(_result).T
+        if estimate_ts_errors:
+            from functools import partial
+            func = partial(wls_nsbas_with_error, use_weights=False)
+            _out = p.map(func, args)
+            valid_idx = np.where(~bool_pt_full)[0]
+            for j, (X, ts_std) in enumerate(_out):
+                i = valid_idx[j]
+                result[:, i] = X
+                tsstd[:, i]  = ts_std
+        else:
+            _result = p.map(censored_lstsq_slow_para_wrapper, args) #list[n_pt][length]
+            result[:, ~bool_pt_full] = np.array(_result).T
         p.close()
-
     #
     # NSBAS result matrix: last 2 rows are vel and vconst
     inc = result[:n_im-1, :]
     vel = result[n_im-1, :]
     vconst = result[n_im, :]
-    return inc, vel, vconst
+    if estimate_ts_errors:
+        return inc, vel, vconst, tsstd
+    else:
+        return inc, vel, vconst
 
 
 # orig solution by ML, just instead of full large matrix of increment rows, use only sum and minmax - much faster,
@@ -693,38 +742,55 @@ def wls_nsbas(i):
     return X
 
 
-def wls_nsbas_with_error(i):
-    """
-    (supported by Copilot)
+def wls_nsbas_with_error(i, use_weights=True):
+    """ Update 2026/05: added residuals to the error calc
     Returns:
         X       : NSBAS solution vector
                   [increments (n_im-1), velocity, constant]
         ts_std  : Standard deviation per epoch (n_im-1)
     """
-    # Use global Gall, unw_tmp, var_tmp, mask, n_im
     if np.mod(i, 1000) == 0:
         print(f'  Running {i:6}/{unw_tmp.shape[1]:6}th point...', flush=True)
-    # --- Weighting ---
-    w = 1.0 / np.sqrt(np.float64(var_tmp[:, i]))
-    Gall_w = Gall * w[:, np.newaxis]
-    n_im = Gall_w.shape[1] - 1
-    unw_w  = unw_tmp[:, i] * w
-    m = mask[:, i]  # valid rows
+    unw_col = unw_tmp[:, i]
+    m = mask[:, i]
     try:
-        # --- Solve WLS ---
-        X = np.linalg.lstsq(Gall_w[m], unw_w[m], rcond=None)[0]
-
-        # --- Posterior covariance of parameters ---
-        GTWG = Gall_w[m].T @ Gall_w[m]
+        if use_weights:
+            # --- Weighted system ---
+            w = 1.0 / np.sqrt(np.float64(var_tmp[:, i]))
+            Gm = Gall[m] * w[m, np.newaxis]
+            dm = unw_col[m] * w[m]
+        else:
+            # --- Unweighted system ---
+            Gm = Gall[m]
+            dm = unw_col[m]
+        n_obs = Gm.shape[0]
+        n_param = Gm.shape[1]
+        n_im = n_param - 1
+        # --- Solve LS ---
+        X = np.linalg.lstsq(Gm, dm, rcond=None)[0]
+        # --- Residuals ---
+        r = dm - Gm @ X
+        # --- Degrees of freedom ---
+        dof = max(n_obs - n_param, 1)
+        # --- Variance factor ---
+        sigma0_sq = (r @ r) / dof
+        # --- Covariance of parameters ---
+        GTG = Gm.T @ Gm
         try:
-            Cx = np.linalg.inv(GTWG)
+            Cx = np.linalg.inv(GTG)
         except:
-            Cx = np.linalg.pinv(GTWG, rcond=1e-10)
+            Cx = np.linalg.pinv(GTG, rcond=1e-10)
+        # --- Scale with residual variance ---
+        Cx *= sigma0_sq
         # --- Extract increment covariance ---
         Cm = Cx[:n_im-1, :n_im-1]
         # --- Time integration matrix ---
-        # u_k = sum_{j<=k} inc_j
-        A = np.tril(np.ones((n_im-1, n_im-1), dtype=np.float64))
+        A = np.tril(np.ones((n_im-1, n_im-1)), dtype=np.float64)
+        # but let's not propagate the extended error due to trend estimation
+        gap_mask = np.all(G == 0, axis=0) # but can i directly access G?
+        # gap_mask = np.all(G_inc == 0, axis=0)
+        # gap_mask = np.all(np.abs(G_inc) < 1e-10, axis=0) # should be safer due to floating point..
+        A[:, gap_mask] = 0
         # --- Propagate covariance ---
         Cu = A @ Cm @ A.T
         ts_std = np.sqrt(np.diag(Cu))
@@ -732,6 +798,7 @@ def wls_nsbas_with_error(i):
         X = np.full(Gall.shape[1], np.nan, dtype=np.float32)
         ts_std = np.full(n_im-1, np.nan, dtype=np.float32)
     return X, ts_std
+
 
 
 '''
