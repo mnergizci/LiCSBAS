@@ -425,8 +425,8 @@ def main(argv=None):
         if not sbovl:
             if not os.path.exists(bad_ifg12file):
                 raise Usage('No 12bad_ifg.txt file exists in {}!'.format(infodir))
-        if not os.path.exists(reffile):
-            raise Usage('No 12ref.txt file exists in {}!'.format(infodir))
+            if not os.path.exists(reffile):
+                raise Usage('No 12ref.txt file exists in {}!'.format(infodir))
     except Usage as err:
         print("\nERROR:", file=sys.stderr, end='')
         print("  "+str(err.msg), file=sys.stderr)

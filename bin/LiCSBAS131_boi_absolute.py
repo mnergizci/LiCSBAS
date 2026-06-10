@@ -163,6 +163,16 @@ def main(argv=None):
 
     # Get daz correction (azimuth ionospheric delay)
     dazes = dl.get_daz_frame(frame)[['epoch', 'daz']]
+    # breakpoint()
+    # daz_mm = dl.get_daz_frame( ##TODO:
+
+    # frame,
+
+    # fulloutput=False,
+
+    # include_corrections=True)
+ 
+    
     dazes['epoch'] = pd.to_datetime(dazes['epoch'])
     dazes['daz'] = dazes['daz'] * 14000  # Convert to mm (scale for azimuth geometry)
     
