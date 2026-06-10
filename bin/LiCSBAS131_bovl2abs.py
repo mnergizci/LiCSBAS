@@ -208,12 +208,125 @@ def main(argv=None):
     cube.to_netcdf(os.path.join(tsadir,'cum_corrected.h5'))
     cube.close()
 '''
+frs=['021D_05965_131313','021D_06162_131213','087A_05958_131313']
+for fr in frs:
+    print(fr)
+    tsadir=fr+'/TS_GEOCml10mask'
+    cumfile=tsadir+'/cum.h5'
+    cube = xr.open_dataset(cumfile)
+    for correction in ['tide','iono']:
+        if correction in cube:
+            print('correcting for '+correction)
+            cube['cum'] = cube['cum'] - cube[correction]
+    #
+    # now need to mean-center it and refer to the first epoch
+    cube['cum'] = cube['cum'] - cube['cum'].mean(axis=(1,2))
+    cube['cum'] = cube['cum'] - cube['cum'][0]
+    #
+    cube.to_netcdf(os.path.join(tsadir,'cum_corrected.h5'))
+    cube.close()
+
 # ted muzu:
 mv TS_GEOCml10mask/cum.h5 TS_GEOCml10mask/cum.backup.h5
 mv TS_GEOCml10mask/cum_corrected.h5 TS_GEOCml10mask/cum.h5
 LiCSBAS14_vel_std.py -t TS_GEOCml10mask -i TS_GEOCml10mask/cum.h5
 LiCSBAS16_filt_ts.py   -t TS_GEOCml10mask --n_para 8 --sbovl
 LiCSBAS_cum2vel.py -s 20170101 -e 20230101 -i TS_GEOCml10mask/cum_filt.h5 -r 0:0/0:0 --vstd
+
+
+# for fringe:
+ok, now i have the vel.mskd files and vstd.mskd files.
+i do it also for los insar.
+
+now i will:
+- convert to tif:
+for x in ????_?????_??????; do cd $x; LiCSBAS_cum2vel.py -s 20170101 -e 20230101 -i TS_GEOCml5GACOS/cum.h5 --mask TS_GEOCml5GACOS/results/mask --png -r 0:0/0:0 --vstd;
+vel=`ls 20*.vel.mskd`; LiCSBAS_flt2geotiff.py -i $vel -p TS_GEOCml5GACOS/info/EQA.dem_par -o ../$x.2017-2023.vel.geo.tif; vstd=`ls 20*.vstd.mskd`; 
+LiCSBAS_flt2geotiff.py -i $vstd -p TS_GEOCml5GACOS/info/EQA.dem_par -o ../$x.2017-2023.vstd.geo.tif; 
+cd ..; done
+# for azis:
+for x in ????_?????_??????; do cd $x;
+vel=`ls 20*.vel`; LiCSBAS_flt2geotiff.py -i $vel -p TS_GEOCml10mask/info/EQA.dem_par -o ../$x.2017-2023.vel.azi.geo.tif; vstd=`ls 20*.vstd`; 
+LiCSBAS_flt2geotiff.py -i $vstd -p TS_GEOCml10mask/info/EQA.dem_par -o ../$x.2017-2023.vstd.azi.geo.tif; 
+cd ..; done
+
+- add the rg (azi) vels to the vel files
+
+import pandas as pd
+import lics_unwrap as lu
+
+frs = ['021D_05765_131313', '021D_05965_131313','021D_06162_131213','087A_05958_131313', '087A_05786_051311']
+for fr in frs:
+    csv = '/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/earmla/fringe.2026/daz_drg/'+fr+'.vels.csv'
+    a=pd.read_csv(csv)
+    offrg = float(a.vel_rg_mmy_huber.values[0])
+    offaz = float(a.vel_az_mmy_huber.values[0])
+    offrg2 = float(a.vel_rg_mmy.values[0])
+    offaz2 = float(a.vel_az_mmy.values[0])
+    print(fr)
+    print('rg: '+str(offrg)+' (or '+str(offrg2)+' )')
+    print('az: '+str(offaz)+' (or '+str(offaz2)+' )')
+    offrg_std = float(a.vel_rg_stderr_mmy.values[0])
+    offaz_std = float(a.vel_az_stderr_mmy.values[0])
+    #
+    inf = fr+'.2017-2023.vstd.azi.geo.tif'
+    outf = fr+'.2017-2023.vstd.azi.abs.geo.tif'
+    toadd = offaz_std
+    b=lu.load_tif2xr(inf)
+    lu.export_xr2tif(b+toadd, outf)
+    #
+    inf = fr+'.2017-2023.vstd.geo.tif'
+    outf = fr+'.2017-2023.vstd.abs.geo.tif'
+    toadd = offrg_std
+    b=lu.load_tif2xr(inf)
+    lu.export_xr2tif(b+toadd, outf)
+    #
+    inf = fr+'.2017-2023.vel.azi.geo.tif'
+    outf = fr+'.2017-2023.vel.azi.abs.geo.tif'
+    toadd = offaz
+    b=lu.load_tif2xr(inf)
+    lu.export_xr2tif(b+toadd, outf)
+    #
+    inf = fr+'.2017-2023.vel.geo.tif'
+    outf = fr+'.2017-2023.vel.abs.geo.tif'
+    toadd = offrg
+    b=lu.load_tif2xr(inf)
+    lu.export_xr2tif(b+toadd, outf)
+
+
+
+- merge all tifs along track
+
+for tr in 021D 087A; do 
+ for ext in E.azi U.azi; do gdal_merge.py -o ../$tr.$ext.geo.tif -n nan -co COMPRESS=DEFLATE -a_nodata nan $tr'_'*.$ext.geo.tif; done;
+ for ext in E U ; do gdal_merge.py -o ../$tr.$ext.geo.tif -n 0 -co COMPRESS=DEFLATE -a_nodata nan $tr'_'*.$ext.geo.tif; done;
+done
+for tr in 021D 087A; do 
+for ext in vel.abs vel.azi.abs vel.azi vel vstd.abs vstd.azi.abs vstd.azi vstd; do 
+gdal_merge.py -o ../$tr.2017-2023.$ext.geo.tif -n nan -co COMPRESS=DEFLATE -a_nodata nan $tr'_'*.2017-2023.$ext.geo.tif; 
+done; done
+
+- decompose to ENU
+import decompose as dec
+import glob
+veltifs = glob.glob('????.20??-20??.vel.abs.geo.tif')
+veltifs += glob.glob('????.20??-20??.vel.azi.abs.geo.tif')
+Etifs = glob.glob('????.E.geo.tif')
+Etifs += glob.glob('????.E.azi.geo.tif')
+Utifs = glob.glob('????.U.geo.tif')
+Utifs += glob.glob('????.U.azi.geo.tif')
+vstdtifs = glob.glob('????.20??-20??.vstd.abs.geo.tif')
+vstdtifs += glob.glob('????.20??-20??.vstd.azi.abs.geo.tif')
+
+enus = dec.decompose_geotiffs(veltifs, Etifs, Utifs, vstdtifs, do_ENU = True)
+enus.to_netcdf('enus_full.nc')
+for h in enus.data_vars:
+     dec.export_xr2tif(enus[h], h+'.test.tif')
+     os.system('create_preview_pygmt.py --grid '+h+'.test.tif')
+     
+
+
+- plot it together with the gnss in ENU
 '''
 
     '''
