@@ -17,6 +17,7 @@ LiCSBAS_vel_plate_motion.py -t tsdir [-f frame] [-o vel_pmm_fixed.tif] [--plate 
  -t TS_GEOC_dir  TS folder with finished processing including step 16 (mandatory)
  -f frame_ID  In case your GEOC folder does not contain ENU tif files, provide frame ID
  -o  Output tif file (Default: vel_pmm_fixed.tif)
+ --input Input vel file to be found inside tsdir/results folder (Default: vel.filt.mskd)
  --plate  Fix to given plate (Default: auto - based on centre coordinates) - must be one of:
   ['auto', 'Antartica', 'Arabia', 'Australia', 'Eurasia', 'India', 'Nazca', 'NorthAmerica', 'Nubia', 'Pacific', 'SouthAmerica', 'Somalia']
  --vstd_fix  Would also perform reference fix in vstd
