@@ -255,7 +255,24 @@ cd ..; done
 import pandas as pd
 import lics_unwrap as lu
 
-frs = ['021D_05765_131313', '021D_05965_131313','021D_06162_131213','087A_05958_131313', '087A_05786_051311']
+# i had to do last minute correction - now these are good estimates (finally)
+frs = ['021D_05765_131313', '021D_05965_131313','087A_05786_051311', '087A_05958_131313']
+offaz = [-33.991, -29.067, 15.203, 14.551]
+stdaz = [3.32/2, 3.416/2, 3.4245/2, 3.362/2]
+
+for i in range(len(frs)):
+    fr = frs[i]
+    inf = fr+'.2017-2023.vstd.azi.geo.tif'
+    outf = fr+'.2017-2023.vstd.azi.abs.geo.tif'
+    b=lu.load_tif2xr(inf)
+    out = np.sqrt(b**2+stdaz[i]**2)
+    lu.export_xr2tif(out, outf)
+    inf = fr+'.2017-2023.vel.azi.geo.tif'
+    outf = fr+'.2017-2023.vel.azi.abs.geo.tif'
+    b=lu.load_tif2xr(inf)
+    lu.export_xr2tif(b+offaz[i], outf)
+
+
 for fr in frs:
     csv = '/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/earmla/fringe.2026/daz_drg/'+fr+'.vels.csv'
     a=pd.read_csv(csv)
@@ -329,7 +346,207 @@ for h in enus.data_vars:
 - plot it together with the gnss in ENU
 '''
 
-    '''
+
+
+'''
+# OTHER COMMANDS I DID FOR FRINGE FIG BELOW
+
+# main figures below
+
+import lics_vis as lv
+import lics_processing as lp
+import framecare as fc
+framelist = ['021D_05765_131313', '021D_05965_131313']
+gridfile = '/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/earmla/fringe.2026/to_decompose2/not_merged/mergeok/021D.2017-2023.vel.geo.tif'
+title = '021D'
+framelist = ['087A_05786_051311', '087A_05958_131313']
+gridfile = '/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/earmla/fringe.2026/to_decompose2/087A.2017-2023.vel.geo.tif'
+title = '087A'
+outfile=title+'.merge1.png'
+
+
+framelist = ['021D_05765_131313', '021D_05965_131313']
+gridfile = '/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/earmla/fringe.2026/to_decompose2/not_merged/mergeok/021D.2017-2023.vel.azi.geo.tif'
+title = '021D'
+framelist = ['087A_05786_051311', '087A_05958_131313']
+gridfile = '/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/earmla/fringe.2026/to_decompose2/087A.2017-2023.vel.azi.geo.tif'
+title = '087A'
+
+outfile=title+'.merge2.png'
+lims = [-6,6]
+framesgpd = fc.get_frames_gpd(framelist)
+
+region = 33.75, 37.3, 29, 33.8 # (minlon, maxlon, minlat, maxlat)
+intif = lp.load_tif2xr(gridfile)
+gg=lv.pygmt_plot(intif,
+        title=title,
+        label='mean-centered velocity [mm/y]',
+        lims=lims,
+        # cmap=args.cmap,
+        projection="M13c",
+        # photobg=False,
+        # medfix=args.medianfix,
+        # region=region,
+        # plotvec = framesgpd
+        )
+#penstyle = '0.5p,black'
+#gg.plot(framesgpd, pen=penstyle)
+gg.savefig(outfile, dpi=100)
+
+
+
+
+# for decomposed - and add GNSS:
+cd /gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/earmla/fringe.2026/to_decompose2
+import lics_vis as lv
+import lics_processing as lp
+import geopandas as gpd
+
+gnss = '/gws/ssde/j25a/nceo_geohazards/vol1/projects/LiCS/proc/current/GIS/AHB_GPS/ahbgps_afterpaper_v6pt5/ahbgps_comparetopdf_2D_04-Apr-2026_itrf14.dat'
+df=pd.read_csv(gnss, delimiter=' ')
+df=df[df['lon']>34]
+df=df[df['lon']<37.7]
+df=df[df['lat']<33.68]
+df=df[df['lat']>28.97]
+
+gridfile = 'N.tif'
+title = 'N'
+
+outfile=title+'.merge2.png'
+#lims = [-6,6]
+#framesgpd = fc.get_frames_gpd(framelist)
+
+#region = 33.75, 37.3, 29, 33.8 # (minlon, maxlon, minlat, maxlat)
+intif = lp.load_tif2xr(gridfile)
+gg=lv.pygmt_plot(intif,
+        title=title,
+        label='mm/year',
+        #lims=lims,
+        # cmap=args.cmap,
+        projection="M13c",
+        # photobg=False,
+        # medfix=args.medianfix,
+        # region=region,
+        # plotvec = framesgpd
+        )
+#penstyle = '0.5p,black'
+#gg.plot(framesgpd, pen=penstyle)
+gg.plot((df['lon'], df['lat']))
+
+gg.savefig(outfile, dpi=100)
+
+
+
+
+
+# set to abs values:
+import pandas as pd
+import lics_unwrap as lu
+
+frs = ['021D_05765_131313', '021D_05965_131313','087A_05958_131313', '087A_05786_051311']
+for fr in frs:
+    csv = '/gws/ssde/j25a/nceo_geohazards/vol2/LiCS/temp/insar_proc/earmla/fringe.2026/daz_drg/'+fr+'.vels.csv'
+    a=pd.read_csv(csv)
+    offrg2 = float(a.vel_rg_mmy.values[0])
+    offaz2 = float(a.vel_az_mmy.values[0])
+    stdaz2 = float(a.vel_az_stderr_mmy.values[0])
+    stdrg2 = float(a.vel_rg_stderr_mmy.values[0])
+    print('rg: '+str(round(offrg2,1))+' ± '+str(round(2*stdrg2,1))+' (2σ) mm/y')
+    print('az: '+str(round(offaz2,1))+' ± '+str(round(2*stdaz2,1))+' (2o) mm/y')
+    veltif = fr+'.2017-2023.vel.geo.tif'
+    velaztif = fr+'.2017-2023.vel.azi.geo.tif'
+    vstdaztif = fr+'.2017-2023.vstd.azi.geo.tif'
+    vstdtif = fr+'.2017-2023.vstd.geo.tif'
+    vel = lu.load_tif2xr(veltif)
+    vel = vel + offrg2
+    out = veltif.replace('.geo.','.abs.geo.')
+    lu.export_xr2tif(vel, '../'+out)
+    vel = lu.load_tif2xr(velaztif)
+    vel = vel + offaz2
+    out = velaztif.replace('.geo.','.abs.geo.')
+    lu.export_xr2tif(vel, '../'+out)
+    vel = lu.load_tif2xr(vstdtif)
+    vel = np.sqrt(vel**2+ stdrg2**2)
+    out = vstdtif.replace('.geo.','.abs.geo.')
+    lu.export_xr2tif(vel, '../'+out)
+    vel = lu.load_tif2xr(vstdaztif)
+    vel = np.sqrt(vel**2+stdaz2**2)
+    out = vstdaztif.replace('.geo.','.abs.geo.')
+    lu.export_xr2tif(vel, '../'+out)
+
+
+for tr in 021D 087A; do
+# for ext in vel.abs vel.azi.abs vel.azi vel vstd.abs vstd.azi.abs vstd.azi vstd; do 
+for ext in vel.abs vel.azi.abs vstd.abs vstd.azi.abs; do  gdal_merge.py -o ../$tr.2017-2023.$ext.geo.tif -n nan -co COMPRESS=DEFLATE -a_nodata nan $tr'_'*.2017-2023.$ext.geo.tif;  done
+done
+
+['021D_05765_131313', '021D_05965_131313', '087A_05958_131313', '087A_05786_051311']
+
+rg: -19.7 ± 3.1 (2σ) mm/y
+az: -41.2 ± 3.4 (2o) mm/y
+
+
+rg: -20.6 ± 2.0 (2σ) mm/y
+az: -30.1 ± 3.4 (2o) mm/y
+
+
+rg: 13.0 ± 2.2 (2σ) mm/y
+az: 8.4 ± 3.4 (2o) mm/y
+
+rg: 9.7 ± 2.8 (2σ) mm/y
+az: 18.4 ± 3.5 (2o) mm/y
+
+
+# decomposition and figure:
+
+import glob
+import decompose as dec
+import lics_unwrap as lu
+
+veltifs = glob.glob('????.20??-20??.vel.abs.geo.tif')
+veltifs += glob.glob('????.20??-20??.vel.azi.abs.geo.tif')
+Etifs = glob.glob('????.E.geo.tif')
+Etifs += glob.glob('????.E.azi.geo.tif')
+Utifs = glob.glob('????.U.geo.tif')
+Utifs += glob.glob('????.U.azi.geo.tif')
+vstdtifs = glob.glob('????.20??-20??.vstd.abs.geo.tif')
+vstdtifs += glob.glob('????.20??-20??.vstd.azi.abs.geo.tif')
+aziflags = []
+for v in veltifs:
+    aziflags.append(v[3])
+
+enus = dec.decompose_geotiffs(veltifs, Etifs, Utifs, vstdtifs, do_ENU = True, aziflags = aziflags)
+enus.to_netcdf('enus_full.nc')
+for e in enus:
+    lu.export_xr2tif(enus[e], e+'.tif')
+
+
+enusl = dec.decompose_geotiffs(veltifs[:-1], Etifs[:-1], Utifs[:-1], vstdtifs[:-1], do_ENU = True, aziflags = aziflags)
+enusl.to_netcdf('enusl_full.nc')
+for e in enusl:
+    lu.export_xr2tif(enusl[e], e+'.l.tif')
+
+
+veltifs.pop(2)
+Etifs.pop(2)
+Utifs.pop(2)
+vstdtifs.pop(2)
+enusr = dec.decompose_geotiffs(veltifs, Etifs, Utifs, vstdtifs, do_ENU = True, aziflags = aziflags)
+enusr.to_netcdf('enusr_full.nc')
+for e in enusr:
+    lu.export_xr2tif(enusr[e], e+'.r.tif')
+
+
+mv ?.tif ?std.tif final_full/.
+for x in E N U; do for h in '.' 'std.'; do gdal_merge.py -n nan -o $x$h'tif' -co COMPRESS=DEFLATE -a_nodata nan $x$h'l.tif' $x$h'r.tif'; done; done
+for xx in E N U; do for x in $xx.tif $xx.l.tif $xx.r.tif; do create_preview_pygmt.py --grid $x; done; done
+
+
+'''
+
+
+
+'''
     if tide_exists:
         # mean center it
         cube['tide'] = cube['tide'] - cube['tide'].mean(axis=(1,2))
