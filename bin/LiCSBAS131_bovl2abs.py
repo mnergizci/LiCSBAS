@@ -509,19 +509,19 @@ Etifs = glob.glob('????.E.geo.tif')
 Etifs += glob.glob('????.E.azi.geo.tif')
 Utifs = glob.glob('????.U.geo.tif')
 Utifs += glob.glob('????.U.azi.geo.tif')
+Ntifs = glob.glob('????.N.geo.tif')
+Ntifs += glob.glob('????.N.azi.geo.tif')
 vstdtifs = glob.glob('????.20??-20??.vstd.abs.geo.tif')
 vstdtifs += glob.glob('????.20??-20??.vstd.azi.abs.geo.tif')
-aziflags = []
-for v in veltifs:
-    aziflags.append(v[3])
 
-enus = dec.decompose_geotiffs(veltifs, Etifs, Utifs, vstdtifs, do_ENU = True, aziflags = aziflags)
+
+enus = dec.decompose_geotiffs(veltifs, Etifs, Utifs, Ntifs = Ntifs, vstdtifs = vstdtifs, do_ENU = True)
 enus.to_netcdf('enus_full.nc')
 for e in enus:
     lu.export_xr2tif(enus[e], e+'.tif')
 
 
-enusl = dec.decompose_geotiffs(veltifs[:-1], Etifs[:-1], Utifs[:-1], vstdtifs[:-1], do_ENU = True, aziflags = aziflags)
+enusl = dec.decompose_geotiffs(veltifs[:-1], Etifs[:-1], Utifs[:-1], Ntifs[:-1], vstdtifs[:-1], do_ENU = True)
 enusl.to_netcdf('enusl_full.nc')
 for e in enusl:
     lu.export_xr2tif(enusl[e], e+'.l.tif')
@@ -530,8 +530,9 @@ for e in enusl:
 veltifs.pop(2)
 Etifs.pop(2)
 Utifs.pop(2)
+Ntifs.pop(2)
 vstdtifs.pop(2)
-enusr = dec.decompose_geotiffs(veltifs, Etifs, Utifs, vstdtifs, do_ENU = True, aziflags = aziflags)
+enusr = dec.decompose_geotiffs(veltifs, Etifs, Utifs, Ntifs, vstdtifs, do_ENU = True)
 enusr.to_netcdf('enusr_full.nc')
 for e in enusr:
     lu.export_xr2tif(enusr[e], e+'.r.tif')
