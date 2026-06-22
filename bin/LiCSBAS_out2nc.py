@@ -199,7 +199,7 @@ def loadall2cube(cumfile, extracols=['loop_ph_avg_abs']):
     
     #if 'mask' in cum:
     #    # means this is filtered version, i.e. cum_filt.h5
-    cube.attrs['filtered_version'] = 'mask' in cum
+    cube.attrs['filtered_version'] = str(('mask' in cum)*1)
     
     #add coh_avg resid_rms vstd
     if os.path.exists(cohfile):
@@ -473,7 +473,7 @@ def toalignsar(tsdir, cube, filestoadd = []):  # ncfile, outncfile, filestoadd =
 def alignsar_global_metadata(cube):
     print('WARNING, global metadata are set in default values, valid for the AlignSAR InSAR TS demo datacube - please change manually')
     print('(especially things such as incidence angle, frame time etc)')
-    cube.attrs['filtered_version'] = 0  # this is because of the workaround we did before...
+    cube.attrs['filtered_version'] = '0'  # this is because of the workaround we did before...
     resolution = float(cube.lon[2] - cube.lon[1])
     frtime = '05:11:50'
     #
@@ -750,7 +750,10 @@ def main(argv=None):
     cube.attrs['ref_lon'] = centre_refx
     cube.attrs['ref_lat'] = centre_refy
     # netcdf does not support boolean, so:
-    cube.attrs['filtered_version'] = cube.attrs['filtered_version']*1
+    try:
+        cube.attrs['filtered_version'] = str(cube.attrs['filtered_version']*1)
+    except:
+        pass
     
     # alignsar (RAM-demanding version):
     if alignsar:
