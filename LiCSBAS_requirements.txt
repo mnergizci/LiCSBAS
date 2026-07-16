@@ -1,7 +1,6 @@
 python>=3.8
 astropy
 beautifulsoup4
-gdal>=2.4
 h5py
 matplotlib
 numpy
@@ -18,6 +17,7 @@ colorcet
 networkx
 scipy
 cmcrameri
-pygmt
 ipympl
 usgs-libcomcat
+gdal
+pygmt
