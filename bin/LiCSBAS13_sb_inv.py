@@ -58,7 +58,7 @@ Outputs in TS_GEOCml*/ :
 Usage
 =====
 LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] [--gamma float] [--n_para int] [--n_unw_r_thre float] [--keep_incfile] [--gpu] [--singular] [--only_sb] [--nopngs] [--sbovl] [--sbovl_abs]
-                 [--no_storepatches] [--load_patches] [--nullify_noloops] [--offsets eqoffsets.txt]
+                 [--no_storepatches] [--load_patches] [--nullify_noloops] [--offsets eqoffsets.txt] [--estimate_ts_errors]
 
  -d  Path to the GEOCml* dir containing stack of unw data
  -t  Path to the output TS_GEOCml* dir.
@@ -90,6 +90,7 @@ LiCSBAS13_sb_inv.py -d ifgdir [-t tsadir] [--inv_alg LS|WLS] [--mem_size float] 
  --sbovl running the inversion on sbovl data (input is in mm)
  --sbovl_abs running the inversion on sbovl data, and use absolute values of sbovl data, not referenced to the reference point
  --ignore_nullification  Use of unwrapped data before the unwrapping error nullification (step 12) if performed.
+ --estimate_ts_errors  This will estimate cumulated time series errors from increment residuals. For NSBAS only (for now). WLS would also use weights to form covariance matrix
 """
 '''
 skipping here as will do it as post-processing:
@@ -203,7 +204,7 @@ def main(argv=None):
     ## For parallel processing
     global n_para, n_para_gap, G, Aloop, unwpatch, hasdatapatch, imdates, incdir, ifgdir, length, width,\
         coef_r2m, ifgdates, ref_unw, cycle, keep_incfile, resdir, restxtfile, \
-        cmap_vel, cmap_wrap, wavelength, nullify_noloops #, step_events
+        cmap_vel, cmap_wrap, wavelength, nullify_noloops, debugflag, estimate_ts_errors #, step_events
 
 
     #%% Set default
@@ -222,7 +223,8 @@ def main(argv=None):
     nullify_noloops_use_data_after_nullification = False
     sbovl = False
     sbovl_abs = False ##No need to set this to True if sbovl is not set MN
-    
+    debugflag = False
+
     try:
         n_para = len(os.sched_getaffinity(0))
     except:
@@ -248,6 +250,7 @@ def main(argv=None):
     #step_events = False
     offsetsflag = False
     offsets_dt = []
+    estimate_ts_errors = False
     #%% Read options
     try:
         try:
@@ -255,7 +258,8 @@ def main(argv=None):
                                        ["help",  "mem_size=", "input_units=", "gamma=",
                                         "n_unw_r_thre=", "keep_incfile", "nopngs", "nullify_noloops", "nullify_noloops_use_data_after_nullification",
                                         "inv_alg=", "n_para=", "gpu", "singular", "singular_gauss","only_sb", "no_storepatches", "load_patches",
-                                        "offsets=", "sbovl", "sbovl_abs", "ignore_nullification"])
+                                        "offsets=", "sbovl", "sbovl_abs", "ignore_nullification",
+                                        "estimate_ts_errors", "debug"])
                                       #  "step_events="])
         except getopt.error as msg:
             raise Usage(msg)
@@ -313,8 +317,11 @@ def main(argv=None):
             elif o == '--offsets':
                 offsetsfile = a
                 offsetsflag = True
-	      
-
+            elif o == '--debug':
+                debugflag = True
+            elif o == '--estimate_ts_errors':
+                estimate_ts_errors = True
+        #
         if not ifgdir:
             raise Usage('No data directory given, -d is not optional!')
         elif not os.path.isdir(ifgdir):
@@ -342,6 +349,8 @@ def main(argv=None):
                 raise Usage('Offsets could not be loaded from '+offsetsfile)
         if inv_alg not in ['LS', 'WLS']:
             raise Usage("Wrong inversion algorithm - only LS or WLS are the options here")
+        if estimate_ts_errors and singular:
+            raise Usage("At this moment, TS errors are estimated only with NSBAS")
         #if (inv_alg == 'WLS') and (singular == True):
         #    raise Usage('Sorry, --singular works only with LS but you requested WLS as inversion algorithm.')
         #if singular or only_sb:
@@ -381,7 +390,7 @@ def main(argv=None):
     bad_ifg11file = os.path.join(infodir, '11bad_ifg.txt')
     bad_ifg12file = os.path.join(infodir, '12bad_ifg.txt')
     bad_ifg120file = os.path.join(infodir, '120bad_ifg.txt')
-    bad_ifg12candidatefile = os.path.join(infodir, '12bad_ifg_cand.txt') 
+    # bad_ifg12candidatefile = os.path.join(infodir, '12bad_ifg_cand.txt')  # should not use
     # if ref point selected using LiCSBAS120:
     reffile = os.path.join(infodir, '120ref.txt')
     if not os.path.exists(reffile):
@@ -491,26 +500,14 @@ def main(argv=None):
 
     ### Read bad_ifg11 and 12
     bad_ifg11 = io_lib.read_ifg_list(bad_ifg11file)
-    if not sbovl:
+    if os.path.exists(bad_ifg12file):
         bad_ifg12 = io_lib.read_ifg_list(bad_ifg12file)
-        if os.path.exists(bad_ifg120file):
-            print('adding also ifgs listed as bad in the optional 120 step')
-            bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
-            bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
-        if os.path.exists(bad_ifg12candidatefile):
-            print('adding also ifgs listed as bad candidates')
-            bad_ifg12candidate = io_lib.read_ifg_list(bad_ifg12candidatefile)
-            bad_ifg12 = list(set(bad_ifg12 + bad_ifg12candidate))
     else:
-        bad_ifg12=[]
-        if os.path.exists(bad_ifg120file):
-            print('adding also ifgs listed as bad in the optional 120 step')
-            bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
-            bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
-        if os.path.exists(bad_ifg12candidatefile):
-            print('adding also ifgs listed as bad candidates')
-            bad_ifg12candidate = io_lib.read_ifg_list(bad_ifg12candidatefile)
-            bad_ifg12 = list(set(bad_ifg12 + bad_ifg12candidate))
+        bad_ifg12 = []
+    if os.path.exists(bad_ifg120file):
+        print('adding also ifgs listed as bad in the optional 120 step')
+        bad_ifg120 = io_lib.read_ifg_list(bad_ifg120file)
+        bad_ifg12 = list(set(bad_ifg12 + bad_ifg120))
     if nullify_noloops:
         # adding also noloop_ifgs as ifgs to skip
         print('skipping noloop_ifgs')
@@ -674,7 +671,7 @@ def main(argv=None):
         memory_size_patch = memory_size
 
     n_store_data = n_ifg*2 + n_im*2 + n_im/4 + 6 + 1 + n_im/2
-    # n_im: cum, gap (1B), inc
+    # n_im: cum, gap (1B), inc [, tsstd]
     # n_ifg: unw, resid
     # and 6 length x width primary outputs
     # plus few small variables... assuming just length x width x 4B - should be less..
@@ -684,7 +681,10 @@ def main(argv=None):
 
     if nullify_noloops:
         n_store_data += n_ifg/4 # 1B boolean
-
+    
+    if estimate_ts_errors:
+        n_store_data += n_im  # for tsstd
+    
     n_patch, patchrow = tools_lib.get_patchrow(width, length, n_store_data, memory_size_patch)
     print('Patch: {}'.format(n_patch))
     print('Patchrows:')
@@ -786,6 +786,10 @@ def main(argv=None):
                 vconst[:processed_rows, :] = vconst_tmp.reshape((processed_rows, width))
                 cumh5 = h5.File(cumh5file, 'r+')
                 gap = cumh5.require_dataset('gap', (n_im-1, length, width), dtype=np.int8, compression=compress)
+                try:
+                    tsstd = cumh5.require_dataset('tsstd', (n_im - 1, length, width), dtype=np.float32, compression=compress)
+                except:
+                    pass
                 
                 print(cumh5.keys())
                 if save_mem:
@@ -819,6 +823,9 @@ def main(argv=None):
             cumh5.create_dataset('bperp', data=bperp)
         gap = cumh5.require_dataset('gap', (n_im-1, length, width),
                                     dtype=np.int8, compression=compress)
+        if estimate_ts_errors:
+            tsstd = cumh5.require_dataset('tsstd', (n_im - 1, length, width),
+                                        dtype=np.float32, compression=compress)
         if save_mem:
             cum = cumh5.require_dataset('cum', (n_im, length, width),
                                         dtype=np.float32, compression=compress)
@@ -1100,7 +1107,8 @@ def main(argv=None):
                 else:
                     method = 'nsbas'
                 print('...using method:   '+method+'\n', flush = True)
-
+                if estimate_ts_errors:
+                    print('...adding time series std estimates \n', flush=True)
                 # with offsets:
                 # nsbas should invert with offsets, as in cum2vel - otherwise the gaps are wrongly estimated due to wrong velocity
                 # only_sb can invert in the next step with offsets as there is no problem
@@ -1120,8 +1128,15 @@ def main(argv=None):
                 else:
                     dt_cum_offsets = None
                 
-                inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_unws(unwpatch, G, dt_cum, gamma, n_para_inv, gpu, dt_offsets = dt_cum_offsets,
-                                                                   wvars = wvars, method = method, inv_alg = inv_alg)
+                _inverted = inv_lib.invert_unws(unwpatch, G, dt_cum, gamma, n_para_inv, gpu, dt_offsets = dt_cum_offsets,
+                                                                   wvars = wvars, method = method, inv_alg = inv_alg, estimate_ts_errors = estimate_ts_errors)
+                if estimate_ts_errors:
+                    inc_tmp, vel_tmp, vconst_tmp, tsstd_tmp = _inverted
+                else:
+                    inc_tmp, vel_tmp, vconst_tmp = _inverted
+                
+                _inverted = None
+                
                 #if inv_alg == 'WLS':
                 #    inc_tmp, vel_tmp, vconst_tmp = inv_lib.invert_nsbas_wls(
                 #        unwpatch, varpatch, G, dt_cum, gamma, n_para_inv)
@@ -1133,10 +1148,13 @@ def main(argv=None):
                 inc_patch = np.zeros((n_im-1, n_pt_all), dtype=np.float32)*np.nan
                 vel_patch = np.zeros((n_pt_all), dtype=np.float32)*np.nan
                 vconst_patch = np.zeros((n_pt_all), dtype=np.float32)*np.nan
-
                 inc_patch[:, ix_unnan_pt] = inc_tmp
                 vel_patch[ix_unnan_pt] = vel_tmp
                 vconst_patch[ix_unnan_pt] = vconst_tmp
+
+                if estimate_ts_errors:
+                    tsstd_patch = np.zeros((n_im-1, n_pt_all), dtype=np.float32)*np.nan
+                    tsstd_patch[:, ix_unnan_pt] = tsstd_tmp
 
                 ### Calculate residuals
                 res_patch = np.zeros((n_ifg, n_pt_all), dtype=np.float32)*np.nan
@@ -1193,6 +1211,8 @@ def main(argv=None):
                 ns_gap_patch = np.zeros((n_pt_all), dtype=np.float32)*np.nan
                 ns_ifg_noloop_patch = np.zeros((n_pt_all), dtype=np.float32)*np.nan
                 maxTlen_patch = np.zeros((n_pt_all), dtype=np.float32)*np.nan
+                if estimate_ts_errors:
+                    tsstd_patch = np.zeros((n_im-1, n_pt_all), dtype=np.float32)*np.nan
 
 
             #%% Output data and image
@@ -1201,6 +1221,14 @@ def main(argv=None):
             vel[rows[0]:rows[1], :] = vel_patch.reshape((lengththis, width))
             vconst[rows[0]:rows[1], :] = vconst_patch.reshape((lengththis, width))
             gap[:, rows[0]:rows[1], :] = gap_patch.reshape((n_im-1, lengththis, width))
+            if estimate_ts_errors:
+                tsstd[:, rows[0]:rows[1], :] = tsstd_patch.reshape((n_im-1, lengththis, width))
+                # additionally setting nan for cum nans that are NOT gaps (keeping std estimates at gaps)
+                cumclip = cum[1:, rows[0]:rows[1], :]
+                gapclip = gap[:, rows[0]:rows[1], :]
+                # tsmask = (gapclip == 0) & np.isnan(cumclip)
+                tsmask = (gapclip == 1) | np.isnan(cumclip)
+                tsstd[:, rows[0]:rows[1], :][tsmask] = np.nan
 
             if store_patches and not save_mem:
                 with open(cumfile, 'w') as f:
@@ -1233,14 +1261,13 @@ def main(argv=None):
                 file = os.path.join(resultsdir, names[i])
                 with open(file, openmode) as f:
                     data[i].tofile(f)
-            # storing also the gap_patch matrix to be used later
-            file = os.path.join(resultsdir, 'gap_patch')
-            with open(file, openmode) as f:
-                gap_patch[i].tofile(f)
 
             # cleaning patch variables from memory:
             varnames = ['res_patch', 'cum_patch', 'inc_patch', 'hasdatapatch', 'gap_patch', 'unwpatch', 'wvars', 'varpatch']
             varnames += ['vel_patch', 'vconst_patch', 'res_rms_patch', 'ns_gap_patch', 'ns_ifg_noloop_patch', 'maxTlen_patch']
+            if estimate_ts_errors:
+                varnames += ['tsstd_patch']
+            
             for vn in varnames:
                 if (vn in globals() or vn in locals()):
                     try:
@@ -1272,11 +1299,11 @@ def main(argv=None):
             update_epochs_i.append(i)
         else:
             sumsq_cum_wrt_med_test = sumsq_cum_wrt_med + (cum[i, :, :]-np.nanmedian(cum[i, :, :]))**2
-        if np.count_nonzero(~np.isnan(sumsq_cum_wrt_med_test))<=1:
-            print('WARNING - epoch '+imdates[i]+' is not consistent with previous epochs in coverage (nullified?) - removing this epoch.')
-            update_epochs_i.append(i)
-        else:
-            sumsq_cum_wrt_med = sumsq_cum_wrt_med_test
+            if np.count_nonzero(~np.isnan(sumsq_cum_wrt_med_test))<=1:
+                print('WARNING - epoch '+imdates[i]+' is not consistent with previous epochs in coverage (nullified?) - removing this epoch.')
+                update_epochs_i.append(i)
+            else:
+                sumsq_cum_wrt_med = sumsq_cum_wrt_med_test
     if update_epochs_i:
         update_epochs_i.sort(reverse=True)   # need to pop last ones first
         for i in update_epochs_i:
@@ -1284,11 +1311,24 @@ def main(argv=None):
             _ = bperp.pop(i)
             if not save_mem:
                 cum = np.delete(cum, i, 0)
+                gap = np.delete(gap, i-1, 0)
+                if estimate_ts_errors:
+                    tsstd = np.delete(tsstd, i-1, 0)
         n_im=len(imdates)
         if save_mem:
             print('removing listed epochs from h5 file')
             update_epochs_i.sort() # probably not needed
             remove_indices_from_dataset(cumh5, 'cum', update_epochs_i)
+            remove_indices_from_dataset(cumh5, 'gap', np.array(update_epochs_i)-1)
+            if estimate_ts_errors:
+                remove_indices_from_dataset(cumh5, 'tsstd', np.array(update_epochs_i) - 1)
+        else:
+            # we use 'gap' directly from h5 file, so we need to physically update the loaded fixed version:
+            del cumh5['gap']
+            cumh5.create_dataset('gap', data=gap, compression=compress)
+            if estimate_ts_errors:
+                del cumh5['tsstd']
+                cumh5.create_dataset('tsstd', data=tsstd, compression=compress)
         if 'imdates' in cumh5:
             del cumh5['imdates']
             cumh5.create_dataset('imdates', data=[np.int32(imd) for imd in imdates])
@@ -1375,36 +1415,37 @@ def main(argv=None):
     cumh5.close()
 
 
-    #%% Output png images
-    ### Incremental displacement
-    if nopngs:
-        print('skipping generating additional png images of increments and residuals - as sometimes taking too long (tutorial purposes)')
-    else:
-        _n_para = n_im-1 if n_para > n_im-1 else n_para
+    #%% Output png images and residuals info
+    if not nopngs:
+        ### Incremental displacement
+        _n_para = n_im - 1 if n_para > n_im - 1 else n_para
         print('\nOutput increment png images with {} parallel processing...'.format(_n_para), flush=True)
         # p = q.Pool(_n_para)
         # p.map(inc_png_wrapper, range(n_im-1))
         # p.close()
         # Create a list of (imx, sbovl) pairs for each index
         args_list = [(imx, sbovl) for imx in range(n_im - 1)]
-    
+
         with q.Pool(_n_para) as p:
             p.starmap(inc_png_wrapper, args_list)
 
-
-        
-        ### Residual for each ifg. png and txt.
-        with open(restxtfile, "w") as f:
-            print('# RMS of residual (mm)', file=f)
-        _n_para = n_ifg if n_para > n_ifg else n_para
+    ### Residual for each ifg. png and txt.
+    with open(restxtfile, "w") as f:
+        print('# RMS of residual (mm)', file=f)
+    _n_para = n_ifg if n_para > n_ifg else n_para
+    p = q.Pool(_n_para)
+    if nopngs:
+        print('\nOutput residuals information with {} parallel processing...'.format(_n_para), flush=True)
+        p.map(resid_txt_wrapper, range(n_ifg))
+    else:
         print('\nOutput residual png images with {} parallel processing...'.format(_n_para), flush=True)
-        p = q.Pool(_n_para)
         p.map(resid_png_wrapper, range(n_ifg))
-        p.close()
+    p.close()
 
     ### Velocity and noise indices
     cmins = [None, None, None, None, None, None]
     cmaxs = [None, None, None, None, None, None]
+    names = ['vel', 'vintercept', 'resid_rms', 'n_gap', 'n_ifg_noloop', 'maxTlen']
     cmaps = [cmap_vel, cmap_vel, cmap_noise_r, cmap_noise_r, cmap_noise_r, cmap_noise]
     titles = ['Velocity (mm/yr)', 'Intercept of velocity (mm)', 'RMS of residual (mm)', 'Number of gaps in SB network', 'Number of ifgs with no loops', 'Max length of connected SB network (yr)']
 
@@ -1443,7 +1484,10 @@ def main(argv=None):
     minite = int(np.mod((elapsed_time/60),60))
     sec = int(np.mod(elapsed_time,60))
     print("\nElapsed time: {0:02}h {1:02}m {2:02}s".format(hour,minite,sec))
-
+    
+    if debugflag:
+        breakpoint()
+    
     print('\n{} Successfully finished!!\n'.format(os.path.basename(argv[0])))
     print('Output directory: {}\n'.format(os.path.relpath(tsadir)))
 
@@ -1461,7 +1505,7 @@ def count_gaps_wrapper(i):
 
     ### n_gap and gap location
 #    ns_unw_unnan4inc = (np.matmul(np.int8(G[:, :, None]), (~np.isnan(unwpatch.T))[:, None, :])).sum(axis=0, dtype=np.int16) #n_ifg, n_im-1, n_pt -> n_im-1, n_pt
-    print('patch '+str(i)+', step 1/3: gaps identification')
+    print('sub-patch '+str(i+1)+', step 1/3: gaps identification')
     ns_unw_unnan4inc = np.array([(G[:, j]*
                           (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])))
                          .sum(axis=1, dtype=np.int16) for j in range(n_im-1)])
@@ -1475,7 +1519,7 @@ def count_gaps_wrapper(i):
     # n_ifg*(n_pt,n_ifg)->(n_loop,n_pt)
     # Number of ifgs for each loop at eath point.
     # 3 means complete loop, 1 or 2 means broken loop.
-    print('patch ' + str(i) + ', step 2/3: n_ifg_noloop')
+    print('sub-patch '+str(i+1) + ', step 2/3: n_ifg_noloop')
     ns_ifg4loop = np.array([(np.abs(Aloop[j, :])*
                          (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch])))
                             .sum(axis=1) for j in range(n_loop)])
@@ -1484,14 +1528,14 @@ def count_gaps_wrapper(i):
 
     # n_loop*(n_loop,n_pt)*n_pt->(n_ifg,n_pt)
     # Number of loops for each ifg at eath point.
-    print('patch ' + str(i) + ', step 3/3: n_loop per each ifg at each point')
+    print('sub-patch '+str(i+1) + ', step 3/3: n_loop per each ifg at each point')
     ns_loop4ifg = np.array([(
             (np.abs(Aloop[:, j])*bool_loop.T).T*
             (~np.isnan(unwpatch[i*n_pt_patch:(i+1)*n_pt_patch, j]))
             ).sum(axis=0) for j in range(n_ifg)]) #
     del bool_loop
 
-    print('patch ' + str(i) + ': indices calculated')
+    print('sub-patch '+str(i+1) + ': indices calculated')
     ns_ifg_noloop_tmp = (ns_loop4ifg==0).sum(axis=0) #n_pt
     del ns_loop4ifg
 
@@ -1578,19 +1622,22 @@ def inc_png_wrapper(imx, sbovl=False):
 
 #%%
 def resid_png_wrapper(i):
-    ifgd = ifgdates[i]
-    infile = os.path.join(resdir, '{}.res'.format(ifgd))
-    resid = io_lib.read_img(infile, length, width)
-    resid_rms = np.sqrt(np.nanmean(resid**2))
-    with open(restxtfile, "a") as f:
-        print('{} {:5.2f}'.format(ifgd, resid_rms), file=f)
-
+    ifgd, infile, resid_rms, resid = resid_txt_wrapper(i)
     pngfile = infile+'.png'
     title = 'Residual (mm) of {} (RMS:{:.2f}mm)'.format(ifgd, resid_rms)
     plot_lib.make_im_png(resid, pngfile, cmap_vel, title, -wavelength/2*1000, wavelength/2*1000)
 
+
+def resid_txt_wrapper(i):
+    ifgd = ifgdates[i]
+    infile = os.path.join(resdir, '{}.res'.format(ifgd))
+    resid = io_lib.read_img(infile, length, width)
+    resid_rms = np.sqrt(np.nanmean(resid ** 2))
+    with open(restxtfile, "a") as f:
+        print('{} {:5.2f}'.format(ifgd, resid_rms), file=f)
     if not keep_incfile:
         os.remove(infile)
+    return ifgd, infile, resid_rms, resid
 
 
 #%% main

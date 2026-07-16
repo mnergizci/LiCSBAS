@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """
-v1.13.4 20210910 Yu Morishita, GSI
-
 ========
 Overview
 ========
@@ -24,7 +22,7 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_d
     [-u U.geo] [-r x1:x2/y1:y2] [--ref_geo lon1/lon2/lat1/lat2] [-p x/y]
     [--p_geo lon/lat] [-c cmap] [--nomask] [--vmin float] [--vmax float]
     [--auto_crange float] [--dmin float] [--dmax float] [--ylen float]
-    [--ts_png pngfile]
+    [--ts_png pngfile] [--dem_background]
 
  -i    Input cum hdf5 file (Default: ./cum_filt.h5 or ./cum.h5)
  --i2  Input 2nd cum hdf5 file
@@ -56,12 +54,16 @@ LiCSBAS_plot_ts.py [-i cum[_filt].h5] [--i2 cum*.h5] [-m yyyymmdd] [-d results_d
  --abs       Show absolute cumulative displacement and velocity if exist in cum file. If not exist, show cum and vel but set title and color range based on absolute values. This is for the scenario like SBOI where the cumulative displacement and velocity are already corrected for plate motion and show the absolute values. In this scenario, the relative cumulative displacement and velocity (i.e., not corrected for plate motion) can be shown by specifying the cum file with relative values with --i2 option.
  --novelocity  Not show velocity in title and not use velocity for color range setting
  --raw         Show raw cumulative displacement without mask and reference area (Default: show filtered cumulative displacement with mask and reference area) for sbovl absolute senario
- --
+
+ # PEB additions:
+ --dem_background  Uses project hgt file to plot a hillshade background. Uses earthpy and rasterio.
 
 example:  LiCSBAS_plot_ts.py -i TS_GEOCml10GACOSmask/cum_filt_interpolate.h5 --cum_name cum --cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
 """
 #%% Change log
 '''
+20260410 Pedro Espin Bedon, UoL (+ML)
+ - added --dem_background and fix for updated matplotlib
 20260211 Muhammet Nergizci, COMET University of Leeds
  - adding the show corrections option to show the corrections in the time series plot, and cum_name options to specify the dataset name for the cumulative displacement and corrections to show in the time series plot
 v1.13.4 20210910 Yu Morishita, GSI
@@ -127,6 +129,7 @@ import cmcrameri.cm as cmc
 import warnings
 import LiCSBAS_io_lib as io_lib
 import LiCSBAS_tools_lib as tools_lib
+import subprocess
 
 os.environ['LANG'] = 'en_US.UTF-8'
 
@@ -178,6 +181,37 @@ def calc_model(dph, imdates_ordinal, xvalues, model):
     return yvalues
 
 
+def create_hgt_tif(resultsdir: str):
+    """
+    Creates hgt tif if does not exist
+
+    Args:
+        resultsdir (str): The base directory for the results.
+
+    Returns:
+        str: The stdef run_licsbass_script(resultsdir: str):
+    """
+    out_path = f"{resultsdir}/results/hgt.geo.tif"
+    if not os.path.isfile(out_path):
+        print('creating '+out_path)
+        # Construct the input and parameter file paths
+        input_path = f"{resultsdir}/results/hgt"
+        parameter_file = f"{resultsdir}/info/EQA.dem_par"
+        # Define the command
+        command = [
+            "LiCSBAS_flt2geotiff.py",  # The script to execute
+            "-i", input_path,  # Input path
+            "-p", parameter_file  # Parameter file path
+        ]
+        try:
+            # Run the command
+            result = subprocess.run(command, check=True, text=True, capture_output=True)
+            return result.stdout
+        except subprocess.CalledProcessError as e:
+            # Raise an error if the script fails
+            raise RuntimeError(f"Script execution failed: {e.stderr}") from e
+
+
 #%% Main
 ## Not use def main to use global valuables
 if __name__ == "__main__":
@@ -215,13 +249,17 @@ if __name__ == "__main__":
     absolute= False
     novel_flag = False
     raw_flag = False
+    tsstd = None
+
+    dem_background = False
     ##--cum_name2 cum_corr_minus_plate --cum_name3 cum_corr_minus_plate_inter
     #%% Read options
     try:
         try:
             opts, args = getopt.getopt(argv[1:], "hi:d:u:m:r:p:c:",
                ["help", "i2=", "ref_geo=", "p_geo=", "nomask", "dmin=", "dmax=",
-                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "cum_name=", "cum_name2=", "cum_name3=", "novelocity", "raw"])
+                "vmin=", "vmax=", "auto_crange=", "ylen=", "ts_png=", "abs", "corrections", "cum_name=",
+                "cum_name2=", "cum_name3=", "novelocity", "raw", "dem_background"])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -250,6 +288,8 @@ if __name__ == "__main__":
                 cmap_name = a
             elif o == '--nomask':
                 maskflag = False
+            elif o == '--dem_background':
+                dem_background = True
             elif o == '--vmin':
                 vmin = float(a)
             elif o == '--vmax':
@@ -307,6 +347,19 @@ if __name__ == "__main__":
             sys.exit(2)
 
     cumdir = os.path.dirname(os.path.abspath(cumfile))
+    # checks
+    if dem_background:
+        try:
+            import earthpy.spatial as es
+            import rasterio as rio
+        except:
+            print('earthpy or rasterio not installed - disabling DEM background')
+            dem_background = False
+        try:
+            out = create_hgt_tif(cumdir)
+        except RuntimeError as e:
+            print(e)
+            dem_background = False
 
     ### cumfile2
     if not cumfile2 and os.path.basename(cumfile) == 'cum_filt.h5' and os.path.exists(os.path.join(cumdir, 'cum.h5')):
@@ -371,6 +424,10 @@ if __name__ == "__main__":
     except:
         gap = []
         print('No gap field found in {}. Skip.'.format(cumfile))
+
+    if 'tsstd' in cumh5:
+        tsstd = cumh5['tsstd']
+        print('Found std estimates - adding to plot')
 
     try:
         geocod_flag = True
@@ -720,14 +777,28 @@ if __name__ == "__main__":
     axt2 = pv.text(0.01, 0.99, 'Left-doubleclick:\n Plot time series\nRight-drag:\n Change ref area', fontsize=8, va='top')
     axt = pv.text(0.01, 0.78, 'Ref area:\n X {}:{}\n Y {}:{}\n (start from 0)'.format(refx1, refx2, refy1, refy2), fontsize=8, va='bottom')
 
-    ### First show
+    ### background DEM
+    if dem_background:
+        alphamain = 0.6
+        demtif=os.path.join(resultsdir,"hgt.geo.tif")
+        print('Shadow DEM', demtif)
+        az=-167.92738 # could rotate based on A/D
+        ### Create hillshade
+        with rio.open(demtif) as srca:
+            elevationa = srca.read(1)
+            h_dem = es.hillshade(elevationa,azimuth=az)
+            axv.imshow(h_dem, cmap='Greys', alpha=0.8)
+    else:
+        alphamain = 1
+    ### main plot
     rax, = axv.plot([refx1h, refx2h, refx2h, refx1h, refx1h],
                     [refy1h, refy1h, refy2h, refy2h, refy1h], '--k', alpha=0.8)
     if not absolute:
         data = vel*mask-np.nanmean((vel*mask)[refy1:refy2+1, refx1:refx2+1])
     else:
         data = vel*mask
-    cax = axv.imshow(data, clim=[vmin, vmax], cmap=cmap, aspect=aspect, interpolation='nearest')
+
+    cax = axv.imshow(data, clim=[vmin, vmax], cmap=cmap, aspect=aspect, interpolation='nearest', alpha = alphamain)
 
     axv.set_title('vel')
 
@@ -1036,9 +1107,20 @@ if __name__ == "__main__":
                 dcum_ref = cum_ref[ii, jj]-np.nanmean(cum_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
                 #dcum_ref = 0
                 dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
+                if tsstd is not None:
+                    std_ref = tsstd[:,refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2]
+                    std_ref[std_ref==0] = np.nan
+                    if np.isnan(std_ref).all():
+                        std_ref = 0
+                    else:
+                        std_ref = np.sqrt(np.nansum(std_ref**2, axis=(1, 2))) / np.sum(~np.isnan(std_ref), axis=(1, 2))
+                    #
+                    std_point = np.sqrt(tsstd[:,ii,jj] ** 2 + std_ref ** 2)
             else:
                 vel1p = vel[ii, jj]
-                dph = cum_abs[:, ii, jj] - cum_abs_ref[ii, jj]
+                dph = cum_abs[:, ii, jj] # - cum_abs_ref[ii, jj]
+                if tsstd is not None:
+                    std_point = tsstd[:, ii, jj]
             ## fit function
             lines1 = [0, 0, 0, 0]
             xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
@@ -1060,8 +1142,8 @@ if __name__ == "__main__":
                     dphf = cum2[:, ii, jj]-np.nanmean(cum2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum2_ref
                 else:
                     vel2p = vel2[ii, jj]
-                    dcum2_ref = cum2_ref[ii, jj]
-                    dphf = cum2[:, ii, jj] - dcum2_ref
+                    # dcum2_ref = cum2_ref[ii, jj]
+                    dphf = cum2[:, ii, jj] # - dcum2_ref
                 ## fit function
                 lines2 = [0, 0, 0, 0]
                 for model, vis in enumerate(visibilities):
@@ -1071,7 +1153,18 @@ if __name__ == "__main__":
                 if not novel_flag:
                     axts.scatter(imdates_dt, dphf, c='r', label=label2, alpha=0.6, zorder=4)
                     axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
-            
+
+            if tsstd is not None:
+                axts.errorbar(imdates_dt[1:], dph[1:], yerr=2*std_point,
+                            fmt='none', ecolor='blue', capsize = 3, zorder=3, alpha=0.5, label='±2σ')
+                #
+                #axts.fill_between(imdates_dt[1:], dph[1:] - 2*stds, dph[1:] + 2*stds, color='blue',alpha=0.25,linewidth=0,zorder=3,
+                #                  label='±2σ')
+                # axts.scatter(imdates_dt[1:], stds, c='purple', label='1-sigma', alpha=0.6, zorder=4)
+                if not ylen:
+                    vlim = [np.nanmin(dph) - 5, np.nanmax(dph) + 5]
+                    axts.set_ylim(vlim)
+
             if cum_name2:
                 dcumname2_ref = cumname2_ref[ii, jj]-np.nanmean(cumname2_ref[refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2])
                 dphf = cumname2[:, ii, jj]-np.nanmean(cumname2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcumname2_ref
@@ -1083,6 +1176,8 @@ if __name__ == "__main__":
                 dphf = cumname3[:, ii, jj]-np.nanmean(cumname3[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcumname3_ref
                 axts.scatter(imdates_dt, dphf, c='purple', label=label4, alpha=0.6, zorder=4)
                 # axts.set_title('vel(1) = {:.1f} mm/yr, vel(2) = {:.1f} mm/yr @({}, {})'.format(vel1p, vel2p, jj, ii), fontsize=10)
+
+
 
             ## gap
             if gap:
@@ -1115,8 +1210,9 @@ if __name__ == "__main__":
         axts.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
         axts_corr.scatter(imdates_dt, np.zeros(len(imdates_dt)), c='b', alpha=0.6)
                 
-        loc_ts = axts.xaxis.set_major_locator(mdates.AutoDateLocator())
-        try:  # Only support from Matplotlib 3.1
+        loc_ts = mdates.AutoDateLocator()
+        axts.xaxis.set_major_locator(loc_ts)
+        try:
             axts.xaxis.set_major_formatter(mdates.ConciseDateFormatter(loc_ts))
         except:
             axts.xaxis.set_major_formatter(mdates.DateFormatter('%Y/%m/%d'))
@@ -1276,7 +1372,7 @@ if __name__ == "__main__":
                     iono2_ref_value = iono2_ref[ii, jj]-np.nanmean(iono2_ref[refy1:refy2, refx1:refx2] * mask[refy1:refy2, refx1:refx2])
                     iono2_adjusted = iono2[:, ii, jj]-np.nanmean(iono2[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - iono2_ref_value
                 else:
-                    iono2_adjusted = iono2[:, ii, jj]-iono2_ref[ii, jj]
+                    iono2_adjusted = iono2[:, ii, jj] #-iono2_ref[ii, jj]
                 # Plot adjusted iono2 correction
                 axts_corr.scatter(imdates_dt, iono2_adjusted, label=label_iono2, c='red', alpha=0.8, zorder=4, marker="p")  # Purple
                 axts_corr.plot(imdates_dt, iono2_adjusted, color='red', alpha=0.8, linestyle='-', zorder=4)  # Purple line       
@@ -1291,7 +1387,7 @@ if __name__ == "__main__":
                 dph = cum[:, ii, jj]-np.nanmean(cum[:, refy1:refy2, refx1:refx2]*mask[refy1:refy2, refx1:refx2], axis=(1, 2)) - dcum_ref
             else:
                 vel1p = vel[ii, jj]
-                dph = cum_abs[:, ii, jj] - cum_abs_ref[ii, jj]
+                dph = cum_abs[:, ii, jj] # - cum_abs_ref[ii, jj]
             ## fit function
             lines1 = [0, 0, 0, 0]
             xvalues = np.arange(imdates_ordinal[0], imdates_ordinal[-1], 10)
