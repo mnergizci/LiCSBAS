@@ -1,0 +1,7 @@
+shapely
+xarray
+rioxarray
+networkx
+ipympl
+usgs-libcomcat
+pygmt

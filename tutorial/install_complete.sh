@@ -26,6 +26,9 @@ mamba install -c conda-forge jupyterlab -y
 # install LiCSBAS
 cd $HOME && git clone https://github.com/comet-licsar/LiCSBAS && \
   for pck in $(tail -n +2 LiCSBAS/LiCSBAS_requirements.txt); do mamba install -c conda-forge -y $pck; done
+# install also optional requirements
+echo "installing optional libraries - you can ignore errors here"
+for pck in $(tail -n +2 LiCSBAS/LiCSBAS_requirements_optional.txt); do mamba install -c conda-forge -y $pck; done
   # mamba install -c conda-forge -y --file LiCSBAS/LiCSBAS_requirements.txt
 echo "export PATH=\$PATH:\$HOME/LiCSBAS/bin" >> ~/.bashrc && \
 echo "export PYTHONPATH=\$PYTHONPATH:\$HOME/LiCSBAS/LiCSBAS_lib" >> ~/.bashrc
