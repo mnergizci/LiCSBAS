@@ -27,6 +27,7 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
  --zarr  The output will be stored in the zarr format
  --addtif   Optionally you can directly include your external tif file as new data layer (it will get resampled using nearest neigbour interpolation)
  --cf   Export the cube to CF-compliant form (to be used e.g. via ncWMS etc.)
+ --xcube  Set basics for viewing via xcube
 """
 #%% Change log
 '''
@@ -612,7 +613,7 @@ def main(argv=None):
         argv = sys.argv
         
     start = time.time()
-    ver=1.1; date=20241011; author="M.Lazecky"
+    ver=1.5; date=20260718; author="M.Lazecky"
     print("\n{} ver{} {} {}".format(os.path.basename(argv[0]), ver, date, author), flush=True)
     print("{} {}".format(os.path.basename(argv[0]), ' '.join(argv[1:])), flush=True)
 
@@ -633,11 +634,13 @@ def main(argv=None):
     filestoadd = []
     tozarr =False
     tocf = False
+    toxcube = False
+    do_not_compress = [] # anything to be NOT compressed..
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "cf", "zarr", "addtif=", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "cf", "xcube", "zarr", "addtif=", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -652,6 +655,9 @@ def main(argv=None):
                 extracols.append(a)
             elif o == '--cf':
                 tocf = True
+            elif o == '--xcube':
+                toxcube = True
+                tocf = True # useful..
             elif o == '--addtif':
                 print('Final datacube will include imported '+a)
                 filestoadd.append(a)
@@ -779,6 +785,29 @@ def main(argv=None):
     cube.rio.set_spatial_dims(x_dim="lon", y_dim="lat", inplace=True)
     cube.rio.write_crs("EPSG:4326", inplace=True)
 
+    if toxcube:
+        # set valid_min/max and some basic palettes
+        for v in cube.data_vars:
+            if 'lat' in cube[v].coords:
+                cube[v].attrs['valid_max'] = float(cube[v].max())
+                cube[v].attrs['valid_min'] = float(cube[v].min())
+                #if float(cube[v].max())
+                if v in ['vel', 'cum']:
+                    cube[v].attrs['color_bar_name'] = 'bwr'
+                    cmin = float(cube[v].quantile(0.01, skipna=True))
+                    cmax = float(cube[v].quantile(0.99, skipna=True))
+                    cube[v].attrs['color_value_min'] = cmin
+                    cube[v].attrs['color_value_max'] = cmax
+                elif v in ['loop_ph_avg_abs', 'rms', 'vstd', 'stc']:
+                    cube[v].attrs['color_bar_name'] = 'YlGnBu'
+                    cube[v].attrs['color_value_min'] = 0.0
+                else:
+                    cube[v].attrs['color_bar_name'] = 'viridis'
+                #
+                if v == 'coh':
+                    cube[v].attrs['color_value_min'] = 0.0
+                    cube[v].attrs['color_value_max'] = 0.8
+
     if tocf:
         ds = cube #xr.open_dataset(infile, decode_times=True, mask_and_scale=False)
         # 1) Fix lat: remove any NaNs, flip to increasing if necessary
@@ -827,7 +856,7 @@ def main(argv=None):
         fix_units("vstd", units="mm year-1")
         fix_units("rms", units="mm")
         fix_units("stc", units="mm")
-        fix_units("coh", units="1")
+        # fix_units("coh", units="1")
         fix_units("loop_ph_avg_abs", units="rad")
         #
         # 5) Remove _FillValue from coordinate variables if present (coordinates must be numeric arrays)
@@ -843,7 +872,10 @@ def main(argv=None):
         ds.attrs["Conventions"] = "CF-1.8"
         #
         # 8) Choose encoding for compression and chunking for ncWMS: time chunk = 1
-        comp = dict(zlib=True, complevel=4)
+        if compress:
+            comp = dict(zlib=True, complevel=4)
+        else:
+            comp = dict(zlib=False)
         # Choose chunks: time/32, lat/128, lon/128 (adjust lat/lon chunk sizes if needed)
         chunktime = 32
         chunklat = 128
@@ -868,16 +900,19 @@ def main(argv=None):
                 else:
                     chunks.append(ds.dims[d])
             encoding[v]["chunksizes"] = tuple(chunks)
+            #if compress:
+            #    if v not in do_not_compress:
+            #        encoding[v]['zlib'] = True
+            #        encoding[v]['complevel'] = 5
         # For coordinate variables ensure they are not compressed (optional)
         encoding["lat"] = {"dtype": ds["lat"].dtype}
         encoding["lon"] = {"dtype": ds["lon"].dtype}
         encoding["time"] = {"dtype": 'i4'}  # ds["time"].dtype}
-        # 9) Write out using netCDF4_classic format
-        ds.to_netcdf(outfile, format="NETCDF4_CLASSIC", encoding=encoding)
-        print("Wrote", outfile)
 
     if not tozarr:
-        if (compress and not alignsar):
+        if tocf:
+            encode = encoding
+        elif (compress and not alignsar):
             if postfilter:
                 encode = {'cum': {'zlib': True, 'complevel': 9}, 'vel': {'zlib': True, 'complevel': 9},
                 'coh': {'zlib': True, 'complevel': 9}, 'rms': {'zlib': True, 'complevel': 9},
@@ -892,7 +927,11 @@ def main(argv=None):
             # if not compress then at least encode only time to keep standard NetCDF:
             encode = {'time': {'dtype': 'i4'}}
 
-        cube.to_netcdf(outfile, encoding=encode)
+        # store:
+        if tocf:
+            cube.to_netcdf(outfile, format="NETCDF4_CLASSIC", encoding=encode) # not sure if needed
+        else:
+            cube.to_netcdf(outfile, encoding=encode)
         if alignsar:
             print('Trying to compress additionally')
             cmd = 'nccopy -d 5 '+outfile+' '+outfile+'.tmp.nc'
