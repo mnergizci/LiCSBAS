@@ -18,7 +18,7 @@ LiCSBAS_out2nc.py [-i infile] [-o outfile] [-m yyyymmdd]
  -o  Output netCDF4 file (Default: output.nc)
  -m  Master (reference) date (Default: first date) - TODO: bperps are fixed-referred to the 1st date
  --alignsar, -A  Export complete cube as developed within AlignSAR (all amplitudes, coherences, calc D_A, mean amp, TODO: atmo_error based on step 16)
- --ref_geo  Reference area in geographical coordinates as: lon1/lon2/lat1/lat2
+ --ref_geo  Reference area in geographical coordinates as: lon1/lon2/lat1/lat2  (you can use "--ref_geo median" to median-fix the dataset)
  --clip_geo  Area to clip in geographical coordinates as: lon1/lon2/lat1/lat2
  --compress, -C  use zlib compression (very small files but time series may take long to load in GIS)
  --postfilter will interpolate VEL only through empty areas and filter in space
@@ -636,11 +636,14 @@ def main(argv=None):
     tocf = False
     toxcube = False
     do_not_compress = [] # anything to be NOT compressed..
+    medianfix = False
 
     #%% Read options
     try:
         try:
-            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "cf", "xcube", "zarr", "addtif=", "extracol=", "compress","postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
+            opts, args = getopt.getopt(argv[1:], "hi:o:m:r:CA", ["help", "alignsar", "cf", "xcube",
+                                                                 "zarr", "addtif=", "extracol=", "compress",
+                                                                 "postfilter","clip_geo=", "ref_geo=", "apply_mask", "mask="])
         except getopt.error as msg:
             raise Usage(msg)
         for o, a in opts:
@@ -658,6 +661,7 @@ def main(argv=None):
             elif o == '--xcube':
                 toxcube = True
                 tocf = True # useful..
+                medianfix = True
             elif o == '--addtif':
                 print('Final datacube will include imported '+a)
                 filestoadd.append(a)
@@ -678,9 +682,14 @@ def main(argv=None):
                 minclipx, maxclipx, minclipy, maxclipy = float(minclipx), float(maxclipx), float(minclipy), float(maxclipy)
             elif o == '--ref_geo':
                 refarea_geo = a
-                minrefx, maxrefx, minrefy, maxrefy = refarea_geo.split('/')
-                minrefx, maxrefx, minrefy, maxrefy = float(minrefx), float(maxrefx), float(minrefy), float(maxrefy)
-                centre_refx, centre_refy = (minrefx+maxrefx)/2, (minrefy+maxrefy)/2
+                if refarea_geo == 'median':
+                    print('setting median fix for reference')
+                    medianfix = True
+                    refarea_geo = []
+                else:
+                    minrefx, maxrefx, minrefy, maxrefy = refarea_geo.split('/')
+                    minrefx, maxrefx, minrefy, maxrefy = float(minrefx), float(maxrefx), float(minrefy), float(maxrefy)
+                    centre_refx, centre_refy = (minrefx+maxrefx)/2, (minrefy+maxrefy)/2
             #elif o == '--mask':
             #    maskfile = a
             elif o == '--apply_mask':
@@ -726,7 +735,11 @@ def main(argv=None):
     cube['cum'] = cube['cum'] - cube['cum'].sel(time=imd_m)
     
     #reference it
-    if refarea_geo:
+    if medianfix:
+        print('Reference set to median - TODO: better check which layers, now only vel, cum. Also, need to fix rms')
+        for v in ['cum', 'vel']:
+            cube[v] = cube[v] - cube[v].median(["lat", "lon"])
+    elif refarea_geo:
         #ref = cube.rio.clip_box(minrefx, minrefy, maxrefx, maxrefy)
         ref = cube.sel(lon=slice(minrefx, maxrefx), lat=slice(maxrefy,minrefy))
         if len(ref.vel) == 0:
@@ -740,6 +753,10 @@ def main(argv=None):
             #for v in ['cum', 'vel', 'vel_filt']:
             for v in ['cum', 'vel']:
                 cube[v] = cube[v] - refcoh[v].median(["lat", "lon"])
+            centre_refy = float(ref.lat.mean())
+            centre_refx = float(ref.lon.mean())
+            cube.attrs['ref_lon'] = centre_refx
+            cube.attrs['ref_lat'] = centre_refy
     else:
         # just load default ref point
         #if np.isnan(centre_refx):
@@ -752,9 +769,9 @@ def main(argv=None):
         refcoords = grep1line('<coordinates>',refkml)
         refcoords = refcoords.split('>')[1].split('<')[0].split(',')
         centre_refx, centre_refy = float(refcoords[0]), float(refcoords[1])
-    
-    cube.attrs['ref_lon'] = centre_refx
-    cube.attrs['ref_lat'] = centre_refy
+        cube.attrs['ref_lon'] = centre_refx
+        cube.attrs['ref_lat'] = centre_refy
+
     # netcdf does not support boolean, so:
     cube.attrs['filtered_version'] = int(cube.attrs['filtered_version']*1)
     
@@ -786,6 +803,8 @@ def main(argv=None):
     cube.rio.write_crs("EPSG:4326", inplace=True)
 
     if toxcube:
+        # need to avoid int64 in attrs:
+        cube.attrs['filtered_version'] = str(cube.attrs['filtered_version'])
         # set valid_min/max and some basic palettes
         for v in cube.data_vars:
             if 'lat' in cube[v].coords:
