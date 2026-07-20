@@ -892,11 +892,11 @@ def main(argv=None):
         #
         # 8) Choose encoding for compression and chunking for ncWMS: time chunk = 1
         if compress:
-            comp = dict(zlib=True, complevel=4)
+            comp = dict(zlib=True, shuffle=True, complevel=1) # 4)  # compression level 1 should be quite optimal for performance
         else:
             comp = dict(zlib=False)
         # Choose chunks: time/32, lat/128, lon/128 (adjust lat/lon chunk sizes if needed)
-        chunktime = 32
+        chunktime = 8  # 32  #### small might be actually better.. (?)
         chunklat = 128
         chunklon = 128
         nt = ds.dims.get("time", chunktime)
