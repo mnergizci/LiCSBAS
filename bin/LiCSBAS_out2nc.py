@@ -846,9 +846,9 @@ def main(argv=None):
         # If time is not decoded, you can leave it; otherwise ensure CF attrs below reflect original units.
         # Set CF-standard attributes for coords
         ds = ds.assign_coords({
+            "time": ds["time"],
             "lat": ds["lat"],
-            "lon": ds["lon"],
-            "time": ds["time"]
+            "lon": ds["lon"]
         })
         ds["lat"].attrs.update({"units": "degrees_north", "standard_name": "latitude", "axis": "Y"})
         ds["lon"].attrs.update({"units": "degrees_east", "standard_name": "longitude", "axis": "X"})
@@ -870,13 +870,13 @@ def main(argv=None):
                 v.attrs["standard_name"] = stdname
             if longname:
                 v.attrs["long_name"] = longname
-        fix_units("cum", stdname="cumulative_displacement", longname="cumulative_displacement", units="mm")
-        fix_units("vel", units="mm year-1")
-        fix_units("vstd", units="mm year-1")
-        fix_units("rms", units="mm")
-        fix_units("stc", units="mm")
+        fix_units("cum", stdname="cumulative_displacement", longname="cumulative displacement", units="mm")
+        fix_units("vel", longname = 'linear velocity', units="mm year-1")
+        fix_units("vstd", longname='bootstrapped velocity stddev', units="mm year-1")
+        fix_units("rms", longname='RMSE of inversion redisuals', units="mm")
+        fix_units("stc", longname='spatio-temporal consistence', units="mm")
         # fix_units("coh", units="1")
-        fix_units("loop_ph_avg_abs", units="rad")
+        fix_units("loop_ph_avg_abs", longname='average absolute loop phase error', units="rad")
         #
         # 5) Remove _FillValue from coordinate variables if present (coordinates must be numeric arrays)
         for c in ["lat", "lon", "time"]:
@@ -927,6 +927,7 @@ def main(argv=None):
         encoding["lat"] = {"dtype": ds["lat"].dtype}
         encoding["lon"] = {"dtype": ds["lon"].dtype}
         encoding["time"] = {"dtype": 'i4'}  # ds["time"].dtype}
+        cube = ds # just in case...
 
     if not tozarr:
         if tocf:
